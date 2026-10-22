@@ -549,10 +549,14 @@ fun VoidButton(
 
     val activeColor = if (isDestructive) Color.Red else MaterialTheme.colorScheme.primary
 
-    val bgColor = if (!enabled) Color.White.copy(0.05f) else Color.White.copy(0.08f)
+    val bgColor = when {
+        !enabled -> Color.White.copy(0.05f)
+        isFocused -> activeColor.copy(alpha = 0.18f)
+        else -> Color.White.copy(0.08f)
+    }
     val textColor = when {
         !enabled -> Color.White.copy(0.3f)
-        isFocused -> activeColor
+        isFocused -> Color.White
         isDestructive || isPrimary -> activeColor.copy(alpha = 0.95f)
         else -> Color.White
     }

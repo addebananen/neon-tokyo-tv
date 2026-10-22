@@ -24,6 +24,9 @@ val LocalHubRoundCorners = staticCompositionLocalOf { true }
 // CompositionLocal for the active theme's ID (lets components add theme-specific decoration)
 val LocalThemeId = staticCompositionLocalOf { DefaultThemes.NEON_TOKYO.id }
 
+// Secondary text and idle icons, from the theme's muted colour (lilac grey in Neon Tokyo)
+val LocalTextMuted = staticCompositionLocalOf { Color(DefaultThemes.NEON_TOKYO.textMutedColor.toInt()) }
+
 // Animation duration for theme transitions
 private const val THEME_ANIMATION_DURATION = 400
 
@@ -82,7 +85,11 @@ fun LumeraTheme(
         typography = LumeraTypography
     ) {
         TvMaterialTheme(colorScheme = tvScheme) {
-            CompositionLocalProvider(LocalThemeId provides theme.id, content = content)
+            CompositionLocalProvider(
+                LocalThemeId provides theme.id,
+                LocalTextMuted provides Color(theme.textMutedColor.toInt()),
+                content = content
+            )
         }
     }
 }

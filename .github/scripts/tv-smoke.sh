@@ -72,10 +72,21 @@ print(center(focused[-1]) if focused else -1, center(target[0]) if target else -
 menu_go() {
   key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
   sleep 1
-  local tries=0 fy ty
+  local tries=0 backs=0 fy ty
   while [ "$tries" -lt 10 ]; do
     read -r fy ty < <(focus_and_target "$1")
-    if [ "${ty:--1}" -lt 0 ] || [ "${fy:--1}" -lt 0 ]; then fail "menu entry $1 not found"; return 1; fi
+    if [ "${ty:--1}" -lt 0 ] || [ "${fy:--1}" -lt 0 ]; then
+      # A sub screen without the menu is still open: step back once and look again
+      if [ "$backs" -lt 2 ]; then
+        backs=$((backs + 1))
+        key BACK
+        sleep 2
+        key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
+        continue
+      fi
+      fail "menu entry $1 not found"
+      return 1
+    fi
     local diff=$((ty - fy))
     if [ "${diff#-}" -lt 30 ]; then key DPAD_CENTER; return 0; fi
     if [ "$diff" -gt 0 ]; then key DPAD_DOWN; else key DPAD_UP; fi
@@ -167,8 +178,12 @@ shot hub-open
 key DPAD_DOWN DPAD_DOWN
 sleep 2
 shot hub-grid
+# First Back jumps to the folder's back arrow, the second one leaves the folder
+key BACK
+sleep 1
 key BACK
 sleep 3
+if ! screen_has "Streaming services"; then fail "Back did not return from the folder to home"; fi
 shot hub-back
 
 # --- Browse rows ---------------------------------------------------------

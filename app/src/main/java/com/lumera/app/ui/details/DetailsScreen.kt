@@ -1,6 +1,7 @@
 package com.lumera.app.ui.details
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -335,11 +336,7 @@ fun DetailsScreen(
                     .onFocusChanged { heroHasFocus = it.hasFocus },
                 verticalArrangement = Arrangement.Bottom
             ) {
-                val titleStyle = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 32.sp,
-                    lineHeight = 34.sp
-                )
+                val titleStyle = NeonType.headline(36.sp, glow = MaterialTheme.colorScheme.primary)
 
                 if (!currentMovie.logo.isNullOrEmpty()) {
                     SubcomposeAsyncImage(
@@ -443,11 +440,14 @@ fun DetailsScreen(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
+                // Kept to the shaded left side so it stays readable over bright artwork
                 Text(
                     text = currentMovie.description ?: "",
                     style = MaterialTheme.typography.bodyLarge,
                     color = textColor,
-                    maxLines = 5
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 640.dp)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -1061,7 +1061,7 @@ private fun ImdbBadge() {
 private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = Modifier) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        style = NeonType.rowTitle(),
         color = textColor.copy(alpha = 0.9f),
         modifier = modifier
     )

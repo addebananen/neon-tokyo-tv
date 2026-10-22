@@ -48,6 +48,10 @@ import com.lumera.app.data.model.ThemeEntity
 import com.lumera.app.ui.addons.VoidButton
 import com.lumera.app.ui.addons.VoidInput
 import com.lumera.app.ui.components.CenterCarouselRow
+import com.lumera.app.ui.components.NeonPalette
+import com.lumera.app.ui.components.NeonSkylineBackdrop
+import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.neonPanel
 import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.theme.DefaultThemes
 import com.lumera.app.ui.theme.LumeraTheme
@@ -69,14 +73,20 @@ fun ProfileScreen(
     val wizardStep by viewModel.wizardStep.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    val isWelcome = wizardStep == 0 && profiles.isEmpty()
+    Box(modifier = Modifier.fillMaxSize()) {
+        // The skyline stays put while the steps fade over it; it dims on screens with more to read
+        NeonSkylineBackdrop(
+            dim = when {
+                isLoading -> 0.75f
+                isWelcome -> 0.05f
+                wizardStep == 0 -> 0.45f
+                else -> 0.62f
+            },
+            leftScrim = !isLoading && isWelcome
+        )
 
-        // FIX: If loading, just show black background (or nothing)
-        // This prevents the "WelcomeView" from flashing briefly.
+        // While loading only the backdrop shows, so the WelcomeView never flashes
         if (!isLoading) {
             AnimatedContent(
                 targetState = wizardStep,
@@ -126,31 +136,32 @@ fun WelcomeView(onStart: () -> Unit) {
     val requester = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(100); requester.requestFocus() }
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            "WELCOME TO NEON TOKYO",
-            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 4.sp),
-            color = Color.White
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Films, series and anime, after dark.",
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.Gray
-        )
-        Spacer(Modifier.height(48.dp))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 96.dp)
+                .widthIn(max = 520.dp)
+        ) {
+            Text("WELCOME TO", style = NeonType.eyebrow(15.sp))
+            Spacer(Modifier.height(6.dp))
+            Text("NEON TOKYO", style = NeonType.display(64.sp))
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Films, series and anime, after dark.",
+                style = MaterialTheme.typography.titleMedium,
+                color = NeonPalette.Lilac
+            )
+            Spacer(Modifier.height(40.dp))
 
-        VoidButton(
-            text = "Create First Profile",
-            onClick = onStart,
-            isPrimary = true,
-            modifier = Modifier.width(250.dp),
-            focusRequester = requester
-        )
+            VoidButton(
+                text = "Create First Profile",
+                onClick = onStart,
+                isPrimary = true,
+                modifier = Modifier.width(260.dp),
+                focusRequester = requester
+            )
+        }
     }
 }
 
@@ -176,11 +187,9 @@ fun ProfileSelectorView(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "WHO IS WATCHING?",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = Color.White
-        )
+        Text("NEON TOKYO", style = NeonType.eyebrow())
+        Spacer(Modifier.height(8.dp))
+        Text("Who's watching?", style = NeonType.headline(36.sp))
 
         Spacer(Modifier.height(50.dp))
 
@@ -330,21 +339,19 @@ private fun ProfileInitialSetupDialog(
             modifier = Modifier
                 .width(520.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                .neonPanel()
                 .padding(32.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "Set Up \"$profileName\"",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                    style = NeonType.headline(24.sp)
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "Choose how this profile should start.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    color = NeonPalette.Lilac
                 )
                 Spacer(Modifier.height(24.dp))
 
@@ -388,21 +395,19 @@ private fun CopyProfileSelectionDialog(
             modifier = Modifier
                 .width(560.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                .neonPanel()
                 .padding(32.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "Copy Configuration",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                    style = NeonType.headline(24.sp)
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = "Select the profile to copy into \"$targetProfileName\".",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    color = NeonPalette.Lilac
                 )
                 Spacer(Modifier.height(20.dp))
 
@@ -410,7 +415,7 @@ private fun CopyProfileSelectionDialog(
                     Text(
                         text = "No available profiles to copy.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
+                        color = NeonPalette.Lilac
                     )
                 } else {
                     sourceProfiles.forEach { sourceProfile ->
@@ -448,21 +453,19 @@ private fun ScratchConfirmDialog(
             modifier = Modifier
                 .width(520.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                .neonPanel()
                 .padding(32.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "Start From Scratch?",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                    style = NeonType.headline(24.sp)
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "\"$profileName\" will start with no addons, no integrations, and a fresh home setup.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    color = NeonPalette.Lilac
                 )
                 Spacer(Modifier.height(24.dp))
                 VoidButton(
@@ -510,8 +513,7 @@ fun ProfileOptionsDialog(
                 modifier = Modifier
                     .width(400.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black)
-                    .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                    .neonPanel()
                     .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -538,8 +540,7 @@ fun ProfileOptionsDialog(
 
                     Text(
                         text = profile.name.uppercase(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White
+                        style = NeonType.headline(24.sp)
                     )
                     Spacer(Modifier.height(32.dp))
 
@@ -601,8 +602,7 @@ fun DeleteConfirmationDialog(
             modifier = Modifier
                 .width(400.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                .neonPanel()
                 .padding(32.dp)
                 .alpha(if (isReady) 1f else 0f),
             contentAlignment = Alignment.Center
@@ -610,14 +610,13 @@ fun DeleteConfirmationDialog(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "Delete Profile?",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                    style = NeonType.headline(24.sp)
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "Are you sure you want to delete \"${profileName}\"?",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    color = NeonPalette.Lilac
                 )
                 Spacer(Modifier.height(32.dp))
 
@@ -664,8 +663,7 @@ fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -
     ) {
         Text(
             if(initialName.isEmpty()) "What should we call you?" else "Update your name",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White
+            style = NeonType.headline(32.sp)
         )
         Spacer(Modifier.height(32.dp))
 
@@ -706,9 +704,9 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Choose an Avatar", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+        Text("Choose an avatar", style = NeonType.headline(32.sp))
         Spacer(Modifier.height(16.dp))
-        Text("Select an avatar that represents you.", color = Color.Gray)
+        Text("Select an avatar that represents you.", color = NeonPalette.Lilac)
 
         Spacer(Modifier.height(40.dp))
 
@@ -742,7 +740,7 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
         Text(
             "Or",
             style = MaterialTheme.typography.bodyLarge,
-            color = Color.Gray
+            color = NeonPalette.Lilac
         )
         
         Spacer(Modifier.height(16.dp))
@@ -827,16 +825,16 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.78f)),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Offset for theme name labels below circles (not present in avatar selector)
             Spacer(Modifier.height(32.dp))
             
-            Text("Choose a Theme", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Text("Choose a theme", style = NeonType.headline(32.sp))
             Spacer(Modifier.height(16.dp))
-            Text("Select a color scheme for your experience.", color = Color.Gray)
+            Text("Select a color scheme for your experience.", color = NeonPalette.Lilac)
 
             Spacer(Modifier.height(40.dp))
 
@@ -870,7 +868,7 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             Text(
                 "Or",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.Gray
+                color = NeonPalette.Lilac
             )
             
             Spacer(Modifier.height(16.dp))
@@ -891,7 +889,7 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(NeonPalette.Night)
                     .padding(32.dp)
             ) {
                 ThemeEditorScreen(
@@ -1010,7 +1008,7 @@ fun ThemePickItem(
         Text(
             text = theme.name,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.White else Color.Gray
+            color = if (isFocused) Color.White else NeonPalette.Lilac
         )
     }
 }
@@ -1049,7 +1047,7 @@ fun ProfileCard(
             modifier = Modifier
                 .size(120.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF1A1A1A))
+                .background(NeonPalette.Violet)
                 .border(3.dp, MaterialTheme.colorScheme.primary.copy(alpha = borderAlpha), CircleShape)
                 .then(focusModifier)
                 .onPreviewKeyEvent { event ->
@@ -1083,7 +1081,7 @@ fun ProfileCard(
         Text(
             text = profile.name.uppercase(),
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = if(isCardFocused || isEditFocused) Color.White else Color.Gray
+            color = if(isCardFocused || isEditFocused) Color.White else NeonPalette.Lilac
         )
         
         Spacer(Modifier.height(8.dp))
@@ -1133,8 +1131,8 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
             modifier = Modifier
                 .size(120.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(0.1f))
-                .border(2.dp, if(isFocused) Color.White else Color.Transparent, CircleShape)
+                .background(NeonPalette.Violet.copy(alpha = 0.6f))
+                .border(2.dp, if (isFocused) MaterialTheme.colorScheme.primary else NeonPalette.Lilac.copy(alpha = 0.35f), CircleShape)
                 .then(focusModifier)
                 .clickable(interactionSource = interactionSource, indication = null) { onClick() }
                 .focusable(interactionSource = interactionSource),
@@ -1146,7 +1144,7 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
         Text(
             "ADD PROFILE",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = if(isFocused) Color.White else Color.Gray
+            color = if(isFocused) Color.White else NeonPalette.Lilac
         )
         Spacer(Modifier.height(8.dp))
         Spacer(Modifier.height(32.dp))

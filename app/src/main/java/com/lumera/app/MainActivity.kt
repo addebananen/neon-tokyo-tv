@@ -950,8 +950,8 @@ class MainActivity : ComponentActivity() {
                         val isRestoringSession = sessionProfileId != null
                         if (!isRestoringSession) {
                             // PROFILE SELECTION / CREATION
-                            // Always use VOID theme for profile selection (black & white)
-                            LumeraTheme(theme = DefaultThemes.VOID) {
+                            // Profile selection always uses the house Neon Tokyo look
+                            LumeraTheme(theme = DefaultThemes.NEON_TOKYO) {
                                 val profileViewModel = hiltViewModel<ProfileViewModel>()
                                 val profiles by profileViewModel.profiles.collectAsState()
 

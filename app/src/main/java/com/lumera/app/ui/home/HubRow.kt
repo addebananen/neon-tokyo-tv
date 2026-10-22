@@ -1,6 +1,7 @@
 package com.lumera.app.ui.home
 
 import androidx.compose.animation.core.Spring
+import com.lumera.app.ui.components.NeonType
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -143,7 +144,7 @@ fun HubRow(
         Text(
             text = hubGroup.title,
             color = Color.White.copy(0.9f),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = NeonType.rowTitle(),
             modifier = Modifier.padding(start = startPadding, bottom = 12.dp)
         )
         

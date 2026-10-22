@@ -19,6 +19,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.firstOrNull
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,6 +33,9 @@ class AddonRepository @Inject constructor(
     private val SEARCHABLE_TYPES = setOf("movie", "series", "anime")
 
     private data class SearchTarget(val transportUrl: String, val type: String, val catalogId: String)
+
+    // How far each catalog behind a combined hub card has been read, per card
+    private val comboOffsets = ConcurrentHashMap<String, ConcurrentHashMap<String, Int>>()
 
     /** Filter out MetaItems where Gson injected null into non-null Kotlin fields */
     private fun List<MetaItem>.sanitize(): List<MetaItem> = filter { item ->
@@ -297,17 +301,50 @@ class AddonRepository @Inject constructor(
     suspend fun getHubCategory(categoryId: String, title: String, maxItems: Int): HomeRow? = withContext(Dispatchers.IO) {
         val parts = NeonTokyoStarterPack.parseCombo(categoryId)
             ?: return@withContext getCategoryRowPreview(categoryId, maxItems)
-        val rows = parts.map { async { getCategoryRowPreview(it, maxItems) } }.awaitAll().filterNotNull()
-        if (rows.isEmpty()) return@withContext null
+        val rows = parts.map { part -> async { part to getCategoryRowPreview(part, maxItems) } }.awaitAll()
+        comboOffsets[categoryId] = ConcurrentHashMap(rows.associate { (part, row) -> part to (row?.items?.size ?: 0) })
+        val loaded = rows.mapNotNull { it.second }
+        if (loaded.isEmpty()) return@withContext null
+        HomeRow(
+            configId = categoryId,
+            title = title,
+            items = interleave(loaded.map { it.items }),
+            // The grid pages a combined card through fetchNextComboPage
+            catalogUrl = categoryId,
+            order = 999,
+            supportsSkip = loaded.any { it.supportsSkip }
+        )
+    }
+
+    /** Next page of every catalog behind a combined hub card, interleaved like the first one. */
+    suspend fun fetchNextComboPage(categoryId: String): List<MetaItem> = withContext(Dispatchers.IO) {
+        val parts = NeonTokyoStarterPack.parseCombo(categoryId) ?: return@withContext emptyList()
+        val offsets = comboOffsets.getOrPut(categoryId) { ConcurrentHashMap() }
+        val pages = parts.map { part ->
+            async {
+                val config = dao.getCatalogConfig(part) ?: return@async emptyList<MetaItem>()
+                val addon = dao.getAddon(config.transportUrl) ?: return@async emptyList<MetaItem>()
+                if (!addon.isEnabled || !catalogSupportsSkip(addon, config.catalogType, config.catalogId)) {
+                    return@async emptyList<MetaItem>()
+                }
+                val skip = offsets[part] ?: 0
+                val url = CatalogUrls.catalog(config.transportUrl, config.catalogType, config.catalogId, config.extraArgs)
+                fetchNextCatalogPage(url, skip).also { offsets[part] = skip + it.size }
+            }
+        }.awaitAll()
+        interleave(pages)
+    }
+
+    private fun interleave(lists: List<List<MetaItem>>): List<MetaItem> {
         val seen = HashSet<String>()
         val merged = ArrayList<MetaItem>()
-        for (i in 0 until rows.maxOf { it.items.size }) {
-            for (row in rows) {
-                val item = row.items.getOrNull(i) ?: continue
+        for (i in 0 until (lists.maxOfOrNull { it.size } ?: 0)) {
+            for (list in lists) {
+                val item = list.getOrNull(i) ?: continue
                 if (seen.add("${item.type}:${item.id}")) merged += item
             }
         }
-        HomeRow(configId = categoryId, title = title, items = merged, order = 999)
+        return merged
     }
 
     suspend fun getHubRows(screen: String = "home"): List<HubGroupRow> = withContext(Dispatchers.IO) {

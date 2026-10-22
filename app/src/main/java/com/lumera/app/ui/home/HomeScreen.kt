@@ -1,6 +1,7 @@
 package com.lumera.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
@@ -416,11 +417,7 @@ fun CinematicLayout(
                                         error = {
                                             Text(
                                                 text = item.name,
-                                                style = MaterialTheme.typography.displaySmall.copy(
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    fontSize = 32.sp,
-                                                    lineHeight = 1.05.em
-                                                ),
+                                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                                 color = Color.White,
                                                 maxLines = 2,
                                                 softWrap = true,
@@ -432,11 +429,7 @@ fun CinematicLayout(
                                 } else {
                                     Text(
                                         text = item.name,
-                                        style = MaterialTheme.typography.displaySmall.copy(
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 32.sp,
-                                            lineHeight = 1.05.em
-                                        ),
+                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                         color = Color.White,
                                         maxLines = 2,
                                         softWrap = true,

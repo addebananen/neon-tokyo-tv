@@ -1,6 +1,7 @@
 package com.lumera.app.ui.navigation
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.ui.theme.LocalTextMuted
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -295,7 +296,7 @@ fun SidebarItem(
     val showIndicator = if (isDrawerActive) isFocused else isSelected
 
     val contentColor by animateColorAsState(
-        targetValue = if (showIndicator) Color.White else Color(0xFF8E9099),
+        targetValue = if (showIndicator) Color.White else LocalTextMuted.current,
         label = "contentColor"
     )
 
@@ -378,6 +379,17 @@ fun SidebarItem(
             }
         }
 
+        // Soft neon bloom behind the indicator bar
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .height(40.dp)
+                .width(indicatorWidth * 7)
+                .zIndex(9f)
+                .background(
+                    Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.32f), Color.Transparent))
+                )
+        )
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -407,7 +419,7 @@ fun ProfileAvatarItem(
     val showIndicator = if (isDrawerActive) isFocused else false
     
     val contentColor by animateColorAsState(
-        targetValue = if (showIndicator) Color.White else Color(0xFF8E9099),
+        targetValue = if (showIndicator) Color.White else LocalTextMuted.current,
         label = "contentColor"
     )
     

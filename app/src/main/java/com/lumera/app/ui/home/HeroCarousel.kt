@@ -1,6 +1,7 @@
 package com.lumera.app.ui.home
 
 import androidx.compose.animation.AnimatedContent
+import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -301,10 +302,7 @@ fun HeroCarousel(
                                 error = {
                                     Text(
                                         text = item.name,
-                                        style = MaterialTheme.typography.displaySmall.copy(
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 32.sp
-                                        ),
+                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                         color = Color.White,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -315,10 +313,7 @@ fun HeroCarousel(
                         } else {
                             Text(
                                 text = item.name,
-                                style = MaterialTheme.typography.displaySmall.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 32.sp
-                                ),
+                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
