@@ -252,6 +252,8 @@ fun CinematicLayout(
 ) {
     var instantFocusItem by remember { mutableStateOf<MetaItem?>(null) }
     var displayedItem by remember { mutableStateOf<MetaItem?>(null) }
+    // Folder card in focus (its title and its row's title): the hero shows the folder instead of a title
+    var focusedHub by remember { mutableStateOf<Pair<String, String>?>(null) }
     var hasRequestedFocus by remember { mutableStateOf(false) }
     val previewUpdateGate = remember { PreviewUpdateGate() }
 
@@ -294,7 +296,7 @@ fun CinematicLayout(
     }
 
     LaunchedEffect(state.rows, state.history, restoredPreviewItem, effectiveLastFocusedKey) {
-        if (instantFocusItem == null) {
+        if (instantFocusItem == null && focusedHub == null) {
             val first = when {
                 restoredPreviewItem != null -> restoredPreviewItem
                 // Returning from details with a saved focus key: avoid showing the wrong
@@ -360,6 +362,7 @@ fun CinematicLayout(
     }
 
     fun updatePreviewItem(item: MetaItem?) {
+        focusedHub = null
         if (item == null) return
         onPreviewItemVisible(item)
         val now = System.currentTimeMillis()
@@ -380,6 +383,9 @@ fun CinematicLayout(
             renderedPreviewItem
         } else null
         CinematicBackground(bgItem)
+        Crossfade(targetState = focusedHub?.first, animationSpec = tween(400), label = "HubGlow") { hubTitle ->
+            if (hubTitle != null) HubHeroGlow(hubTitle)
+        }
 
         Column(modifier = Modifier.fillMaxSize().zIndex(2f)) {
             // INFO SECTION
@@ -452,6 +458,13 @@ fun CinematicLayout(
                             )
                         }
                     }
+                }
+                AnimatedContent(
+                    targetState = focusedHub,
+                    transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
+                    label = "HubInfo"
+                ) { hub ->
+                    if (hub != null) HubHero(title = hub.first, rowTitle = hub.second)
                 }
             }
 
@@ -588,8 +601,10 @@ fun CinematicLayout(
                                         hubGroup = item,
                                         startPadding = startPadding,
                                         onHubClick = onHubClick,
-                                        onFocused = { _, focusKey ->
+                                        onFocused = { hubItem, focusKey ->
                                             instantFocusItem = null
+                                            displayedItem = null
+                                            focusedHub = hubItem.title to item.title
                                             wrappedOnFocusChange("hub_$focusKey")
                                         },
                                         entryRequester = entryRequester,
@@ -1336,8 +1351,8 @@ private fun HomeMetaStrip(item: MetaItem) {
     val genreLabel = item.genres
         ?.firstOrNull()
         ?.replaceFirstChar { it.uppercase() }
-        ?: "Unknown"
-    val yearLabel = extractHomePrimaryYear(item.releaseInfo)
+    // Catalogs that send no genre or year just leave those out instead of showing placeholders
+    val yearLabel = extractHomePrimaryYear(item.releaseInfo).takeIf { it != "----" }
     val valueColor = Color.White.copy(alpha = 0.92f)
     val textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
 
@@ -1346,10 +1361,14 @@ private fun HomeMetaStrip(item: MetaItem) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(text = typeLabel, style = textStyle, color = valueColor)
-        HomeMetaDot()
-        Text(text = genreLabel, style = textStyle, color = valueColor)
-        HomeMetaDot()
-        Text(text = yearLabel, style = textStyle, color = valueColor)
+        genreLabel?.let {
+            HomeMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
+        yearLabel?.let {
+            HomeMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
 
         item.runtime?.filter { it.isDigit() }?.toIntOrNull()?.let { mins ->
             HomeMetaDot()

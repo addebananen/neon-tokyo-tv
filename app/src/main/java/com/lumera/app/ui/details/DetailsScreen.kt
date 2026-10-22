@@ -375,8 +375,7 @@ fun DetailsScreen(
                 val genreLabel = currentMovie.genres
                     ?.firstOrNull()
                     ?.replaceFirstChar { it.uppercase() }
-                    ?: "Unknown"
-                val yearLabel = extractPrimaryYear(currentMovie.releaseInfo)
+                val yearLabel = extractPrimaryYear(currentMovie.releaseInfo).takeIf { it != "----" }
 
                 val ageRating = enrichment?.ageRating
                 val runtimeMin = enrichment?.runtimeMinutes
@@ -391,18 +390,22 @@ fun DetailsScreen(
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                         color = textColor.copy(alpha = 0.95f)
                     )
-                    MetaDot(textColor)
-                    Text(
-                        text = genreLabel,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                        color = textColor.copy(alpha = 0.95f)
-                    )
-                    MetaDot(textColor)
-                    Text(
-                        text = yearLabel,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                        color = textColor.copy(alpha = 0.95f)
-                    )
+                    genreLabel?.let {
+                        MetaDot(textColor)
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                            color = textColor.copy(alpha = 0.95f)
+                        )
+                    }
+                    yearLabel?.let {
+                        MetaDot(textColor)
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                            color = textColor.copy(alpha = 0.95f)
+                        )
+                    }
 
                     ageRating?.let {
                         MetaDot(textColor)

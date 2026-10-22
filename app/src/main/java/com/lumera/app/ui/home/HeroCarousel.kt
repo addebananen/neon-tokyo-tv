@@ -381,8 +381,8 @@ private fun HeroMetaStrip(item: MetaItem) {
     val genreLabel = item.genres
         ?.firstOrNull()
         ?.replaceFirstChar { it.uppercase() }
-        ?: "Unknown"
-    val yearLabel = extractHeroPrimaryYear(item.releaseInfo)
+    // Catalogs that send no genre or year just leave those out instead of showing placeholders
+    val yearLabel = extractHeroPrimaryYear(item.releaseInfo).takeIf { it != "----" }
     val valueColor = Color.White.copy(alpha = 0.92f)
     val textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
 
@@ -391,10 +391,14 @@ private fun HeroMetaStrip(item: MetaItem) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(text = typeLabel, style = textStyle, color = valueColor)
-        HeroMetaDot()
-        Text(text = genreLabel, style = textStyle, color = valueColor)
-        HeroMetaDot()
-        Text(text = yearLabel, style = textStyle, color = valueColor)
+        genreLabel?.let {
+            HeroMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
+        yearLabel?.let {
+            HeroMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
 
         item.runtime?.filter { it.isDigit() }?.toIntOrNull()?.let { mins ->
             HeroMetaDot()

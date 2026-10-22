@@ -26,10 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
@@ -1043,9 +1045,23 @@ fun ProfileCard(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.scale(scale)
     ) {
+        val bloomColor = MaterialTheme.colorScheme.primary
         Box(
             modifier = Modifier
                 .size(120.dp)
+                // Neon halo that fades in with the focus ring (drawn before the clip so it can spill out)
+                .drawBehind {
+                    if (borderAlpha > 0f) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                0.55f to bloomColor.copy(alpha = 0.5f * borderAlpha),
+                                1f to Color.Transparent,
+                                radius = size.minDimension * 0.85f
+                            ),
+                            radius = size.minDimension * 0.85f
+                        )
+                    }
+                }
                 .clip(CircleShape)
                 .background(NeonPalette.Violet)
                 .border(3.dp, MaterialTheme.colorScheme.primary.copy(alpha = borderAlpha), CircleShape)

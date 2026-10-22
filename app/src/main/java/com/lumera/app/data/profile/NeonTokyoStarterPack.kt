@@ -202,6 +202,15 @@ object NeonTokyoStarterPack {
         )
     }
 
+    /** One line under a folder's name on the home screen. */
+    fun hubBlurb(title: String): String {
+        val service = SERVICES.firstOrNull { it.second.equals(title, ignoreCase = true) }?.second
+        if (service != null) return "Everything on $service in Sweden, films and series together. Updates by itself."
+        val genre = GENRES.firstOrNull { it.equals(title, ignoreCase = true) }
+        if (genre != null) return "Popular $genre films and series, kept up to date from Cinemeta."
+        return "Open the folder to browse everything in it."
+    }
+
     private val ANIME_TITLES = listOf(
         "top-airing" to "Airing now: top anime",
         "trending" to "Trending anime",

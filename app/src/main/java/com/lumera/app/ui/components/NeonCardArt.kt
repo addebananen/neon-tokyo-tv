@@ -1,13 +1,18 @@
 package com.lumera.app.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -27,6 +32,9 @@ import com.lumera.app.ui.theme.KanitFamily
  * Neon sign style art for hub cards without an image: a night sky tinted by the
  * card's accent colour, a glowing horizon and a perspective grid, with the title
  * lit like a neon tube. Everything is cached per size, so it is as cheap as a bitmap.
+ *
+ * On focus the sign flickers on like a real tube. The flicker only changes layer
+ * alpha and draw-phase values, so it never recomposes or re-measures the text.
  */
 @Composable
 fun NeonCardArt(
@@ -38,6 +46,24 @@ fun NeonCardArt(
     maxLines: Int = 2
 ) {
     val accent = remember(title) { NeonAccents.forTitle(title) }
+    // 0 = idle sign, 1 = fully lit
+    val lit = remember { Animatable(if (focused) 1f else 0f) }
+    LaunchedEffect(focused, glow) {
+        if (!glow) return@LaunchedEffect
+        if (focused) {
+            lit.animateTo(1f, keyframes {
+                durationMillis = 340
+                0.15f at 0
+                1f at 50
+                0.3f at 100
+                1f at 160
+                0.75f at 230
+                1f at 340
+            })
+        } else {
+            lit.animateTo(0f, tween(240))
+        }
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -59,10 +85,11 @@ fun NeonCardArt(
                 val rows = (1..3).map { i -> horizonY + (size.height - horizonY) * (i / 3f) * (i / 3f) }
                 val line = 1.dp.toPx()
                 onDrawBehind {
+                    val l = lit.value
                     drawRect(sky)
-                    drawRect(glow)
-                    drawLine(accent.copy(alpha = 0.35f), Offset(0f, horizonY), Offset(size.width, horizonY), strokeWidth = line * 4)
-                    drawLine(accent, Offset(0f, horizonY), Offset(size.width, horizonY), strokeWidth = line * 1.5f)
+                    drawRect(glow, alpha = 0.7f + 0.3f * l)
+                    drawLine(accent.copy(alpha = 0.25f + 0.3f * l), Offset(0f, horizonY), Offset(size.width, horizonY), strokeWidth = line * (3 + 3 * l))
+                    drawLine(lerp(accent, Color.White, 0.35f * l), Offset(0f, horizonY), Offset(size.width, horizonY), strokeWidth = line * 1.5f)
                     rays.forEach { x ->
                         drawLine(NeonAccents.Cyan.copy(alpha = 0.28f), Offset(vanishX, horizonY), Offset(x, size.height), strokeWidth = line)
                     }
@@ -73,19 +100,33 @@ fun NeonCardArt(
             },
         contentAlignment = Alignment.Center
     ) {
+        val textStyle = TextStyle(
+            fontFamily = KanitFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontStyle = FontStyle.Italic,
+            fontSize = fontSize.sp,
+            letterSpacing = 0.3.sp,
+            color = Color(0xFFF6EAFF)
+        )
+        val textModifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 18.dp)
+        // Poster placeholders skip the glow: there can be many of them while a row loads
+        if (glow) {
+            Text(
+                text = title,
+                modifier = textModifier.graphicsLayer { alpha = 0.55f + 0.45f * lit.value },
+                style = textStyle.copy(
+                    color = lerp(accent, Color.White, 0.55f),
+                    shadow = Shadow(color = accent, blurRadius = 22f)
+                ),
+                textAlign = TextAlign.Center,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Text(
             text = title,
-            modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 18.dp),
-            style = TextStyle(
-                fontFamily = KanitFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontStyle = FontStyle.Italic,
-                fontSize = fontSize.sp,
-                letterSpacing = 0.3.sp,
-                color = if (focused) Color.White else Color(0xFFF6EAFF),
-                // Blurred text shadows cost a little per frame, so poster placeholders skip them
-                shadow = if (glow) Shadow(color = accent.copy(alpha = if (focused) 0.95f else 0.7f), blurRadius = if (focused) 22f else 14f) else null
-            ),
+            modifier = textModifier,
+            style = textStyle,
             textAlign = TextAlign.Center,
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis

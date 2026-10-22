@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.Border
+import androidx.tv.material3.Glow
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -120,6 +121,10 @@ fun HubCard(
                     border = BorderStroke(3.dp, glowColor),
                     shape = focusedCardShape
                 )
+            ),
+            // Neon bloom around the focused card only, one shadow on screen at a time
+            glow = ClickableSurfaceDefaults.glow(
+                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = 12.dp)
             )
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
