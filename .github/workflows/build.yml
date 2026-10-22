@@ -38,6 +38,16 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # assrender builds native code with the NDK; AGP's own on-demand download of it
+      # sometimes arrives corrupt, so fetch it up front with retries
+      - name: Install NDK
+        run: |
+          for i in 1 2 3 4; do
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;27.0.12077973" > /dev/null && break
+            echo "NDK download failed, retry $i"; rm -rf "$ANDROID_HOME/ndk/27.0.12077973"; sleep $((i * 10))
+          done
+          test -f "$ANDROID_HOME/ndk/27.0.12077973/source.properties"
+
       - name: Write local.properties
         run: echo "tmdb.api_key=${TMDB_API_KEY}" > local.properties
 

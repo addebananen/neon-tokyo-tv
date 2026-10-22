@@ -748,7 +748,8 @@ class MainActivity : ComponentActivity() {
         val density = resources.displayMetrics.density
 
         val container = android.widget.FrameLayout(this).apply {
-            setBackgroundColor(android.graphics.Color.BLACK)
+            // Same night violet the intro fades into, so there is no black flash
+            setBackgroundColor(0xFF0D0721.toInt())
         }
 
         val surfaceView = android.view.SurfaceView(this)
@@ -2351,7 +2352,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val SPLASH_PAUSE_MS = 4500
+        private const val SPLASH_PAUSE_MS = 1200
         private const val KEY_SPLASH_SHOWN = "splash_shown"
     }
 }
