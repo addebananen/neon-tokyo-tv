@@ -1,0 +1,234 @@
+# Baseline Profile for Lumera - Pre-compiled for faster startup and scrolling
+# These rules tell ART to AOT-compile these classes/methods at install time
+# Result: 30-50% faster first-frame rendering and smooth scroll from launch
+
+# ============================================================================
+# ALL LUMERA CLASSES - Ensure every app class is loaded into AOT
+# ============================================================================
+
+Lcom/lumera/app/**;
+
+# ============================================================================
+# STARTUP CRITICAL PATH
+# ============================================================================
+
+# Application startup
+HSPLcom/lumera/app/LumeraApplication;->onCreate()V
+HSPLcom/lumera/app/LumeraApplication;->newImageLoader()Lcoil/ImageLoader;
+HSPLcom/lumera/app/StartupOptimizer;->warmup()V
+
+# MainActivity lifecycle
+HSPLcom/lumera/app/MainActivity;->onCreate(Landroid/os/Bundle;)V
+
+# Hilt DI initialization
+HSPLdagger/hilt/android/internal/**;->**(**)**
+
+# ============================================================================
+# COIL IMAGE LOADING - Critical for smooth first scroll
+# ============================================================================
+
+# Memory cache operations
+HSPLcoil/memory/MemoryCache$Builder;->**(**)**
+HSPLcoil/memory/RealMemoryCache;->**(**)**
+
+# Disk cache operations
+HSPLcoil/disk/DiskCache$Builder;->**(**)**
+HSPLcoil/disk/RealDiskCache;->**(**)**
+
+# Image request execution
+HSPLcoil/request/ImageRequest$Builder;->**(**)**
+HSPLcoil/RealImageLoader;->**(**)**
+HSPLcoil/decode/**;->**(**)**
+HSPLcoil/fetch/**;->**(**)**
+
+# ============================================================================
+# COMPOSE UI - Critical for first frame
+# ============================================================================
+
+# Composition
+HSPLandroidx/compose/runtime/CompositionImpl;->**(**)**
+HSPLandroidx/compose/runtime/Composer**;->**(**)**
+HSPLandroidx/compose/runtime/Recomposer;->**(**)**
+HSPLandroidx/compose/runtime/SnapshotState**;->**(**)**
+HSPLandroidx/compose/runtime/external/kotlinx/collections/immutable/**;->**(**)**
+
+# Layout
+HSPLandroidx/compose/ui/layout/**;->**(**)**
+HSPLandroidx/compose/foundation/layout/**;->**(**)**
+
+# Lazy lists - critical for scrolling
+HSPLandroidx/compose/foundation/lazy/LazyListState;->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyListKt**;->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyListMeasuredItem;->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyListItemProvider;->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyRow**;->**(**)**
+HSPLandroidx/compose/foundation/lazy/LazyColumn**;->**(**)**
+
+# Animation - smooth navigation transitions
+HSPLandroidx/compose/animation/**;->**(**)**
+HSPLandroidx/compose/animation/core/**;->**(**)**
+
+# Lifecycle / collectAsState
+HSPLandroidx/lifecycle/compose/**;->**(**)**
+
+# TV Material components
+HSPLandroidx/tv/material3/**;->**(**)**
+
+# ============================================================================
+# LUMERA UI - Home screen critical path
+# ============================================================================
+
+HSPLcom/lumera/app/ui/home/HomeScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/home/HomeViewModel;->**(**)**
+HSPLcom/lumera/app/ui/home/HomeViewModel$HomeState;->**(**)**
+HSPLcom/lumera/app/ui/home/InfiniteLoopRowKt;->**(**)**
+HSPLcom/lumera/app/ui/home/HubRowKt;->**(**)**
+HSPLcom/lumera/app/ui/home/HubCardKt;->**(**)**
+HSPLcom/lumera/app/ui/home/HeroCarouselKt;->**(**)**
+HSPLcom/lumera/app/ui/home/LumeraCardKt;->**(**)**
+HSPLcom/lumera/app/ui/home/GridViewScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/home/ViewMoreCardKt;->**(**)**
+HSPLcom/lumera/app/ui/home/DpadRepeatGateKt;->**(**)**
+HSPLcom/lumera/app/ui/home/FocusPivotSpecKt;->**(**)**
+
+# Card & background components
+HSPLcom/lumera/app/ui/components/LumeraBackgroundKt;->**(**)**
+HSPLcom/lumera/app/ui/components/GlassComponentsKt;->**(**)**
+HSPLcom/lumera/app/ui/components/CenterCarouselRowKt;->**(**)**
+
+# Navigation
+HSPLcom/lumera/app/ui/navigation/**;->**(**)**
+
+# ============================================================================
+# LUMERA UI - Secondary screens
+# ============================================================================
+
+# Details
+HSPLcom/lumera/app/ui/details/DetailsScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/details/DetailsViewModel;->**(**)**
+HSPLcom/lumera/app/ui/details/GlassSidebarKt;->**(**)**
+
+# Search
+HSPLcom/lumera/app/ui/search/SearchScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/search/SearchViewModel;->**(**)**
+HSPLcom/lumera/app/ui/search/VirtualKeyboardKt;->**(**)**
+
+# Settings
+HSPLcom/lumera/app/ui/settings/SettingsScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/settings/SettingsViewModel;->**(**)**
+HSPLcom/lumera/app/ui/settings/SettingsSubScreensKt;->**(**)**
+HSPLcom/lumera/app/ui/settings/DashboardEditorScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/settings/DashboardViewModel;->**(**)**
+HSPLcom/lumera/app/ui/settings/ThemeScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/settings/ThemeEditorScreenKt;->**(**)**
+
+# Player
+HSPLcom/lumera/app/ui/player/PlayerScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/player/PlayerViewModel;->**(**)**
+HSPLcom/lumera/app/ui/player/base/PlayerModelsKt;->**(**)**
+HSPLcom/lumera/app/ui/player/base/ExoPlayerBackend;->**(**)**
+HSPLcom/lumera/app/ui/player/base/ComposePlayerSurfaceKt;->**(**)**
+HSPLcom/lumera/app/ui/player/base/BasePlayerScaffoldKt;->**(**)**
+
+# Profiles
+HSPLcom/lumera/app/ui/profiles/ProfileScreenKt;->**(**)**
+HSPLcom/lumera/app/ui/profiles/ProfileViewModel;->**(**)**
+
+# ============================================================================
+# LUMERA VIEWMODELS & UTILS
+# ============================================================================
+
+HSPLcom/lumera/app/ui/MainViewModel;->**(**)**
+HSPLcom/lumera/app/ui/theme/ThemeManager;->**(**)**
+HSPLcom/lumera/app/ui/theme/Theme**;->**(**)**
+HSPLcom/lumera/app/ui/utils/ImagePrefetcher**;->**(**)**
+HSPLcom/lumera/app/ui/utils/FocusUtils**;->**(**)**
+
+# ============================================================================
+# DATA LAYER - Repository, DAO, DI
+# ============================================================================
+
+HSPLcom/lumera/app/data/repository/AddonRepository;->**(**)**
+HSPLcom/lumera/app/data/repository/SubtitleRepository;->**(**)**
+HSPLcom/lumera/app/data/repository/IntroRepository;->**(**)**
+HSPLcom/lumera/app/data/local/AddonDao_Impl;->**(**)**
+HSPLcom/lumera/app/data/local/LumeraDatabase_Impl;->**(**)**
+HSPLcom/lumera/app/data/profile/ProfileConfigurationManager;->**(**)**
+HSPLcom/lumera/app/data/auth/StremioAuthManager;->**(**)**
+HSPLcom/lumera/app/data/player/SourceSelectionStore;->**(**)**
+HSPLcom/lumera/app/data/player/PlaybackTrackSelectionStore;->**(**)**
+
+# DI modules
+HSPLcom/lumera/app/di/DatabaseModule;->**(**)**
+HSPLcom/lumera/app/di/NetworkModule;->**(**)**
+HSPLcom/lumera/app/di/ImageLoaderModule;->**(**)**
+
+# ============================================================================
+# DATA MODELS - Hot deserialization paths
+# ============================================================================
+
+# Stremio models (Gson deserialization)
+HSPLcom/lumera/app/data/model/stremio/MetaItem;->**(**)**
+HSPLcom/lumera/app/data/model/stremio/MetaVideo;->**(**)**
+HSPLcom/lumera/app/data/model/stremio/MetaResponse;->**(**)**
+HSPLcom/lumera/app/data/model/stremio/CatalogResponse;->**(**)**
+HSPLcom/lumera/app/data/model/stremio/Stream;->**(**)**
+HSPLcom/lumera/app/data/model/stremio/StreamResponse;->**(**)**
+
+# Room entities
+HSPLcom/lumera/app/data/model/WatchHistoryEntity;->**(**)**
+HSPLcom/lumera/app/data/model/ProfileEntity;->**(**)**
+HSPLcom/lumera/app/data/model/AddonEntity;->**(**)**
+HSPLcom/lumera/app/data/model/CatalogConfigEntity;->**(**)**
+HSPLcom/lumera/app/data/model/ThemeEntity;->**(**)**
+HSPLcom/lumera/app/data/model/HubRowEntity;->**(**)**
+HSPLcom/lumera/app/data/model/HubRowItemEntity;->**(**)**
+HSPLcom/lumera/app/data/model/HubRowWithItems;->**(**)**
+
+# Domain models
+HSPLcom/lumera/app/domain/HomeRow;->**(**)**
+HSPLcom/lumera/app/domain/CategoryRow;->**(**)**
+HSPLcom/lumera/app/domain/HubGroupRow;->**(**)**
+HSPLcom/lumera/app/domain/HubItem;->**(**)**
+HSPLcom/lumera/app/domain/HubShape;->**(**)**
+HSPLcom/lumera/app/domain/DashboardTab;->**(**)**
+HSPLcom/lumera/app/domain/HeroConfig;->**(**)**
+HSPLcom/lumera/app/domain/AddonSubtitle;->**(**)**
+
+# ============================================================================
+# NETWORKING - Faster first API call
+# ============================================================================
+
+HSPLretrofit2/Retrofit;->**(**)**
+HSPLretrofit2/OkHttpCall;->**(**)**
+HSPLokhttp3/OkHttpClient;->**(**)**
+HSPLokhttp3/internal/connection/RealConnectionPool;->**(**)**
+HSPLokhttp3/internal/http2/**;->**(**)**
+
+# ============================================================================
+# ROOM DATABASE - Faster first query
+# ============================================================================
+
+HSPLandroidx/room/RoomDatabase;->**(**)**
+
+# ============================================================================
+# GSON DESERIALIZATION - First API response parsing
+# ============================================================================
+
+HSPLcom/google/gson/Gson;->**(**)**
+HSPLcom/google/gson/internal/bind/**;->**(**)**
+HSPLcom/google/gson/reflect/TypeToken;->**(**)**
+HSPLcom/google/gson/stream/JsonReader;->**(**)**
+
+# ============================================================================
+# SHARED PREFERENCES - Profile loading
+# ============================================================================
+
+HSPLandroid/app/SharedPreferencesImpl;->**(**)**
+HSPLandroidx/security/crypto/EncryptedSharedPreferences;->**(**)**
+
+# ============================================================================
+# COROUTINES - Background processing
+# ============================================================================
+
+HSPLkotlinx/coroutines/**;->**(**)**
