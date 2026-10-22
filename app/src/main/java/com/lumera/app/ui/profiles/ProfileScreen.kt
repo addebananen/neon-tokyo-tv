@@ -132,13 +132,13 @@ fun WelcomeView(onStart: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            "WELCOME TO LUMERA",
+            "WELCOME TO NEON TOKYO",
             style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 4.sp),
             color = Color.White
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            "Your cinematic universe awaits.",
+            "Films, series and anime, after dark.",
             style = MaterialTheme.typography.titleMedium,
             color = Color.Gray
         )
@@ -804,7 +804,8 @@ private fun UploadAvatarButton(
 fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
     val themeManager: ThemeManager = hiltViewModel()
     val themes = DefaultThemes.ALL
-    val initialIndex = themes.size / 2
+    // Start on Neon Tokyo so a single press of OK picks the house theme
+    val initialIndex = themes.indexOfFirst { it.id == DefaultThemes.NEON_TOKYO.id }.coerceAtLeast(0)
     var previewTheme by remember { mutableStateOf(themes[initialIndex]) }
     val listState = rememberLazyListState()
     val horizontalRepeatGate = remember {

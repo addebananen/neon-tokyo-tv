@@ -923,7 +923,10 @@ class MainActivity : ComponentActivity() {
             val updateState by appUpdateManager.state.collectAsState()
             var updateDismissed by rememberSaveable { mutableStateOf(false) }
             val updateScope = rememberCoroutineScope()
-            LaunchedEffect(Unit) { appUpdateManager.checkForUpdate() }
+            // The emulator test passes nt_ci so the popup does not cover the screens under test
+            val ciRun = remember { intent?.getBooleanExtra("nt_ci", false) == true }
+            var updateDownloadStarted by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(Unit) { if (!ciRun) appUpdateManager.checkForUpdate() }
 
             LumeraTheme(theme = currentTheme) {
                 CompositionLocalProvider(
@@ -2300,6 +2303,7 @@ class MainActivity : ComponentActivity() {
                                 UpdateAvailableDialog(
                                     info = state.info,
                                     onUpdate = {
+                                        updateDownloadStarted = true
                                         updateScope.launch { appUpdateManager.downloadAndInstall(state.info.apkUrl) }
                                     },
                                     onDismiss = { updateDismissed = true },
@@ -2316,7 +2320,9 @@ class MainActivity : ComponentActivity() {
                                     totalMb = state.totalMb
                                 )
                             }
-                            is UpdateState.Error -> {
+                            // A failed background check (TV still joining Wi-Fi, GitHub down) stays silent;
+                            // only a download the user started reports its error
+                            is UpdateState.Error -> if (updateDownloadStarted) {
                                 UpdateErrorDialog(
                                     message = state.message,
                                     onRetry = {
