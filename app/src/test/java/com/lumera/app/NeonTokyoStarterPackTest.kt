@@ -62,4 +62,14 @@ class NeonTokyoStarterPackTest {
         assertEquals("genre=Action", action.extraArgs)
         assertTrue(action.uniqueId.endsWith("#genre=Action"))
     }
+
+    @Test
+    fun folderBlurbFollowsTheTab() {
+        assertEquals(
+            "Everything on Netflix in Sweden, films and series together. Updates by itself.",
+            NeonTokyoStarterPack.hubBlurb("Netflix", "nt_services_home")
+        )
+        assertEquals("Everything on Netflix in Sweden. Updates by itself.", NeonTokyoStarterPack.hubBlurb("Netflix", "nt_services_movies"))
+        assertEquals("Popular Horror series, kept up to date from Cinemeta.", NeonTokyoStarterPack.hubBlurb("Horror", "nt_genres_series"))
+    }
 }

@@ -202,12 +202,20 @@ object NeonTokyoStarterPack {
         )
     }
 
-    /** One line under a folder's name on the home screen. */
-    fun hubBlurb(title: String): String {
+    /** One line under a folder's name on the home screen; [hubRowId] tells the Films and Series tabs apart. */
+    fun hubBlurb(title: String, hubRowId: String = ""): String {
+        val what = when {
+            hubRowId.endsWith("_movies") -> "films"
+            hubRowId.endsWith("_series") -> "series"
+            else -> "films and series"
+        }
         val service = SERVICES.firstOrNull { it.second.equals(title, ignoreCase = true) }?.second
-        if (service != null) return "Everything on $service in Sweden, films and series together. Updates by itself."
+        if (service != null) {
+            val together = if (what == "films and series") ", films and series together" else ""
+            return "Everything on $service in Sweden$together. Updates by itself."
+        }
         val genre = GENRES.firstOrNull { it.equals(title, ignoreCase = true) }
-        if (genre != null) return "Popular $genre films and series, kept up to date from Cinemeta."
+        if (genre != null) return "Popular $genre $what, kept up to date from Cinemeta."
         return "Open the folder to browse everything in it."
     }
 

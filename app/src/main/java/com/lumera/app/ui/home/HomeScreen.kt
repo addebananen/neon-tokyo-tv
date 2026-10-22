@@ -252,8 +252,8 @@ fun CinematicLayout(
 ) {
     var instantFocusItem by remember { mutableStateOf<MetaItem?>(null) }
     var displayedItem by remember { mutableStateOf<MetaItem?>(null) }
-    // Folder card in focus (its title and its row's title): the hero shows the folder instead of a title
-    var focusedHub by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Folder card in focus (its title, its row's title and row id): the hero shows the folder instead of a title
+    var focusedHub by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     var hasRequestedFocus by remember { mutableStateOf(false) }
     val previewUpdateGate = remember { PreviewUpdateGate() }
 
@@ -464,7 +464,7 @@ fun CinematicLayout(
                     transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
                     label = "HubInfo"
                 ) { hub ->
-                    if (hub != null) HubHero(title = hub.first, rowTitle = hub.second)
+                    if (hub != null) HubHero(title = hub.first, rowTitle = hub.second, rowId = hub.third)
                 }
             }
 
@@ -604,7 +604,7 @@ fun CinematicLayout(
                                         onFocused = { hubItem, focusKey ->
                                             instantFocusItem = null
                                             displayedItem = null
-                                            focusedHub = hubItem.title to item.title
+                                            focusedHub = Triple(hubItem.title, item.title, item.id)
                                             wrappedOnFocusChange("hub_$focusKey")
                                         },
                                         entryRequester = entryRequester,

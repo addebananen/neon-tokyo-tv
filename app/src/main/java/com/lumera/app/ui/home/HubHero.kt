@@ -30,7 +30,7 @@ import com.lumera.app.ui.components.NeonType
  * so the hero never sits empty.
  */
 @Composable
-fun HubHero(title: String, rowTitle: String, modifier: Modifier = Modifier) {
+fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier = Modifier) {
     val accent = remember(title) { NeonAccents.forTitle(title) }
     Column(modifier = modifier.padding(top = 28.dp)) {
         Text(rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent))
@@ -43,7 +43,7 @@ fun HubHero(title: String, rowTitle: String, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = NeonTokyoStarterPack.hubBlurb(title),
+            text = NeonTokyoStarterPack.hubBlurb(title, rowId),
             style = MaterialTheme.typography.bodyLarge,
             color = NeonPalette.Lilac,
             maxLines = 2,
