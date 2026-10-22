@@ -22,8 +22,17 @@ data class CatalogManifest(
     val type: String = "",
     val id: String = "",
     val name: String = "",
-    val extra: List<CatalogExtra>? = null
-)
+    val extra: List<CatalogExtra>? = null,
+    // Older addons list required extras here instead of flagging them in `extra`
+    val extraRequired: List<String>? = null
+) {
+    /** A catalog that only answers with an extra (search box, mandatory genre) can't be a plain row. */
+    fun needsExtraToBrowse(): Boolean =
+        extra.orEmpty().any { it.isRequired } || !extraRequired.isNullOrEmpty()
+
+    fun supportsSearch(): Boolean =
+        extra.orEmpty().any { it.name == "search" } || extraRequired.orEmpty().contains("search")
+}
 
 data class CatalogExtra(
     val name: String = "",

@@ -10,10 +10,14 @@ import com.lumera.app.data.model.CatalogConfigEntity
 import com.lumera.app.data.model.HubRowEntity
 import com.lumera.app.data.model.HubRowItemEntity
 import com.lumera.app.data.model.WatchHistoryEntity
-import com.lumera.app.data.model.stremio.CatalogManifest
 import com.lumera.app.data.repository.AddonRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import android.util.Log
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,8 +42,8 @@ class ProfileConfigurationManager @Inject constructor(
         private const val KEY_PENDING_SETUP_PROFILES = "pending_setup_profiles"
         private const val KEY_LAST_ACTIVE_PROFILE_ID = "last_active_profile_id"
         private const val SNAPSHOT_DIR = "profile_snapshots"
-        private const val DEFAULT_CINEMETA_MANIFEST_URL = "https://v3-cinemeta.strem.io/manifest.json"
-        private const val DEFAULT_CINEMETA_TRANSPORT_URL = "https://v3-cinemeta.strem.io"
+        private const val TAG = "NeonTokyoStarter"
+        private const val STARTER_MANIFEST_TIMEOUT_MS = 12_000L
     }
 
     private val gson = Gson()
@@ -168,59 +172,22 @@ class ProfileConfigurationManager @Inject constructor(
         )
     }
 
-    private suspend fun createDefaultRuntimeSnapshot(): ProfileRuntimeSnapshot {
-        val fallbackCatalogs = listOf(
-            CatalogManifest(type = "movie", id = "top", name = "Top"),
-            CatalogManifest(type = "series", id = "top", name = "Top")
-        )
+    private suspend fun createDefaultRuntimeSnapshot(): ProfileRuntimeSnapshot = coroutineScope {
+        val manifests = NeonTokyoStarterPack.MANIFEST_URLS.map { manifestUrl ->
+            async {
+                val manifest = runCatching {
+                    withTimeout(STARTER_MANIFEST_TIMEOUT_MS) { addonRepository.fetchManifest(manifestUrl) }
+                }.onFailure { Log.w(TAG, "Starter addon unavailable: $manifestUrl", it) }.getOrNull()
+                manifestUrl.removeSuffix("/manifest.json") to manifest
+            }
+        }.awaitAll().toMap()
 
-        val manifest = runCatching { addonRepository.fetchManifest(DEFAULT_CINEMETA_MANIFEST_URL) }.getOrNull()
-        val catalogs = manifest?.catalogs
-            ?.filter { it.type == "movie" || it.type == "series" }
-            ?.ifEmpty { fallbackCatalogs }
-            ?: fallbackCatalogs
-
-        val addonName = manifest?.name ?: "Cinemeta"
-        val addonEntity = AddonEntity(
-            transportUrl = DEFAULT_CINEMETA_TRANSPORT_URL,
-            id = manifest?.id ?: "org.stremio.cinemeta",
-            name = addonName,
-            version = manifest?.version ?: "1.0.0",
-            description = manifest?.description ?: "Official Stremio metadata addon",
-            iconUrl = manifest?.logo,
-            isTrusted = false,
-            isEnabled = true,
-            nickname = null,
-            catalogsJson = gson.toJson(catalogs)
-        )
-
-        val configs = catalogs.mapIndexed { index, catalog ->
-            val isMovie = catalog.type == "movie"
-            val isSeries = catalog.type == "series"
-            CatalogConfigEntity(
-                uniqueId = "${DEFAULT_CINEMETA_TRANSPORT_URL}/${catalog.type}/${catalog.id}",
-                transportUrl = DEFAULT_CINEMETA_TRANSPORT_URL,
-                addonName = addonName,
-                catalogType = catalog.type,
-                catalogId = catalog.id,
-                catalogName = catalog.name,
-                customTitle = null,
-                showInHome = true,
-                showInMovies = isMovie,
-                showInSeries = isSeries,
-                homeOrder = index,
-                moviesOrder = if (isMovie) index else 999,
-                seriesOrder = if (isSeries) index else 999
-            )
+        NeonTokyoStarterPack.build(manifests, gson).also { snapshot ->
+            snapshot.catalogConfigs.forEach {
+                Log.i(TAG, "Starter catalog ${it.addonName} ${it.catalogType}/${it.catalogId} " +
+                    "${it.extraArgs ?: ""} '${it.customTitle ?: it.catalogName}' home=${it.showInHome}")
+            }
         }
-
-        return ProfileRuntimeSnapshot(
-            addons = listOf(addonEntity),
-            catalogConfigs = configs,
-            hubRows = emptyList(),
-            hubRowItems = emptyList(),
-            watchHistory = emptyList()
-        )
     }
 
     private fun writeSnapshot(profileId: Int, snapshot: ProfileRuntimeSnapshot) {

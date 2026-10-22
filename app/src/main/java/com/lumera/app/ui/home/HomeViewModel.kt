@@ -729,8 +729,9 @@ class HomeViewModel @Inject constructor(
         // 3. If not found, fetch from repository
         viewModelScope.launch {
             try {
-                val fetchedRow = repository.getCategoryRowPreview(
-                    configId = hubItem.categoryId,
+                val fetchedRow = repository.getHubCategory(
+                    categoryId = hubItem.categoryId,
+                    title = hubItem.title,
                     maxItems = hubInitialLoadCount
                 )
                 if (fetchedRow != null) {

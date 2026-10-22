@@ -16,6 +16,8 @@ fail() { echo "FAIL: $*" | tee -a "$OUT/FAILURES.txt"; }
 alive() {
   if ! adb shell pidof "$PKG" >/dev/null 2>&1; then
     fail "app is not running after step $1"
+  elif ! adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then
+    fail "app left the foreground after step $1"
   fi
 }
 
@@ -43,6 +45,62 @@ key() {
 screen_has() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
   adb shell cat /sdcard/ui.xml 2>/dev/null | grep -qi -- "$1"
+}
+
+# focus_and_target <label>: prints "<focused center y> <menu entry center y>" from the UI tree
+focus_and_target() {
+  timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
+  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+import re, sys
+xml = sys.stdin.read()
+label = sys.argv[1]
+def center(node):
+    m = re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", node)
+    return (int(m.group(2)) + int(m.group(4))) // 2 if m else -1
+nodes = re.findall(r"<node [^>]*>", xml)
+focused = [n for n in nodes if "focused=\"true\"" in n]
+def left(node):
+    m = re.search(r"bounds=\"\[(\d+),", node)
+    return int(m.group(1)) if m else 9999
+# Menu entries sit at the left edge, which keeps posters with the same title out
+target = [n for n in nodes if ("content-desc=\"%s\"" % label) in n and left(n) < 500]
+print(center(focused[-1]) if focused else -1, center(target[0]) if target else -1)
+' "$1"
+}
+
+# menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
+menu_go() {
+  key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
+  sleep 1
+  local tries=0 fy ty
+  while [ "$tries" -lt 10 ]; do
+    read -r fy ty < <(focus_and_target "$1")
+    if [ "${ty:--1}" -lt 0 ] || [ "${fy:--1}" -lt 0 ]; then fail "menu entry $1 not found"; return 1; fi
+    local diff=$((ty - fy))
+    if [ "${diff#-}" -lt 30 ]; then key DPAD_CENTER; return 0; fi
+    if [ "$diff" -gt 0 ]; then key DPAD_DOWN; else key DPAD_UP; fi
+    tries=$((tries + 1))
+  done
+  fail "could not focus menu entry $1"
+  return 1
+}
+
+# type_grid <word>: types on the app's 6 column on-screen keyboard with the D-pad,
+# starting from the "a" key, the way someone with a remote would
+type_grid() {
+  local keys="abcdefghijklmnopqrstuvwxyz1234567890" row=0 col=0 i ch idx r c
+  for ((i = 0; i < ${#1}; i++)); do
+    ch="${1:$i:1}"
+    idx=$(expr index "$keys" "$ch")
+    idx=$((idx - 1))
+    r=$((idx / 6)); c=$((idx % 6))
+    while [ "$row" -lt "$r" ]; do adb shell input keyevent DPAD_DOWN; row=$((row + 1)); sleep 0.3; done
+    while [ "$row" -gt "$r" ]; do adb shell input keyevent DPAD_UP; row=$((row - 1)); sleep 0.3; done
+    while [ "$col" -lt "$c" ]; do adb shell input keyevent DPAD_RIGHT; col=$((col + 1)); sleep 0.3; done
+    while [ "$col" -gt "$c" ]; do adb shell input keyevent DPAD_LEFT; col=$((col - 1)); sleep 0.3; done
+    adb shell input keyevent DPAD_CENTER
+    sleep 0.6
+  done
 }
 
 # wait_for <text> <seconds>
@@ -102,6 +160,17 @@ fi
 sleep 8
 shot home
 
+# --- Hub folders: open the first streaming service card --------------------
+key DPAD_CENTER
+sleep 8
+shot hub-open
+key DPAD_DOWN DPAD_DOWN
+sleep 2
+shot hub-grid
+key BACK
+sleep 3
+shot hub-back
+
 # --- Browse rows ---------------------------------------------------------
 key DPAD_DOWN
 sleep 2
@@ -115,7 +184,10 @@ shot home-row3-right
 key DPAD_DOWN DPAD_DOWN
 sleep 2
 shot home-row5
-key DPAD_DOWN DPAD_DOWN DPAD_DOWN
+key DPAD_DOWN
+sleep 2
+shot home-row6
+key DPAD_DOWN DPAD_DOWN
 sleep 3
 shot home-deep
 
@@ -137,29 +209,28 @@ shot back-to-home
 key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
 sleep 2
 shot menu-open
-key DPAD_DOWN DPAD_CENTER
+menu_go Movies
 sleep 10
 shot movies-tab
 key DPAD_DOWN DPAD_DOWN
 sleep 2
 shot movies-rows
-key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
-key DPAD_DOWN DPAD_CENTER
+menu_go Series
 sleep 10
 shot series-tab
-key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
-key DPAD_UP DPAD_UP DPAD_UP DPAD_CENTER
+key DPAD_DOWN DPAD_DOWN DPAD_DOWN
+sleep 2
+shot series-rows
+menu_go Search
 sleep 6
 shot search-tab
-adb shell input text "dune"
-sleep 1
-key ENTER
+type_grid "dune"
 sleep 10
 shot search-results
-key BACK
+key DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT
 sleep 2
-key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
-key DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_CENTER
+shot search-results-focus
+menu_go Settings
 sleep 5
 shot settings
 key DPAD_RIGHT
@@ -170,13 +241,15 @@ sleep 2
 shot settings-down
 
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
-key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
-key DPAD_UP DPAD_UP DPAD_UP DPAD_UP DPAD_CENTER
+menu_go Home
 sleep 8
 for i in $(seq 1 25); do adb shell input keyevent DPAD_DOWN; done
 for i in $(seq 1 40); do adb shell input keyevent DPAD_RIGHT; done
 sleep 4
 shot stress-scroll
+for i in $(seq 1 30); do adb shell input keyevent DPAD_UP; done
+sleep 3
+shot stress-back-top
 
 # --- Results ----------------------------------------------------------------
 adb shell dumpsys gfxinfo "$PKG" > "$OUT/gfxinfo.txt" 2>&1
@@ -190,6 +263,7 @@ if [ -n "$APP_PID_LINES" ]; then
   grep -A40 "FATAL EXCEPTION" "$OUT/logcat-full.txt" > "$OUT/crash.txt" || true
 fi
 grep -i "neontokyo\|lumera\|AndroidRuntime\|System.err" "$OUT/logcat-full.txt" > "$OUT/logcat-app.txt" || true
+grep "NeonTokyoStarter\|MetahubFallback" "$OUT/logcat-full.txt" > "$OUT/starter-catalogs.txt" || true
 
 if [ -s "$OUT/FAILURES.txt" ]; then
   cat "$OUT/FAILURES.txt"

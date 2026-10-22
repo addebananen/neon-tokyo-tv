@@ -25,5 +25,8 @@ data class CatalogConfigEntity(
 
     val isInfiniteLoopEnabled: Boolean = false,  // Default: Standard linear scrolling (Grid View)
     val visibleItemCount: Int = 15,              // Only used when Grid View is enabled
-    val isInfiniteScrollingEnabled: Boolean = true  // Only used when Grid View is enabled; loops at View More
+    val isInfiniteScrollingEnabled: Boolean = true,  // Only used when Grid View is enabled; loops at View More
+
+    // Fixed catalog extras such as "genre=Action", so one addon catalog can back several rows or hub cards
+    val extraArgs: String? = null
 )

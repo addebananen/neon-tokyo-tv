@@ -171,6 +171,7 @@ dependencies {
     implementation(files("../playbackcore/libs/lib-decoder-mpegh-release.aar"))
 
     // 8. Testing & Debugging
+    testImplementation("junit:junit:4.13.2")
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("androidx.compose.material3:material3:1.2.0")

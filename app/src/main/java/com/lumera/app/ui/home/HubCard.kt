@@ -44,6 +44,7 @@ import coil.request.ImageRequest
 import coil.size.Scale
 import com.lumera.app.domain.HubItem
 import com.lumera.app.domain.HubShape
+import com.lumera.app.ui.components.NeonCardArt
 import com.lumera.app.ui.theme.LocalHubRoundCorners
 
 /**
@@ -147,32 +148,12 @@ fun HubCard(
                     )
 
                 } else {
-                    // Simple Card Style (ViewMoreCard look)
-                    // No image, just background color + centered text/icon
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(cardShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = hubItem.title,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp
-                                ),
-                                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                    // Neon sign art, tinted per service or genre
+                    NeonCardArt(
+                        title = hubItem.title,
+                        focused = isFocused,
+                        modifier = Modifier.clip(cardShape)
+                    )
                 }
             }
         }

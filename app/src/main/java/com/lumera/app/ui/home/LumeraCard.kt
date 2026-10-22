@@ -125,15 +125,27 @@ fun LumeraCard(
             }
             
             Box(modifier = Modifier.fillMaxSize()) {
+                // Neon title card until the poster arrives, and for titles that have no poster
+                var posterLoaded by remember(posterUrl) { mutableStateOf(false) }
+                if (!posterLoaded) {
+                    NeonCardArt(
+                        title = title,
+                        focused = isFocused,
+                        glow = false,
+                        fontSize = 15,
+                        maxLines = 4,
+                        modifier = Modifier.clip(cardShape)
+                    )
+                }
                 // AsyncImage is lighter than SubcomposeAsyncImage - no subcomposition overhead
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
+                    onSuccess = { posterLoaded = true },
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(cardShape)
-                        .background(MaterialTheme.colorScheme.surface)
                 )
 
                 // Watched badge — corner triangle with checkmark
