@@ -21,7 +21,8 @@ alive() {
   fi
 }
 
-# shot <name>: screenshot + UI tree (texts help reading the screen without the image)
+# shot <name> [noalive]: screenshot + UI tree (texts help reading the screen without the image).
+# noalive skips the foreground check, for the screensaver, which is a system window.
 shot() {
   step=$((step + 1))
   local name
@@ -30,7 +31,7 @@ shot() {
   if timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; then
     adb pull /sdcard/ui.xml "$OUT/$name.xml" >/dev/null 2>&1
   fi
-  alive "$name"
+  [ "${2:-}" = noalive ] || alive "$name"
   echo "step $name"
 }
 
@@ -66,6 +67,40 @@ def left(node):
 target = [n for n in nodes if ("content-desc=\"%s\"" % label) in n and left(n) < 500]
 print(center(focused[-1]) if focused else -1, center(target[0]) if target else -1)
 ' "$1"
+}
+
+# focused_label: the text inside the element that has the D-pad focus
+focused_label() {
+  timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
+  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+import re, sys
+xml = sys.stdin.read()
+nodes = re.findall(r"<node [^>]*>", xml)
+def box(node):
+    m = re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", node)
+    return tuple(map(int, m.groups())) if m else None
+focused = [box(n) for n in nodes if "focused=\"true\"" in n]
+if focused and focused[-1]:
+    x1, y1, x2, y2 = focused[-1]
+    for n in nodes:
+        t = re.search(r"text=\"([^\"]*)\"", n)
+        b = box(n)
+        if t and t.group(1) and b and b[0] >= x1 and b[1] >= y1 and b[2] <= x2 and b[3] <= y2:
+            print(t.group(1))
+            break
+'
+}
+
+# focus_down_to <label> <max presses>: presses Down until the focused element shows that label
+focus_down_to() {
+  local i=0
+  while [ "$i" -le "$2" ]; do
+    if [ "$(focused_label)" = "$1" ]; then return 0; fi
+    adb shell input keyevent DPAD_DOWN
+    sleep 0.8
+    i=$((i + 1))
+  done
+  return 1
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
@@ -254,6 +289,59 @@ shot settings-content
 key DPAD_DOWN DPAD_DOWN
 sleep 2
 shot settings-down
+
+# --- Screensaver and Projectivy rows in Personalization ----------------------
+if focus_down_to "Preview" 8; then
+  shot settings-screensaver
+  key DPAD_DOWN
+  sleep 1
+  shot settings-projectivy
+  key DPAD_UP
+  sleep 1
+  key DPAD_CENTER
+  sleep 5
+  shot dream-preview
+  sleep 8
+  shot dream-preview-later
+  key BACK
+  sleep 3
+  if ! screen_has "Screensaver"; then fail "Back did not return from the screensaver preview to settings"; fi
+else
+  fail "Screensaver row not found in Personalization"
+fi
+
+# --- Projectivy wallpaper provider -------------------------------------------
+if ! adb shell cmd package query-services -a tv.projectivy.plugin.WALLPAPER_PROVIDER 2>/dev/null | grep -q NeonWallpaperProviderService; then
+  fail "the Projectivy wallpaper provider is not registered"
+fi
+# Projectivy opens the settings page as ".NeonWallpaperSettings" under the package name
+adb shell am start -n "$PKG/.NeonWallpaperSettings" > "$OUT/wallpaper-settings-start.txt" 2>&1
+sleep 6
+shot wallpaper-settings
+key DPAD_DOWN
+sleep 5
+shot wallpaper-night-drive
+key DPAD_DOWN
+sleep 1
+key DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT
+sleep 2
+shot wallpaper-swatches
+key BACK
+sleep 3
+
+# --- The screensaver as the TV runs it ---------------------------------------
+if ! adb shell cmd package query-services -a android.service.dreams.DreamService 2>/dev/null | grep -q NeonDreamService; then
+  fail "the screensaver is not registered"
+fi
+adb shell settings put secure screensaver_enabled 1
+adb shell settings put secure screensaver_components "$PKG/com.lumera.app.dream.NeonDreamService"
+adb shell am start -n com.android.systemui/.Somnambulator > "$OUT/dream-start.txt" 2>&1
+sleep 8
+adb shell dumpsys dreams > "$OUT/dreams.txt" 2>&1
+shot dream-system noalive
+adb shell input keyevent DPAD_UP
+sleep 3
+adb shell settings delete secure screensaver_components
 
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
 menu_go Home

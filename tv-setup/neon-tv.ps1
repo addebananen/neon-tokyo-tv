@@ -4,15 +4,21 @@ Neon Tokyo setup for a TCL Google TV, run from a Windows PC on the same network.
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1              # everything
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step undo   # put it all back
 
-Steps: connect, inventory, debloat, launcher, tune, art, app, restart, report, undo.
+Steps: connect, inventory, debloat, launcher, tune, art, app, dream, restart, report, undo.
 Nothing is uninstalled: apps are only disabled, and every change is written to
 %USERPROFILE%\NeonTV\undo.txt so -Step undo can reverse it. A factory reset also
 restores everything.
+
+TVs with "Wireless debugging" instead of network ADB on port 5555: pair once with
+  neon-tv.ps1 -Pair 192.168.1.23:37000 -Code 123456
+using the address and code the TV shows under "Pair device with pairing code".
 #>
 param(
-    [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'restart', 'report', 'undo')]
+    [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'restart', 'report', 'undo')]
     [string]$Step = 'all',
     [string]$Ip = '',
+    [string]$Pair = '',
+    [string]$Code = '',
     [switch]$AnyDevice
 )
 
@@ -27,6 +33,7 @@ $IpFile = Join-Path $Work 'tv-ip.txt'
 $Raw = 'https://raw.githubusercontent.com/addebananen/neon-tokyo-tv/dev/tv-setup'
 $Projectivy = 'com.spocky.projengmenu'
 $NeonApp = 'com.neontokyo.tv'
+$NeonDream = "$NeonApp/com.lumera.app.dream.NeonDreamService"
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 
 # Never disabled, whatever a list says: inputs, remote, Wi-Fi, updates, Play, voice, casting.
@@ -53,7 +60,18 @@ $Bloat = @(
 $StockHome = @('com.google.android.apps.tv.launcherx', 'com.google.android.videos')
 $SetupHome = 'com.google.android.tungsten.setupwraith'
 
-function Say([string]$text) { Write-Host "[NeonTV] $text" }
+function Say([string]$text) {
+    Write-Host '[NeonTV] ' -ForegroundColor Magenta -NoNewline
+    Write-Host $text
+}
+
+function Banner {
+    Write-Host ''
+    Write-Host '  N E O N   T O K Y O' -ForegroundColor Magenta -NoNewline
+    Write-Host '   //   Google TV setup' -ForegroundColor Cyan
+    Write-Host '  ----------------------------------------------' -ForegroundColor DarkMagenta
+    Write-Host ''
+}
 
 function Ensure-Adb {
     $onPath = Get-Command adb.exe -ErrorAction SilentlyContinue
@@ -94,11 +112,41 @@ function Find-TvCandidates {
     @($found | Sort-Object -Unique)
 }
 
+# "192.168.1.23" or "192.168.1.23:5555" -> "192.168.1.23:5555"
+function With-Port([string]$address) { if ($address -match ':\d+$') { $address } else { "${address}:5555" } }
+
+function Test-Port([string]$address) {
+    $hostName, $port = (With-Port $address) -split ':'
+    $client = New-Object System.Net.Sockets.TcpClient
+    try { $client.ConnectAsync($hostName, [int]$port).Wait(1500) -and $client.Connected }
+    catch { $false }
+    finally { $client.Dispose() }
+}
+
+# TVs with Wireless debugging announce themselves; classic network ADB on 5555 usually doesn't
+function Get-MdnsCandidates {
+    $out = & $script:AdbExe mdns services 2>$null | Out-String
+    @(Lines $out | Where-Object { $_ -match '_adb-tls-connect|_adb\._tcp' } |
+        ForEach-Object { [regex]::Match($_, '\d{1,3}(\.\d{1,3}){3}:\d{2,5}').Value } |
+        Where-Object { $_ } | Sort-Object -Unique)
+}
+
 function Connect-Tv {
     Ensure-Adb
+    if ($Pair) {
+        if (-not $Code) { throw 'Add the six-digit pairing code the TV shows: -Code 123456' }
+        Say "Pairing with $Pair..."
+        Say ((& $script:AdbExe pair $Pair $Code 2>&1 | Out-String).Trim())
+        Start-Sleep 2
+    }
     $candidates = @()
     if ($Ip) { $candidates = @($Ip) }
-    elseif (Test-Path $IpFile) { $candidates = @((Get-Content $IpFile -Raw).Trim()) }
+    elseif (Test-Path $IpFile) {
+        $saved = (Get-Content $IpFile -Raw).Trim()
+        if ($saved -and (Test-Port $saved)) { $candidates = @($saved) }
+        elseif ($saved) { Say "The TV is no longer answering at $saved. Looking for it again." }
+    }
+    if ($candidates.Count -eq 0) { $candidates = Get-MdnsCandidates }
     if ($candidates.Count -eq 0) {
         Say 'Looking for the TV on your network (port 5555)...'
         $candidates = Find-TvCandidates
@@ -107,7 +155,7 @@ function Connect-Tv {
         throw 'No TV found. On the TV, turn on Settings > System > Developer options > USB debugging, then run again (or pass -Ip with the TV''s address).'
     }
     foreach ($c in $candidates) {
-        $script:Serial = "${c}:5555"
+        $script:Serial = With-Port $c
         & $script:AdbExe connect $script:Serial | Out-Null
         Say "Connecting to $($script:Serial). If the TV asks 'Allow USB debugging?', tick 'Always allow' and press OK."
         $state = ''
@@ -120,8 +168,8 @@ function Connect-Tv {
         if ($state -ne 'device') { Say "No answer from $c."; continue }
         $who = (Shell 'getprop ro.product.manufacturer') + ' ' + (Shell 'getprop ro.product.brand') + ' ' + (Shell 'getprop ro.product.model')
         if (-not $AnyDevice -and $who -notmatch 'TCL') { Say "Skipping $c ($who): not a TCL TV."; continue }
-        Set-Content $IpFile $c
-        Say "Connected: $who at $c"
+        Set-Content $IpFile $script:Serial
+        Say "Connected: $who at $($script:Serial)"
         return
     }
     throw 'Could not connect to the TV. Accept the prompt on the TV and run again.'
@@ -265,9 +313,28 @@ function Restart-Tv {
     }
 }
 
+function Set-Screensaver {
+    $dreams = Shell 'cmd package query-services --brief -a android.service.dreams.DreamService'
+    if ($dreams -notmatch [regex]::Escape($NeonDream)) {
+        Say 'This Neon Tokyo version has no screensaver yet (it comes with 0.2). Skipping it.'
+        return
+    }
+    $saved = Join-Path $Before 'screensaver.txt'
+    if (-not (Test-Path $saved)) {
+        New-Item -ItemType Directory -Force -Path $Before | Out-Null
+        $settings = foreach ($k in 'screensaver_components', 'screensaver_enabled') { "$k=$(Shell "settings get secure $k")" }
+        $settings | Set-Content $saved
+    }
+    # Google TV only lists its own Ambient mode, so the screensaver is picked here
+    Shell "settings put secure screensaver_components $NeonDream" | Out-Null
+    Shell 'settings put secure screensaver_enabled 1' | Out-Null
+    Say 'Screensaver: Neon Tokyo night (skyline, neon clock, shooting stars). It starts after the TV''s usual idle time.'
+}
+
 function Show-Report {
     Say '--- Report ---'
     Say ('Home button opens: ' + ((Lines (Shell 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME')) | Select-Object -Last 1))
+    Say ('Screensaver: ' + (Shell 'settings get secure screensaver_components'))
     Say ('On screen: ' + (Shell 'dumpsys window | grep mCurrentFocus'))
     Say ('Memory now: ' + ((Lines (Shell "grep -E 'MemTotal|MemAvailable' /proc/meminfo")) -join ', '))
     $was = Join-Path $Before 'memory.txt'
@@ -277,6 +344,9 @@ function Show-Report {
     Adb pull /sdcard/neontv-after.png (Join-Path $Work 'screen-after.png') | Out-Null
     Shell 'rm /sdcard/neontv-after.png' | Out-Null
     Say "Screenshot of the TV: $(Join-Path $Work 'screen-after.png')"
+    if (Shell "pm path $Projectivy") {
+        Say 'Tip: in Projectivy, Settings > Appearance > Wallpaper > Neon Tokyo makes the skyline follow the app you point at.'
+    }
 }
 
 function Undo-All {
@@ -288,23 +358,33 @@ function Undo-All {
         }
         Remove-Item $UndoFile
     }
-    $saved = Join-Path $Before 'settings.txt'
-    if (Test-Path $saved) {
-        foreach ($l in Get-Content $saved) {
-            $k, $v = $l -split '=', 2
-            if ($v -and $v -ne 'null') { Shell "settings put global $k $v" | Out-Null }
-            else { Shell "settings delete global $k" | Out-Null }
-        }
+    Restore-Settings 'global' (Join-Path $Before 'settings.txt')
+    Restore-Settings 'secure' (Join-Path $Before 'screensaver.txt')
+    # The Home button goes back to whatever it opened before, normally the Google TV home screen
+    $was = Join-Path $Before 'home.txt'
+    $original = if (Test-Path $was) { (Get-Content $was) | Where-Object { $_ -match '^\S+/\S+$' } | Select-Object -Last 1 } else { '' }
+    if ($original -and $original -notmatch [regex]::Escape($Projectivy)) {
+        Say "Home button: $original $(Shell "cmd package set-home-activity $original")"
     }
     Shell 'input keyevent KEYCODE_HOME' | Out-Null
-    Say 'Everything this script turned off is back on. Uninstall Projectivy on the TV to get the Google TV home screen back as default.'
+    Say 'Everything is back the way it was. Projectivy and Neon Tokyo stay installed; uninstall them on the TV if you want them gone.'
+}
+
+function Restore-Settings([string]$namespace, [string]$file) {
+    if (-not (Test-Path $file)) { return }
+    foreach ($l in Get-Content $file) {
+        $k, $v = $l -split '=', 2
+        if ($v -and $v -ne 'null') { Shell "settings put $namespace $k $v" | Out-Null }
+        else { Shell "settings delete $namespace $k" | Out-Null }
+    }
 }
 
 Start-Transcript -Path (Join-Path $Work 'log.txt') -Append | Out-Null
 try {
+    Banner
     Connect-Tv
     switch ($Step) {
-        'all'       { Save-Inventory; Remove-Bloat; Set-Launcher; Set-Tuning; Push-Art; Install-NeonApp; Restart-Tv; Show-Report }
+        'all'       { Save-Inventory; Remove-Bloat; Set-Launcher; Set-Tuning; Push-Art; Install-NeonApp; Set-Screensaver; Restart-Tv; Show-Report }
         'connect'   { }
         'inventory' { Save-Inventory }
         'debloat'   { Save-Inventory; Remove-Bloat }
@@ -312,6 +392,7 @@ try {
         'tune'      { Save-Inventory; Set-Tuning }
         'art'       { Push-Art }
         'app'       { Install-NeonApp }
+        'dream'     { Set-Screensaver }
         'restart'   { Restart-Tv; Show-Report }
         'report'    { Show-Report }
         'undo'      { Undo-All }

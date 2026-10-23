@@ -49,6 +49,9 @@ android {
         buildConfigField("String", "TRAKT_CLIENT_ID", "\"$traktClientId\"")
         buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"$traktClientSecret\"")
 
+        // Identifies the wallpaper provider to Projectivy Launcher; the test build gets its own
+        resValue("string", "nt_wallpaper_provider_uuid", "0bf66a9d-66d0-4d92-8e47-a5a463086130")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -75,6 +78,7 @@ android {
         debug {
             applicationIdSuffix = ".test"
             resValue("string", "app_name", "Neon Tokyo Test")
+            resValue("string", "nt_wallpaper_provider_uuid", "06da0f93-beab-4095-86e4-46289fd5e2bc")
         }
         release {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
@@ -101,6 +105,8 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        // Projectivy's wallpaper provider interface
+        aidl = true
     }
     packaging {
         resources {

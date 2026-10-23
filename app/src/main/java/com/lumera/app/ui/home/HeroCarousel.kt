@@ -40,8 +40,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
+import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.backdropRequest
 import com.lumera.app.R
 import com.lumera.app.data.model.stremio.MetaItem
 import kotlinx.coroutines.delay
@@ -223,26 +223,21 @@ fun HeroCarousel(
             label = "hero_bg"
         ) { item ->
             val bgReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
-            val imageUrl = item.background ?: item.poster
-            if (imageUrl != null && bgReady) {
-                val context = LocalContext.current
+            val context = LocalContext.current
+            val backdrop = remember(item.background, item.poster) {
+                backdropRequest(context, item.background, item.poster)
+            }
+            if (backdrop != null && bgReady) {
                 val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-                val request = remember(imageUrl) {
-                    ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .crossfade(false)
-                        .size(1920, 1080)
-                        .allowHardware(true)
-                        .build()
-                }
                 Box(modifier = Modifier.fillMaxSize()) {
                     AsyncImage(
-                        model = request,
+                        model = backdrop.request,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         alignment = Alignment.TopCenter,
                         modifier = Modifier
                             .fillMaxSize()
+                            .alpha(if (backdrop.wash) 0.7f else 1f)
                             .drawWithCache {
                                 val bottomGradient = Brush.verticalGradient(
                                     colorStops = arrayOf(
@@ -291,15 +286,13 @@ fun HeroCarousel(
                         contentAlignment = Alignment.BottomStart
                     ) {
                         if (!item.logo.isNullOrEmpty()) {
-                            SubcomposeAsyncImage(
-                                model = item.logo,
-                                contentDescription = item.name,
-                                contentScale = ContentScale.Fit,
-                                alignment = Alignment.BottomStart,
+                            TitleLogo(
+                                url = item.logo.orEmpty(),
+                                name = item.name,
                                 modifier = Modifier
                                     .widthIn(max = 400.dp)
                                     .heightIn(max = 70.dp),
-                                error = {
+                                fallback = {
                                     Text(
                                         text = item.name,
                                         style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),

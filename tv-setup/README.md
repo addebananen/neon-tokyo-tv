@@ -9,7 +9,10 @@ What it does:
 - Speeds up menus: window and screen transitions run at 0.5x. Animations inside apps keep their normal speed.
 - Copies the Neon Tokyo wallpaper, banners and icons to `Pictures/NeonTokyo` on the TV.
 - Installs the latest Neon Tokyo release (0.2 or newer).
+- Makes *Neon Tokyo night* the screensaver: the skyline with its grid rolling towards you, a neon clock, twinkling stars and the odd shooting star. Google TV only lists its own Ambient mode, so this can only be picked over ADB.
 - Restarts the TV and checks that it boots straight into Projectivy.
+
+In Projectivy, pick **Settings → Appearance → Wallpaper → Neon Tokyo** and the skyline wallpaper takes the colour of the app you point at: red for YouTube and Netflix, green for Spotify and Xbox, violet for Stremio, blue for HDMI inputs. When the TV sits idle the grid starts rolling.
 
 It never touches inputs/HDMI, the remote, Wi-Fi, system updates, Play Store/Play Services, voice search or Chromecast.
 
@@ -27,8 +30,12 @@ iwr https://raw.githubusercontent.com/addebananen/neon-tokyo-tv/dev/tv-setup/neo
 powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\NeonTV\neon-tv.ps1
 ```
 
-You can also run one step at a time with `-Step connect|inventory|debloat|launcher|tune|art|app|restart|report`.
+You can also run one step at a time with `-Step connect|inventory|debloat|launcher|tune|art|app|dream|restart|report`.
 If the TV isn't found automatically, add `-Ip 192.168.x.x`. Its IP is under Settings → Network & Internet.
+If the TV gets a new address later, the script notices and looks for it again.
+
+A TV that offers **Wireless debugging** instead: open *Pair device with pairing code* on the TV and run once with
+`-Pair 192.168.x.x:port -Code 123456`, using the address and code it shows.
 
 ## Undo
 
@@ -36,4 +43,4 @@ If the TV isn't found automatically, add `-Ip 192.168.x.x`. Its IP is under Sett
 powershell -ExecutionPolicy Bypass -File $env:USERPROFILE\NeonTV\neon-tv.ps1 -Step undo
 ```
 
-This turns everything back on and puts the animation speeds back. The TV's original state, including its package list, a screenshot and its memory use, is saved in `%USERPROFILE%\NeonTV\before`.
+This turns everything back on, puts the animation speeds and the screensaver back, and gives the Home button back to the Google TV home screen. The TV's original state, including its package list, a screenshot and its memory use, is saved in `%USERPROFILE%\NeonTV\before`.

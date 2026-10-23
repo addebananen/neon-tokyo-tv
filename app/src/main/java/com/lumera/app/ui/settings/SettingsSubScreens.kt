@@ -222,6 +222,13 @@ fun PersonalizationSettings(
                 blockUp = false
             )
         }
+        Spacer(Modifier.height(15.dp))
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+        Spacer(Modifier.height(15.dp))
+
+        // SCREENSAVER AND PROJECTIVY WALLPAPER
+        NeonExtrasSettings(onGoBack = onGoBack)
+        Spacer(Modifier.height(24.dp))
     }
 }
 

@@ -47,8 +47,9 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
+import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.backdropRequest
+import androidx.compose.ui.geometry.Offset
 import com.lumera.app.R
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.WatchHistoryEntity
@@ -412,15 +413,13 @@ fun CinematicLayout(
                                 contentAlignment = Alignment.BottomStart
                             ) {
                                 if (!item.logo.isNullOrEmpty()) {
-                                    SubcomposeAsyncImage(
-                                        model = item.logo,
-                                        contentDescription = item.name,
-                                        contentScale = ContentScale.Fit,
-                                        alignment = Alignment.BottomStart,
+                                    TitleLogo(
+                                        url = item.logo.orEmpty(),
+                                        name = item.name,
                                         modifier = Modifier
                                             .widthIn(max = 500.dp)
                                             .heightIn(max = 90.dp),
-                                        error = {
+                                        fallback = {
                                             Text(
                                                 text = item.name,
                                                 style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
@@ -1303,31 +1302,39 @@ fun CinematicBackground(item: MetaItem?) {
                 label = "HeroBg"
             ) { currentItem ->
                 if (currentItem != null) {
-                    val image = currentItem.background ?: currentItem.poster
                     val context = LocalContext.current
-                    val imageRequest = remember(image) {
-                        ImageRequest.Builder(context)
-                            .data(image)
-                            .crossfade(false)
-                            .size(1920, 1080)
-                            .build()
+                    val backdrop = remember(currentItem.background, currentItem.poster) {
+                        backdropRequest(context, currentItem.background, currentItem.poster)
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         AsyncImage(
-                            model = imageRequest,
+                            model = backdrop?.request,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(if (backdrop?.wash == true) 0.7f else 1f)
                         )
-                        // Left and bottom edge fades only
+                        // Left and bottom edge fades, and a soft shade where the title and text sit,
+                        // for backdrops with their own lettering
                         Spacer(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .drawWithCache {
+                                    val textShade = Brush.radialGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to backgroundColor.copy(0.6f),
+                                            0.55f to backgroundColor.copy(0.28f),
+                                            1.0f to Color.Transparent
+                                        ),
+                                        center = Offset(0f, size.height * 0.4f),
+                                        radius = size.width * 0.6f
+                                    )
                                     onDrawWithContent {
                                         drawRect(brush = leftFade)
                                         drawRect(brush = bottomFade)
+                                        drawRect(brush = textShade)
                                     }
                                 }
                         )

@@ -567,11 +567,23 @@ class AddonRepository @Inject constructor(
             } catch (_: Exception) { /* try next */ }
         }
 
-        // Last resort: Cinemeta for standard types
-        try {
-            val url = "https://v3-cinemeta.strem.io/meta/$type/$id.json"
-            return@withContext withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta.sanitize()
-        } catch (_: Exception) { null }
+        // Last resort: Cinemeta for standard types. Catalogs sometimes file a series as a movie
+        // or the other way round, so an IMDb id also gets a try under the other type.
+        val cinemetaTypes = buildList {
+            add(type)
+            if (id.startsWith("tt")) when (type) {
+                "movie" -> add("series")
+                "series" -> add("movie")
+            }
+        }
+        for (cinemetaType in cinemetaTypes) {
+            try {
+                val url = "https://v3-cinemeta.strem.io/meta/$cinemetaType/$id.json"
+                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta.sanitize()
+                if (meta != null) return@withContext meta
+            } catch (_: Exception) { /* try the other type */ }
+        }
+        null
     }
 
     private fun AddonEntity.supportsMetaType(type: String): Boolean {

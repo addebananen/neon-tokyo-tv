@@ -74,6 +74,15 @@ jobs:
           path: neon-tokyo-*.apk
           retention-days: 7
 
+  # Runs the TV setup script against a fake TV and checks that undo puts everything back
+  tv-setup-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test neon-tv.ps1
+        run: bash .github/scripts/tv-setup-test.sh
+
   # Boots an Android TV 11 emulator (same Android version as the TCL C845),
   # clicks through the app with the remote's D-pad and fails on any crash.
   tv-test:
@@ -105,6 +114,9 @@ jobs:
           keytool -genkeypair -keystore test.jks -storepass android -keypass android -alias test \
             -keyalg RSA -keysize 2048 -validity 365 -dname "CN=Neon Tokyo Test"
           "$BT/apksigner" sign --ks test.jks --ks-pass pass:android --key-pass pass:android --out neon-tokyo-test.apk aligned.apk
+          # The wallpaper provider hands Projectivy android.resource://<package>/<type>/<name> addresses,
+          # which resolve when the resource table carries the package name
+          "$BT/aapt2" dump resources neon-tokyo-test.apk 2>/dev/null | grep -m1 "Package name" || true
 
       - name: Run TV smoke test
         uses: reactivecircus/android-emulator-runner@v2
@@ -134,7 +146,7 @@ jobs:
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-screens
 
   release:
-    needs: [build, tv-test]
+    needs: [build, tv-test, tv-setup-test]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

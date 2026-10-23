@@ -84,7 +84,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
+import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.backdropRequest
+import androidx.compose.ui.platform.LocalContext
 import com.lumera.app.domain.AddonSubtitle
 import com.lumera.app.domain.episodePlaybackId
 import com.lumera.app.domain.episodeStreamId
@@ -283,13 +285,16 @@ fun DetailsScreen(
         }
         if (showMovieContent && !tmdbPending) {
             val currentMovie = requireNotNull(movie)
-            val bgImage = currentMovie.background ?: currentMovie.poster
+            val detailsContext = LocalContext.current
+            val backdrop = remember(currentMovie.background, currentMovie.poster) {
+                backdropRequest(detailsContext, currentMovie.background, currentMovie.poster)
+            }
             Box(modifier = Modifier.alpha(contentAlpha)) {
             AsyncImage(
-                model = bgImage,
+                model = backdrop?.request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().alpha(0.6f)
+                modifier = Modifier.fillMaxSize().alpha(if (backdrop?.wash == true) 0.45f else 0.6f)
             )
 
             Box(
@@ -339,15 +344,13 @@ fun DetailsScreen(
                 val titleStyle = NeonType.headline(36.sp, glow = MaterialTheme.colorScheme.primary)
 
                 if (!currentMovie.logo.isNullOrEmpty()) {
-                    SubcomposeAsyncImage(
-                        model = currentMovie.logo,
-                        contentDescription = currentMovie.name,
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.BottomStart,
+                    TitleLogo(
+                        url = currentMovie.logo.orEmpty(),
+                        name = currentMovie.name,
                         modifier = Modifier
                             .widthIn(max = 450.dp)
                             .heightIn(max = 90.dp),
-                        error = {
+                        fallback = {
                             Text(
                                 text = currentMovie.name,
                                 style = titleStyle,
