@@ -5,6 +5,7 @@ import com.lumera.app.data.model.stremio.Manifest
 import com.lumera.app.data.profile.NeonTokyoStarterPack
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
@@ -61,6 +62,31 @@ class NeonTokyoStarterPackTest {
         val action = snapshot.catalogConfigs.single { it.customTitle == "Action films" }
         assertEquals("genre=Action", action.extraArgs)
         assertTrue(action.uniqueId.endsWith("#genre=Action"))
+    }
+
+    @Test
+    fun serviceCardsKnowTheirServiceEvenWhenRenamed() {
+        val snapshot = NeonTokyoStarterPack.build(emptyMap())
+        val services = snapshot.hubRowItems.filter { it.hubRowId.startsWith("nt_services") }
+        assertEquals(NeonTokyoStarterPack.SERVICES.size * 3, services.size)
+        services.forEach { item ->
+            val code = NeonTokyoStarterPack.SERVICES.single { it.second == item.title }.first
+            assertEquals(item.configUniqueId, code, NeonTokyoStarterPack.serviceCode(item.configUniqueId, "My films"))
+        }
+        snapshot.hubRowItems.filter { it.hubRowId.startsWith("nt_genres") }.forEach { item ->
+            assertNull(item.title, NeonTokyoStarterPack.serviceCode(item.configUniqueId, item.title))
+        }
+    }
+
+    @Test
+    fun handMadeCardsFindTheirServiceByName() {
+        val other = "https://example.com/movie/top"
+        assertEquals("nfx", NeonTokyoStarterPack.serviceCode(other, "netflix"))
+        assertEquals("hbm", NeonTokyoStarterPack.serviceCode(other, "Max"))
+        assertEquals("amp", NeonTokyoStarterPack.serviceCode(other, " Amazon Prime Video "))
+        assertEquals("pmp", NeonTokyoStarterPack.serviceCode("combo:$other|$other", "Paramount Plus"))
+        assertNull(NeonTokyoStarterPack.serviceCode(other, "Top 10 films on Netflix in Sweden"))
+        assertNull(NeonTokyoStarterPack.serviceCode("", ""))
     }
 
     @Test

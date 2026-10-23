@@ -68,6 +68,29 @@ object NeonTokyoStarterPack {
     fun parseCombo(categoryId: String): List<String>? =
         if (categoryId.startsWith(COMBO)) categoryId.removePrefix(COMBO).split('|').filter { it.isNotBlank() } else null
 
+    /**
+     * The service a hub card opens, as its Streaming Catalogs code: from the catalogs the card
+     * points at, so a renamed card keeps its art, or else from the card's title.
+     */
+    fun serviceCode(categoryId: String, title: String): String? {
+        val codes = SERVICES.map { it.first }
+        (parseCombo(categoryId) ?: listOf(categoryId)).forEach { id ->
+            // Config ids end in /<type>/<catalog id>, with any extra arguments after a #
+            val catalogId = id.substringBefore('#').substringAfterLast('/')
+            if (catalogId in codes) return catalogId
+        }
+        val name = title.trim().lowercase()
+        return SERVICES.firstOrNull { it.second.lowercase() == name }?.first ?: SERVICE_ALIASES[name]
+    }
+
+    private val SERVICE_ALIASES = mapOf(
+        "max" to "hbm", "hbo" to "hbm",
+        "disney plus" to "dnp",
+        "prime" to "amp", "amazon prime" to "amp", "amazon prime video" to "amp", "amazon video" to "amp",
+        "apple tv" to "atp", "apple tv plus" to "atp",
+        "paramount" to "pmp", "paramount plus" to "pmp"
+    )
+
     fun configId(transportUrl: String, type: String, catalogId: String, extraArgs: String? = null) =
         "$transportUrl/$type/$catalogId" + (extraArgs?.let { "#$it" } ?: "")
 

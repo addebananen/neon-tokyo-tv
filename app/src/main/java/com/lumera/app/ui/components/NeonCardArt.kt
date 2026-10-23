@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,24 +46,7 @@ fun NeonCardArt(
     maxLines: Int = 2
 ) {
     val accent = remember(title) { NeonAccents.forTitle(title) }
-    // 0 = idle sign, 1 = fully lit
-    val lit = remember { Animatable(if (focused) 1f else 0f) }
-    LaunchedEffect(focused, glow) {
-        if (!glow) return@LaunchedEffect
-        if (focused) {
-            lit.animateTo(1f, keyframes {
-                durationMillis = 340
-                0.15f at 0
-                1f at 50
-                0.3f at 100
-                1f at 160
-                0.75f at 230
-                1f at 340
-            })
-        } else {
-            lit.animateTo(0f, tween(240))
-        }
-    }
+    val lit = rememberNeonLit(focused, enabled = glow)
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -130,6 +114,32 @@ fun NeonCardArt(
             )
         }
     }
+}
+
+/**
+ * How lit a neon sign is, from 0 (idle) to 1 (fully on). When [focused] turns true it
+ * flickers on like a real tube. Read it in the draw phase so it never recomposes.
+ */
+@Composable
+fun rememberNeonLit(focused: Boolean, enabled: Boolean = true): State<Float> {
+    val lit = remember { Animatable(if (focused) 1f else 0f) }
+    LaunchedEffect(focused, enabled) {
+        if (!enabled) return@LaunchedEffect
+        if (focused) {
+            lit.animateTo(1f, keyframes {
+                durationMillis = 340
+                0.15f at 0
+                1f at 50
+                0.3f at 100
+                1f at 160
+                0.75f at 230
+                1f at 340
+            })
+        } else {
+            lit.animateTo(0f, tween(240))
+        }
+    }
+    return lit.asState()
 }
 
 object NeonAccents {

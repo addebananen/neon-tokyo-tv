@@ -43,9 +43,11 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Scale
+import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.domain.HubItem
 import com.lumera.app.domain.HubShape
 import com.lumera.app.ui.components.NeonCardArt
+import com.lumera.app.ui.components.ServiceCardArt
 import com.lumera.app.ui.theme.LocalHubRoundCorners
 
 /**
@@ -153,12 +155,26 @@ fun HubCard(
                     )
 
                 } else {
-                    // Neon sign art, tinted per service or genre
-                    NeonCardArt(
-                        title = hubItem.title,
-                        focused = isFocused,
-                        modifier = Modifier.clip(cardShape)
-                    )
+                    val serviceCode = remember(hubItem.categoryId, hubItem.title) {
+                        NeonTokyoStarterPack.serviceCode(hubItem.categoryId, hubItem.title)
+                    }
+                    if (serviceCode != null) {
+                        // The service's own scene, its subject lifting off it on focus
+                        ServiceCardArt(
+                            code = serviceCode,
+                            title = hubItem.title,
+                            shape = shape,
+                            focused = isFocused,
+                            modifier = Modifier.clip(cardShape)
+                        )
+                    } else {
+                        // Neon sign art, tinted per genre
+                        NeonCardArt(
+                            title = hubItem.title,
+                            focused = isFocused,
+                            modifier = Modifier.clip(cardShape)
+                        )
+                    }
                 }
             }
         }

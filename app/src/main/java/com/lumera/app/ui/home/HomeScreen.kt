@@ -1,6 +1,7 @@
 package com.lumera.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.AnimatedContent
@@ -255,8 +256,8 @@ fun CinematicLayout(
 ) {
     var instantFocusItem by remember { mutableStateOf<MetaItem?>(null) }
     var displayedItem by remember { mutableStateOf<MetaItem?>(null) }
-    // Folder card in focus (its title, its row's title and row id): the hero shows the folder instead of a title
-    var focusedHub by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+    // Folder card in focus: the hero shows the folder instead of a title
+    var focusedHub by remember { mutableStateOf<FocusedHub?>(null) }
     var hasRequestedFocus by remember { mutableStateOf(false) }
     val previewUpdateGate = remember { PreviewUpdateGate() }
 
@@ -386,8 +387,14 @@ fun CinematicLayout(
             renderedPreviewItem
         } else null
         CinematicBackground(bgItem)
-        Crossfade(targetState = focusedHub?.first, animationSpec = tween(400), label = "HubGlow") { hubTitle ->
-            if (hubTitle != null) HubHeroGlow(hubTitle)
+        Crossfade(targetState = focusedHub?.let { it.title to it.serviceCode }, animationSpec = tween(400), label = "HubGlow") { hub ->
+            val serviceCode = hub?.second
+            when {
+                hub == null -> Unit
+                // A streaming service shows its own scene, other folders a glow in their colour
+                serviceCode != null -> ServiceHeroArt(serviceCode)
+                else -> HubHeroGlow(hub.first)
+            }
         }
 
         Column(modifier = Modifier.fillMaxSize().zIndex(2f)) {
@@ -470,9 +477,9 @@ fun CinematicLayout(
                 ) { hub ->
                     if (hub != null) {
                         HubHero(
-                            title = hub.first,
-                            rowTitle = hub.second,
-                            rowId = hub.third,
+                            title = hub.title,
+                            rowTitle = hub.rowTitle,
+                            rowId = hub.rowId,
                             modifier = Modifier.padding(horizontal = NeonGlowRoom)
                         )
                     }
@@ -615,7 +622,12 @@ fun CinematicLayout(
                                         onFocused = { hubItem, focusKey ->
                                             instantFocusItem = null
                                             displayedItem = null
-                                            focusedHub = Triple(hubItem.title, item.title, item.id)
+                                            focusedHub = FocusedHub(
+                                                title = hubItem.title,
+                                                rowTitle = item.title,
+                                                rowId = item.id,
+                                                serviceCode = NeonTokyoStarterPack.serviceCode(hubItem.categoryId, hubItem.title)
+                                            )
                                             wrappedOnFocusChange("hub_$focusKey")
                                         },
                                         entryRequester = entryRequester,
@@ -704,6 +716,9 @@ fun CinematicLayout(
         }
     }
 }
+
+/** A folder card in focus, for the hero: its title, its row's title and id, and its service if it is one. */
+private data class FocusedHub(val title: String, val rowTitle: String, val rowId: String, val serviceCode: String?)
 
 /**
  * Redirect the saved continue-watching focus key when the row has changed since navigation:
@@ -1272,35 +1287,6 @@ private fun PersistLazyListPosition(
 fun CinematicBackground(item: MetaItem?) {
     // Use the theme's actual background color
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-    
-    // Only fade LEFT and BOTTOM edges - top/right are at screen edge. The left fade reaches
-    // past the end of the description, so lettering in a backdrop stays behind the title.
-    val leftFadeStops = arrayOf(
-        0.0f to backgroundColor,
-        0.1f to backgroundColor.copy(0.96f),
-        0.25f to backgroundColor.copy(0.88f),
-        0.4f to backgroundColor.copy(0.74f),
-        0.55f to backgroundColor.copy(0.54f),
-        0.7f to backgroundColor.copy(0.32f),
-        0.85f to backgroundColor.copy(0.12f),
-        1.0f to Color.Transparent
-    )
-
-    // Bottom fade: blend into the rows area
-    val bottomFade = Brush.verticalGradient(
-        colorStops = arrayOf(
-            0.0f to Color.Transparent,
-            0.2f to backgroundColor.copy(0.05f),
-            0.35f to backgroundColor.copy(0.15f),
-            0.45f to backgroundColor.copy(0.25f),
-            0.55f to backgroundColor.copy(0.38f),
-            0.65f to backgroundColor.copy(0.52f),
-            0.75f to backgroundColor.copy(0.68f),
-            0.85f to backgroundColor.copy(0.82f),
-            0.92f to backgroundColor.copy(0.92f),
-            1.0f to backgroundColor
-        )
-    )
 
     Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
         Box(modifier = Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.65f)) {
@@ -1324,33 +1310,7 @@ fun CinematicBackground(item: MetaItem?) {
                                 .fillMaxSize()
                                 .alpha(if (backdrop?.wash == true) 0.7f else 1f)
                         )
-                        // Left and bottom edge fades, and a soft shade where the title and text sit,
-                        // for backdrops with their own lettering
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .drawWithCache {
-                                    val leftFade = Brush.horizontalGradient(
-                                        colorStops = *leftFadeStops,
-                                        startX = 0f,
-                                        endX = size.width * 0.7f
-                                    )
-                                    val textShade = Brush.radialGradient(
-                                        colorStops = arrayOf(
-                                            0.0f to backgroundColor.copy(0.7f),
-                                            0.55f to backgroundColor.copy(0.34f),
-                                            1.0f to Color.Transparent
-                                        ),
-                                        center = Offset(0f, size.height * 0.4f),
-                                        radius = size.width * 0.6f
-                                    )
-                                    onDrawWithContent {
-                                        drawRect(brush = leftFade)
-                                        drawRect(brush = bottomFade)
-                                        drawRect(brush = textShade)
-                                    }
-                                }
-                        )
+                        Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
                         com.lumera.app.ui.components.NoiseOverlay()
                     }
                 }
@@ -1359,6 +1319,57 @@ fun CinematicBackground(item: MetaItem?) {
     }
 }
 
+/**
+ * The fades over a hero backdrop, which sits at the top right of the screen. Only the left
+ * and bottom edges fade, into the page and the rows; the left fade reaches past the end of
+ * the description, and a soft shade sits where the title and text are, so lettering in a
+ * backdrop stays behind the title.
+ */
+internal fun Modifier.backdropFades(backgroundColor: Color): Modifier = drawWithCache {
+    val leftFade = Brush.horizontalGradient(
+        colorStops = arrayOf(
+            0.0f to backgroundColor,
+            0.1f to backgroundColor.copy(0.96f),
+            0.25f to backgroundColor.copy(0.88f),
+            0.4f to backgroundColor.copy(0.74f),
+            0.55f to backgroundColor.copy(0.54f),
+            0.7f to backgroundColor.copy(0.32f),
+            0.85f to backgroundColor.copy(0.12f),
+            1.0f to Color.Transparent
+        ),
+        startX = 0f,
+        endX = size.width * 0.7f
+    )
+    val bottomFade = Brush.verticalGradient(
+        colorStops = arrayOf(
+            0.0f to Color.Transparent,
+            0.2f to backgroundColor.copy(0.05f),
+            0.35f to backgroundColor.copy(0.15f),
+            0.45f to backgroundColor.copy(0.25f),
+            0.55f to backgroundColor.copy(0.38f),
+            0.65f to backgroundColor.copy(0.52f),
+            0.75f to backgroundColor.copy(0.68f),
+            0.85f to backgroundColor.copy(0.82f),
+            0.92f to backgroundColor.copy(0.92f),
+            1.0f to backgroundColor
+        )
+    )
+    val textShade = Brush.radialGradient(
+        colorStops = arrayOf(
+            0.0f to backgroundColor.copy(0.7f),
+            0.55f to backgroundColor.copy(0.34f),
+            1.0f to Color.Transparent
+        ),
+        center = Offset(0f, size.height * 0.4f),
+        radius = size.width * 0.6f
+    )
+    onDrawWithContent {
+        drawContent()
+        drawRect(brush = leftFade)
+        drawRect(brush = bottomFade)
+        drawRect(brush = textShade)
+    }
+}
 
 @Composable
 fun Badge(text: String, color: Color, textColor: Color) {
