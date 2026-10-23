@@ -461,8 +461,8 @@ fun VoidAddonItem(
                     } else false
                 } else Modifier
             )
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
             .padding(16.dp)
     ) {
@@ -574,8 +574,8 @@ fun VoidButton(
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(if (enabled) Modifier.focusable(interactionSource = interactionSource) else Modifier),
         contentAlignment = Alignment.Center
     ) {
@@ -608,8 +608,8 @@ fun VoidToggleRow(
             .height(50.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
-            .clickable(interactionSource = interactionSource, indication = null) { onToggle() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onToggle() }
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp)
     ) {

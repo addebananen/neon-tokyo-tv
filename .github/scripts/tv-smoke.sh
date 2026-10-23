@@ -461,8 +461,14 @@ key DPAD_CENTER
 sleep 2
 screen_has "Change Photo" || fail "the options of a photo profile do not offer Change Photo"
 shot profile-options
+# One press of Back closes it, the way the remote is used
 key BACK
 sleep 2
+if screen_has "Change Photo"; then
+  fail "one press of Back did not close the profile options"
+  key BACK
+  sleep 2
+fi
 # Add Guest next to Adrian. The keyboard can open over the name step at once, and then the UI
 # tree shows the keyboard instead, so an open keyboard counts as being on the name step too
 key DPAD_RIGHT DPAD_CENTER

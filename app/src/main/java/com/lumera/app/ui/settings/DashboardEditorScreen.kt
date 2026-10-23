@@ -1204,9 +1204,7 @@ fun VoidEditorItem(
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusRequester(focusRequester)
-            .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent {
                 if (isReordering) {
                     when (it.key) {
@@ -1216,6 +1214,8 @@ fun VoidEditorItem(
                     }
                 } else false
             }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
@@ -1302,9 +1302,7 @@ fun VoidHubEditorItem(
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusRequester(focusRequester)
-            .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent {
                 if (isReordering) {
                     when (it.key) {
@@ -1314,6 +1312,8 @@ fun VoidHubEditorItem(
                     }
                 } else false
             }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp)
     ) {
         Row(
@@ -1402,9 +1402,7 @@ fun HubItemEditorRow(
             .clip(RoundedCornerShape(6.dp))
             .background(if (isFocused || isReordering) Color.White.copy(0.1f) else Color.White.copy(0.03f))
             .border(borderWidth, borderColor, RoundedCornerShape(6.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusRequester(focusRequester)
-            .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent {
                 if (isReordering) {
                     when (it.key) {
@@ -1414,6 +1412,8 @@ fun HubItemEditorRow(
                     }
                 } else false
             }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
             .padding(horizontal = 12.dp)
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -1551,8 +1551,8 @@ fun VoidSimpleItem(text: String, onClick: () -> Unit, focusRequester: FocusReque
             .height(50.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (isFocused) Color.White.copy(0.1f) else Color.White.copy(0.05f))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1590,10 +1590,10 @@ fun VoidCheckboxRow(
                 },
                 RoundedCornerShape(8.dp)
             )
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .clickable(interactionSource = interactionSource, indication = null) {
                 onCheckedChange(!isChecked)
             }
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

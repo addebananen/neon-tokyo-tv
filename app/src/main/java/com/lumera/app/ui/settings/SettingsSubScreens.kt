@@ -1373,8 +1373,8 @@ private fun CompactSliderButton(
                 },
                 RoundedCornerShape(6.dp)
             )
-            .clickable(interactionSource = interactionSource, indication = null) { if (enabled) onClick() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { if (enabled) onClick() }
             .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.Center
     ) {

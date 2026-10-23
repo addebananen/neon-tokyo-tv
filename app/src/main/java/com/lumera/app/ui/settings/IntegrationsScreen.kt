@@ -1125,8 +1125,8 @@ private fun IntegrationButton(
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(if (enabled) Modifier.focusable(interactionSource = interactionSource) else Modifier),
         contentAlignment = Alignment.Center
     ) {
