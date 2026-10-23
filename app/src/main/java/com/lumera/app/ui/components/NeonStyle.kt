@@ -106,6 +106,13 @@ object NeonType {
 }
 
 /**
+ * Room to leave around neon text that fades in or out with AnimatedContent: a fade draws its
+ * content clipped to the content's bounds, so without this room the glow would stop in a hard
+ * edge until the fade is over.
+ */
+val NeonGlowRoom = 24.dp
+
+/**
  * Text lit like a neon sign. The glow comes from the style's shadow and is drawn in a margin of
  * its own around the text, so it fades out softly instead of stopping in a hard box at the edges
  * of the text. [glow] scales it from 0 to 1 and is read while drawing, so animating it never

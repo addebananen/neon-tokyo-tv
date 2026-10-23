@@ -49,6 +49,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.NeonGlowRoom
 import com.lumera.app.ui.components.backdropRequest
 import androidx.compose.ui.geometry.Offset
 import com.lumera.app.R
@@ -398,15 +399,17 @@ fun CinematicLayout(
                     .padding(start = startPadding, top = infoTopPadding),
                 contentAlignment = Alignment.TopStart
             ) {
+                // The fades get room around the text, so a glowing title isn't clipped while they run
                 AnimatedContent(
                     targetState = renderedPreviewItem,
                     transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
-                    label = "Info"
+                    label = "Info",
+                    modifier = Modifier.offset(x = -NeonGlowRoom)
                 ) { item ->
                     if (item != null) {
                         // Hide info content while waiting for TMDB enrichment
                         val itemReady = !state.tmdbEnabled || state.tmdbEnrichedIds.contains("${item.type}:${item.id}")
-                        Column(modifier = Modifier.alpha(if (itemReady) 1f else 0f)) {
+                        Column(modifier = Modifier.padding(horizontal = NeonGlowRoom).alpha(if (itemReady) 1f else 0f)) {
                             Box(
                                 modifier = Modifier
                                     .width(700.dp)
@@ -462,9 +465,17 @@ fun CinematicLayout(
                 AnimatedContent(
                     targetState = focusedHub,
                     transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
-                    label = "HubInfo"
+                    label = "HubInfo",
+                    modifier = Modifier.offset(x = -NeonGlowRoom)
                 ) { hub ->
-                    if (hub != null) HubHero(title = hub.first, rowTitle = hub.second, rowId = hub.third)
+                    if (hub != null) {
+                        HubHero(
+                            title = hub.first,
+                            rowTitle = hub.second,
+                            rowId = hub.third,
+                            modifier = Modifier.padding(horizontal = NeonGlowRoom)
+                        )
+                    }
                 }
             }
 

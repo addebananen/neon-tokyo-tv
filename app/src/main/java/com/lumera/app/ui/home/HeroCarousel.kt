@@ -42,6 +42,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.NeonGlowRoom
 import com.lumera.app.ui.components.backdropRequest
 import com.lumera.app.R
 import com.lumera.app.data.model.stremio.MetaItem
@@ -271,15 +272,17 @@ fun HeroCarousel(
                 .padding(start = startPadding, bottom = 40.dp, end = 40.dp),
             verticalArrangement = Arrangement.Bottom
         ) {
+            // The fade gets room around the text, so a glowing title isn't clipped while it runs
             AnimatedContent(
                 targetState = currentItem,
                 transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
                 contentKey = { "${it.type}:${it.id}" },
-                label = "hero_info"
+                label = "hero_info",
+                modifier = Modifier.offset(x = -NeonGlowRoom)
             ) { item ->
                 // Hide info content while waiting for TMDB enrichment to prevent addon data flash
                 val itemReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
-                Column(modifier = Modifier.alpha(if (itemReady) 1f else 0f)) {
+                Column(modifier = Modifier.padding(horizontal = NeonGlowRoom).alpha(if (itemReady) 1f else 0f)) {
                     Box(
                         modifier = Modifier
                             .width(600.dp)
