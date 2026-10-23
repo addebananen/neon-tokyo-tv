@@ -278,8 +278,10 @@ private fun LoopingVideo(uri: Uri, modifier: Modifier = Modifier) {
 
                     override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
                         val target = Surface(texture).also { surface = it }
+                        val mediaPlayer = runCatching { MediaPlayer() }.getOrNull() ?: return
+                        // A player that can't open the video is let go at once, not left holding a decoder
                         player = runCatching {
-                            MediaPlayer().apply {
+                            mediaPlayer.apply {
                                 setDataSource(context, uri)
                                 setSurface(target)
                                 isLooping = true
@@ -288,7 +290,7 @@ private fun LoopingVideo(uri: Uri, modifier: Modifier = Modifier) {
                                 setOnErrorListener { _, _, _ -> true }
                                 prepareAsync()
                             }
-                        }.getOrNull()
+                        }.onFailure { mediaPlayer.release() }.getOrNull()
                     }
 
                     override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = Unit

@@ -146,7 +146,9 @@ fun backdropRequest(context: Context, background: String?, poster: String?): Bac
     val request = ImageRequest.Builder(context)
         .data(url)
         .crossfade(false)
-        .apply { if (wash) size(36, 54) else size(1920, 1080) }
+        // Its own memory cache key: the sharp poster a card already holds would otherwise be
+        // handed back for the tiny decode
+        .apply { if (wash) size(36, 54).memoryCacheKey("$url#wash") else size(1920, 1080) }
         .build()
     return Backdrop(request, wash)
 }

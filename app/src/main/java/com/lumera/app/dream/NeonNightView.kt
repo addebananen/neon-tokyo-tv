@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RectF
@@ -19,6 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
@@ -65,6 +67,14 @@ class NeonNightView(context: Context) : View(context) {
     private var shot: Shot? = null
     // The first one comes soon, so a quick look at the preview shows one
     private var nextShotAt = started + 5_000L + random.nextLong(4_000L)
+    // One gradient from 0 to 1 along x, stretched and turned onto the tail every frame
+    private val tailShader = LinearGradient(
+        0f, 0f, 1f, 0f,
+        intArrayOf(Color.WHITE, withAlpha(STAR_CYAN, 0.4f), Color.TRANSPARENT),
+        floatArrayOf(0f, 0.3f, 1f),
+        Shader.TileMode.CLAMP
+    )
+    private val tailMatrix = Matrix()
     private val tailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -188,7 +198,6 @@ class NeonNightView(context: Context) : View(context) {
         val p = (now - current.start) / current.duration.toFloat()
         if (p >= 1f) {
             shot = null
-            tailPaint.shader = null
             nextShotAt = now + 16_000L + random.nextLong(14_000L)
             return
         }
@@ -200,13 +209,15 @@ class NeonNightView(context: Context) : View(context) {
         val tailX = headX - current.dirX * length
         val tailY = headY - current.dirY * length
 
-        tailPaint.shader = LinearGradient(
-            headX, headY, tailX, tailY,
-            intArrayOf(withAlpha(Color.WHITE, alpha), withAlpha(STAR_CYAN, alpha * 0.4f), Color.TRANSPARENT),
-            floatArrayOf(0f, 0.3f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawLine(headX, headY, tailX, tailY, tailPaint)
+        if (length >= 1f) {
+            tailMatrix.setScale(length, length)
+            tailMatrix.postRotate(atan2(-current.dirY, -current.dirX) * 180f / PI.toFloat())
+            tailMatrix.postTranslate(headX, headY)
+            tailShader.setLocalMatrix(tailMatrix)
+            tailPaint.shader = tailShader
+            tailPaint.alpha = (alpha * 255).toInt()
+            canvas.drawLine(headX, headY, tailX, tailY, tailPaint)
+        }
         headPaint.alpha = (alpha * 80).toInt()
         canvas.drawCircle(headX, headY, 7f, headPaint)
         headPaint.alpha = (alpha * 255).toInt()

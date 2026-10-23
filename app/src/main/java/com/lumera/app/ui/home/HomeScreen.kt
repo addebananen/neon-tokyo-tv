@@ -1264,21 +1264,17 @@ fun CinematicBackground(item: MetaItem?) {
     
     // Only fade LEFT and BOTTOM edges - top/right are at screen edge. The left fade reaches
     // past the end of the description, so lettering in a backdrop stays behind the title.
-    val leftFade = Brush.horizontalGradient(
-        colorStops = arrayOf(
-            0.0f to backgroundColor,
-            0.1f to backgroundColor.copy(0.96f),
-            0.25f to backgroundColor.copy(0.86f),
-            0.4f to backgroundColor.copy(0.7f),
-            0.55f to backgroundColor.copy(0.5f),
-            0.7f to backgroundColor.copy(0.3f),
-            0.85f to backgroundColor.copy(0.12f),
-            1.0f to Color.Transparent
-        ),
-        startX = 0f,
-        endX = 640f
+    val leftFadeStops = arrayOf(
+        0.0f to backgroundColor,
+        0.1f to backgroundColor.copy(0.96f),
+        0.25f to backgroundColor.copy(0.88f),
+        0.4f to backgroundColor.copy(0.74f),
+        0.55f to backgroundColor.copy(0.54f),
+        0.7f to backgroundColor.copy(0.32f),
+        0.85f to backgroundColor.copy(0.12f),
+        1.0f to Color.Transparent
     )
-    
+
     // Bottom fade: blend into the rows area
     val bottomFade = Brush.verticalGradient(
         colorStops = arrayOf(
@@ -1323,10 +1319,15 @@ fun CinematicBackground(item: MetaItem?) {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .drawWithCache {
+                                    val leftFade = Brush.horizontalGradient(
+                                        colorStops = *leftFadeStops,
+                                        startX = 0f,
+                                        endX = size.width * 0.7f
+                                    )
                                     val textShade = Brush.radialGradient(
                                         colorStops = arrayOf(
-                                            0.0f to backgroundColor.copy(0.6f),
-                                            0.55f to backgroundColor.copy(0.28f),
+                                            0.0f to backgroundColor.copy(0.7f),
+                                            0.55f to backgroundColor.copy(0.34f),
                                             1.0f to Color.Transparent
                                         ),
                                         center = Offset(0f, size.height * 0.4f),

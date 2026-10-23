@@ -30,7 +30,7 @@ $Work = Join-Path $env:USERPROFILE 'NeonTV'
 $Before = Join-Path $Work 'before'
 $UndoFile = Join-Path $Work 'undo.txt'
 $IpFile = Join-Path $Work 'tv-ip.txt'
-$Raw = 'https://raw.githubusercontent.com/addebananen/neon-tokyo-tv/dev/tv-setup'
+$Raw = 'https://raw.githubusercontent.com/addebananen/neon-tokyo-tv'
 $Projectivy = 'com.spocky.projengmenu'
 $NeonApp = 'com.neontokyo.tv'
 $NeonDream = "$NeonApp/com.lumera.app.dream.NeonDreamService"
@@ -251,23 +251,43 @@ function Set-Tuning {
 }
 
 function Push-Art {
-    $art = Join-Path $Work 'art'
     $files = @('wallpaper.png')
     foreach ($n in 'pc', 'spotify', 'stremio', 'switch-2', 'wii-u', 'wii', 'xbox-360', 'xbox', 'youtube', 'yt-music') {
         $files += "banners/$n.png"; $files += "icons/$n.png"
     }
-    Say 'Downloading the Neon Tokyo wallpaper, banners and icons...'
-    foreach ($f in $files) {
-        $local = Join-Path $art ($f -replace '/', '\')
-        New-Item -ItemType Directory -Force -Path (Split-Path $local) | Out-Null
-        Invoke-WebRequest "$Raw/art/$f" -OutFile $local -UseBasicParsing
+    $sep = [IO.Path]::DirectorySeparatorChar
+    # The art next to the script when it runs from a copy of the repository, otherwise fresh
+    # from GitHub every time (the script itself usually sits in the NeonTV folder)
+    $fromRepo = $PSScriptRoot -and ($PSScriptRoot -ne $Work) -and (Test-Path (Join-Path $PSScriptRoot 'art/wallpaper.png'))
+    if ($fromRepo) {
+        $art = Join-Path $PSScriptRoot 'art'
+    } else {
+        $art = Join-Path $Work 'art'
+        Say 'Downloading the Neon Tokyo wallpaper, banners and icons...'
+        foreach ($f in $files) {
+            $local = Join-Path $art ($f -replace '/', $sep)
+            New-Item -ItemType Directory -Force -Path (Split-Path $local) | Out-Null
+            # The released art first, the art still being worked on if it isn't released yet
+            foreach ($branch in 'main', 'dev') {
+                try {
+                    Invoke-WebRequest "$Raw/$branch/tv-setup/art/$f" -OutFile $local -UseBasicParsing -ErrorAction Stop
+                    break
+                } catch {
+                    Remove-Item $local -ErrorAction SilentlyContinue
+                }
+            }
+        }
     }
     Shell 'mkdir -p /sdcard/Pictures/NeonTokyo/banners /sdcard/Pictures/NeonTokyo/icons' | Out-Null
+    $missing = @()
     foreach ($f in $files) {
-        Adb push (Join-Path $art ($f -replace '/', '\')) "/sdcard/Pictures/NeonTokyo/$f" | Out-Null
+        $local = Join-Path $art ($f -replace '/', $sep)
+        if (-not (Test-Path $local)) { $missing += $f; continue }
+        Adb push $local "/sdcard/Pictures/NeonTokyo/$f" | Out-Null
         Shell "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/NeonTokyo/$f" | Out-Null
     }
-    Say 'The pictures are on the TV in Pictures/NeonTokyo.'
+    if ($missing.Count -gt 0) { Say "Could not download $($missing -join ', '). Run -Step art again later for those." }
+    Say "$($files.Count - $missing.Count) pictures are on the TV in Pictures/NeonTokyo."
 }
 
 function Install-NeonApp {

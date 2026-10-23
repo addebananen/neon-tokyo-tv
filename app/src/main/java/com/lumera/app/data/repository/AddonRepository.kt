@@ -100,8 +100,11 @@ class AddonRepository @Inject constructor(
         val seenIds = HashSet<String>()
         val seenTitles = HashSet<String>()
         jobs.awaitAll().flatten().filter { item ->
-            val titleKey = "${item.type}|${item.name.trim().lowercase()}|${item.releaseInfo?.take(4)}"
-            seenIds.add(item.id) && seenTitles.add(titleKey)
+            // Two addons with the same title: same type, name and year. Without a year the
+            // name alone says too little, so then only the id counts.
+            val year = item.releaseInfo?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
+            seenIds.add(item.id) &&
+                (year == null || seenTitles.add("${item.type}|${item.name.trim().lowercase()}|$year"))
         }
     }
 

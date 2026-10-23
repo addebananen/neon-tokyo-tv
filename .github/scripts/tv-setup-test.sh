@@ -40,6 +40,9 @@ run -Ip 192.168.1.77:41234 -Step tune
 check "window animations at 0.5x" '[ "$(setting global/window_animation_scale)" = 0.5 ]'
 check "app animations untouched" '[ "$(setting global/animator_duration_scale)" = 1.0 ]'
 
+run -Ip 192.168.1.77:41234 -Step art
+check "pushed the wallpaper, 10 banners and 10 icons" '[ "$(grep -c " push .*/sdcard/Pictures/NeonTokyo/" "$FAKE_ADB_STATE/calls")" -eq 21 ]'
+
 run -Ip 192.168.1.77:41234 -Step dream
 check "Neon Tokyo night is the screensaver" '[ "$(setting secure/screensaver_components)" = com.neontokyo.tv/com.lumera.app.dream.NeonDreamService ]'
 

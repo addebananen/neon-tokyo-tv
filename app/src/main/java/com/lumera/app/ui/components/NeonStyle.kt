@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -27,13 +28,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -135,10 +139,33 @@ fun NeonText(
     // A little more than the blur radius, which is where the glow has faded out
     val margin = remember(shadow, density) { with(density) { (shadow.blurRadius * 1.15f + 2f).toDp() } }
     val layout = remember { mutableStateOf<TextLayoutResult?>(null) }
+    // Text cut short with an ellipsis is painted clipped to its box, glow and all. So a text that
+    // doesn't fit is shortened here instead, and the part that shows is laid out whole.
+    val measurer = rememberTextMeasurer()
+    var shortened by remember(text, plain, maxLines, softWrap) { mutableStateOf<Shortened?>(null) }
     BasicText(
-        text = text,
+        text = shortened?.text ?: text,
         style = plain,
-        onTextLayout = { layout.value = it },
+        onTextLayout = { result ->
+            layout.value = result
+            val room = result.layoutInput.constraints
+            val cut = shortened
+            if (cut != null && cut.room != room) {
+                // The room changed: start again from the whole text
+                shortened = null
+            } else if (cut == null && overflow == TextOverflow.Ellipsis && result.hasVisualOverflow) {
+                val fitted = shorten(text) { candidate ->
+                    !measurer.measure(
+                        AnnotatedString(candidate),
+                        style = plain,
+                        softWrap = softWrap,
+                        maxLines = maxLines,
+                        constraints = room
+                    ).hasVisualOverflow
+                }
+                shortened = Shortened(fitted, room)
+            }
+        },
         overflow = overflow,
         softWrap = softWrap,
         maxLines = maxLines,
@@ -155,6 +182,26 @@ fun NeonText(
             }
             .padding(margin)
     )
+}
+
+private class Shortened(val text: String, val room: Constraints)
+
+private const val ELLIPSIS = "…"
+
+/** The longest start of [text] that still [fits] with an ellipsis after it. */
+internal fun shorten(text: String, fits: (String) -> Boolean): String {
+    fun cut(length: Int): String {
+        // Never split a character made of two chars
+        val end = if (length in 1 until text.length && text[length - 1].isHighSurrogate()) length - 1 else length
+        return text.substring(0, end).trimEnd() + ELLIPSIS
+    }
+    var low = 0
+    var high = text.length - 1
+    while (low < high) {
+        val mid = (low + high + 1) / 2
+        if (fits(cut(mid))) low = mid else high = mid - 1
+    }
+    return cut(low)
 }
 
 /** Lays the content out with [margin] of room on every side that hangs over its neighbours. */

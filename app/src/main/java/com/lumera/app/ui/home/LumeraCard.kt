@@ -38,6 +38,8 @@ import androidx.compose.material3.Text
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Scale
@@ -130,8 +132,11 @@ fun LumeraCard(
             }
             
             Box(modifier = Modifier.fillMaxSize()) {
-                // Neon title card until the poster arrives, and for titles that have no poster
-                var posterLoaded by remember(posterUrl) { mutableStateOf(false) }
+                // Neon title card until the poster arrives, and for titles that have no poster.
+                // A poster already in memory shows at once, so its card skips the art.
+                var posterLoaded by remember(posterUrl) {
+                    mutableStateOf(posterUrl != null && context.imageLoader.memoryCache?.get(MemoryCache.Key(posterUrl)) != null)
+                }
                 if (!posterLoaded) {
                     NeonCardArt(
                         title = title,
