@@ -155,6 +155,87 @@ private val MIGRATION_43_44 = object : Migration(43, 44) {
     }
 }
 
+/**
+ * History, the watchlist and next episodes get a profileId, so each profile keeps its own.
+ * Existing rows are marked unassigned (-1); ProfileConfigurationManager hands them out to
+ * their profiles at the next login, since only it knows which profile they came from.
+ */
+private val MIGRATION_44_45 = object : Migration(44, 45) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS active_profile (" +
+                "slot INTEGER NOT NULL, " +
+                "profileId INTEGER NOT NULL, " +
+                "PRIMARY KEY(slot))"
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS watch_history_new (" +
+                "id TEXT NOT NULL, " +
+                "title TEXT NOT NULL, " +
+                "poster TEXT, " +
+                "background TEXT, " +
+                "logo TEXT, " +
+                "position INTEGER NOT NULL, " +
+                "duration INTEGER NOT NULL, " +
+                "lastWatched INTEGER NOT NULL, " +
+                "type TEXT NOT NULL, " +
+                "watched INTEGER NOT NULL, " +
+                "scrobbled INTEGER NOT NULL, " +
+                "profileId INTEGER NOT NULL, " +
+                "PRIMARY KEY(profileId, id))"
+        )
+        db.execSQL(
+            "INSERT INTO watch_history_new " +
+                "(id, title, poster, background, logo, position, duration, lastWatched, type, watched, scrobbled, profileId) " +
+                "SELECT id, title, poster, background, logo, position, duration, lastWatched, type, watched, scrobbled, -1 " +
+                "FROM watch_history"
+        )
+        db.execSQL("DROP TABLE watch_history")
+        db.execSQL("ALTER TABLE watch_history_new RENAME TO watch_history")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS watchlist_new (" +
+                "id TEXT NOT NULL, " +
+                "type TEXT NOT NULL, " +
+                "title TEXT NOT NULL, " +
+                "poster TEXT, " +
+                "addedAt INTEGER NOT NULL, " +
+                "profileId INTEGER NOT NULL, " +
+                "PRIMARY KEY(profileId, id))"
+        )
+        db.execSQL(
+            "INSERT INTO watchlist_new (id, type, title, poster, addedAt, profileId) " +
+                "SELECT id, type, title, poster, addedAt, -1 FROM watchlist"
+        )
+        db.execSQL("DROP TABLE watchlist")
+        db.execSQL("ALTER TABLE watchlist_new RENAME TO watchlist")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS series_next_up_new (" +
+                "seriesId TEXT NOT NULL, " +
+                "title TEXT NOT NULL, " +
+                "poster TEXT, " +
+                "nextSeason INTEGER NOT NULL, " +
+                "nextEpisode INTEGER NOT NULL, " +
+                "nextEpisodeTitle TEXT, " +
+                "nextReleased TEXT, " +
+                "isComplete INTEGER NOT NULL, " +
+                "isNewEpisode INTEGER NOT NULL, " +
+                "updatedAt INTEGER NOT NULL, " +
+                "profileId INTEGER NOT NULL, " +
+                "PRIMARY KEY(profileId, seriesId))"
+        )
+        db.execSQL(
+            "INSERT INTO series_next_up_new " +
+                "(seriesId, title, poster, nextSeason, nextEpisode, nextEpisodeTitle, nextReleased, isComplete, isNewEpisode, updatedAt, profileId) " +
+                "SELECT seriesId, title, poster, nextSeason, nextEpisode, nextEpisodeTitle, nextReleased, isComplete, isNewEpisode, updatedAt, -1 " +
+                "FROM series_next_up"
+        )
+        db.execSQL("DROP TABLE series_next_up")
+        db.execSQL("ALTER TABLE series_next_up_new RENAME TO series_next_up")
+    }
+}
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
@@ -174,7 +255,7 @@ object DatabaseModule {
                     db.execSQL("PRAGMA synchronous = 2")
                 }
             })
-            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44)
+            .addMigrations(MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44, MIGRATION_44_45)
             .build()
     }
 

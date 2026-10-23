@@ -98,7 +98,6 @@ import com.lumera.app.ui.theme.LocalHubRoundCorners
 import com.lumera.app.ui.theme.LumeraTheme
 import com.lumera.app.ui.theme.ThemeManager
 import dagger.hilt.android.AndroidEntryPoint
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -702,13 +701,6 @@ class MainActivity : ComponentActivity() {
     private var splashPausedAtLogo = false
     private var splashAppReady = false
     private val _splashFinished = mutableStateOf(false)
-
-    override fun onStop() {
-        super.onStop()
-        lifecycleScope.launch(Dispatchers.IO) {
-            profileConfigurationManager.saveActiveRuntimeState()
-        }
-    }
 
     override fun onDestroy() {
         dismissSplash()
@@ -1509,7 +1501,6 @@ class MainActivity : ComponentActivity() {
                                 )
                                 if (url.startsWith("magnet:")) {
                                     uiScope.launch {
-                                        mainViewModel.persistActiveProfileState()
                                         selectedPlaybackId = playbackId
                                         selectedPlaybackType = playbackType
                                         selectedPlaybackTitle = resolvedPlaybackTitle
@@ -1541,7 +1532,6 @@ class MainActivity : ComponentActivity() {
                                 } else {
                                     stopService(Intent(this@MainActivity, TorrentService::class.java))
                                     uiScope.launch {
-                                        mainViewModel.persistActiveProfileState()
                                         selectedPlaybackId = playbackId
                                         selectedPlaybackType = playbackType
                                         selectedPlaybackTitle = resolvedPlaybackTitle

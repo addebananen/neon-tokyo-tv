@@ -2,6 +2,7 @@ package com.lumera.app.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import com.lumera.app.data.model.ActiveProfileEntity
 import com.lumera.app.data.model.AddonEntity
 import com.lumera.app.data.model.CatalogConfigEntity
 import com.lumera.app.data.model.HubRowEntity
@@ -23,9 +24,10 @@ import com.lumera.app.data.model.WatchlistEntity
         HubRowEntity::class,
         HubRowItemEntity::class,
         WatchlistEntity::class,
-        SeriesNextUpEntity::class
+        SeriesNextUpEntity::class,
+        ActiveProfileEntity::class
     ],
-    version = 44
+    version = 45
 )
 abstract class LumeraDatabase : RoomDatabase() {
     abstract fun addonDao(): AddonDao

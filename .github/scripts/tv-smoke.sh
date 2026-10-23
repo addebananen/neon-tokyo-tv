@@ -103,6 +103,72 @@ focus_down_to() {
   return 1
 }
 
+# focus_right_to <label> <max presses>: presses Right until the focused element shows that label
+focus_right_to() {
+  local i=0
+  while [ "$i" -le "$2" ]; do
+    if [ "$(focused_label)" = "$1" ]; then return 0; fi
+    adb shell input keyevent DPAD_RIGHT
+    sleep 0.8
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# photo_address: "<ip> <port> <token>" of the page the profile photo dialog shows
+photo_address() {
+  timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
+  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+import re, sys
+m = re.search(r"text=\"http://([0-9.]+):([0-9]+)/([a-z0-9]{6})\"", sys.stdin.read())
+if m:
+    print(*m.groups())
+'
+}
+
+# photo_from_phone: with the photo dialog open, does what a phone does after scanning the
+# QR code: opens the page, sends a photo, sees the TV show it, and keeps it with OK
+photo_from_phone() {
+  local ip port token base code state
+  read -r ip port token < <(photo_address)
+  if [ -z "${token:-}" ]; then fail "the photo dialog shows no address"; return 1; fi
+  echo "photo page at http://$ip:$port/$token"
+  adb forward tcp:18080 tcp:"$port" >/dev/null
+  base="http://127.0.0.1:18080/$token"
+  if ! curl -fsS -m 10 "$base" -o "$OUT/photo-page.html"; then fail "the photo page did not open"; return 1; fi
+  if grep -q "{{" "$OUT/photo-page.html"; then fail "the photo page kept its placeholders"; fi
+  grep -q "Photo for" "$OUT/photo-page.html" || fail "the photo page has no title"
+  for asset in skyline.webp kanit-medium.ttf kanit-semibold-italic.ttf; do
+    code=$(curl -s -m 10 -o /dev/null -w "%{http_code}" "$base/$asset")
+    [ "$code" = 200 ] || fail "the photo page's $asset answered $code"
+  done
+  # Only the address in the QR code takes a photo, and only a photo
+  code=$(curl -s -m 10 -H "Expect:" -o /dev/null -w "%{http_code}" -F "image=aGVsbG8=" "http://127.0.0.1:18080/zzzzzz/photo")
+  [ "$code" = 404 ] || fail "a wrong address answered $code instead of 404"
+  code=$(curl -s -m 10 -H "Expect:" -o /dev/null -w "%{http_code}" -F "image=aGVsbG8=" "$base/photo")
+  [ "$code" = 400 ] || fail "a file that is no photo answered $code instead of 400"
+  sleep 2
+  screen_has "Phone connected" || fail "the TV did not notice the phone"
+  shot photo-qr
+  base64 -w0 .github/scripts/photo-fixture.jpg > "$OUT/photo.b64"
+  code=$(curl -s -m 20 -H "Expect:" -o "$OUT/photo-post.txt" -w "%{http_code}" -F "image=<$OUT/photo.b64" "$base/photo")
+  if [ "$code" != 200 ]; then fail "sending the photo answered $code: $(cat "$OUT/photo-post.txt")"; return 1; fi
+  if ! wait_for "Use This Photo" 20; then fail "the photo never showed on the TV"; return 1; fi
+  sleep 2
+  shot photo-preview
+  state=$(curl -s -m 5 "$base/status")
+  echo "$state" | grep -q '"preview"' || fail "the phone was told $state instead of preview"
+  if [ "$(focused_label)" != "USE THIS PHOTO" ]; then fail "Use This Photo does not have the focus"; fi
+  key DPAD_CENTER
+  sleep 1
+  state=$(curl -s -m 5 "$base/status")
+  echo "$state" | grep -q '"done"' || fail "the phone was told $state instead of done"
+  sleep 6
+  if curl -s -m 3 "$base/status" >/dev/null 2>&1; then fail "the photo page still answers after the photo was chosen"; fi
+  adb forward --remove tcp:18080 >/dev/null 2>&1
+  return 0
+}
+
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
 menu_go() {
   key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
@@ -190,7 +256,20 @@ if screen_has "Create First Profile"; then
   sleep 2
   if screen_has "Enter Name"; then key ENTER; sleep 2; fi
   shot avatar-step
-  key DPAD_CENTER
+  # A photo of yourself instead of an avatar, sent from a phone through the QR code
+  key DPAD_DOWN
+  if [ "$(focused_label)" = "Use a Photo From Your Phone" ]; then
+    key DPAD_CENTER
+    sleep 4
+    if ! photo_from_phone; then
+      key BACK
+      sleep 2
+      key DPAD_UP DPAD_CENTER
+    fi
+  else
+    fail "the phone photo button is not below the avatars"
+    key DPAD_UP DPAD_CENTER
+  fi
   sleep 2
   shot theme-step
   key DPAD_CENTER
@@ -245,6 +324,15 @@ shot home-deep
 key DPAD_CENTER
 sleep 10
 shot details
+# Adrian keeps this one for later; the watchlist is his alone
+if focus_right_to "ADD TO WATCHLIST" 5; then
+  key DPAD_CENTER
+  sleep 2
+  [ "$(focused_label)" = "WATCHLISTED" ] || fail "Add to watchlist did not take"
+  shot details-watchlisted
+else
+  fail "no Add to watchlist button on the details page"
+fi
 key DPAD_DOWN
 sleep 2
 shot details-down
@@ -353,6 +441,68 @@ shot stress-scroll
 for i in $(seq 1 30); do adb shell input keyevent DPAD_UP; done
 sleep 3
 shot stress-back-top
+
+# --- A second profile: the same addons, a history and watchlist of its own ----
+menu_go Watchlist
+sleep 5
+shot watchlist-adrian
+if screen_has "Your watchlist is empty"; then fail "Adrian's watchlist lost the title he added"; fi
+menu_go "Profile Avatar"
+if ! wait_for "watching" 20; then fail "Change Profile did not open the profile screen"; fi
+sleep 2
+shot profiles-again
+# The photo profile offers to change its photo
+key DPAD_DOWN
+sleep 1
+key DPAD_CENTER
+sleep 2
+screen_has "Change Photo" || fail "the options of a photo profile do not offer Change Photo"
+shot profile-options
+key BACK
+sleep 2
+# Add Guest next to Adrian
+key DPAD_RIGHT DPAD_CENTER
+sleep 2
+if screen_has "What should we call you"; then
+  adb shell input text "Guest"
+  sleep 1
+  key ENTER
+  sleep 2
+  if screen_has "Enter Name"; then key ENTER; sleep 2; fi
+  key DPAD_CENTER
+  sleep 2
+  key DPAD_CENTER
+  sleep 4
+  shot profiles-two
+  screen_has "GUEST" || fail "the Guest profile is missing on the profile screen"
+  starter_before=$(grep -c "Starter catalog" "$OUT/logcat-full.txt")
+  # Focus starts on Adrian; Guest is next to him
+  key DPAD_RIGHT DPAD_CENTER
+  if ! wait_for "Continue\|Popular\|Trending\|Top" 60; then fail "Guest's home shows no catalog rows"; fi
+  sleep 6
+  shot home-guest
+  starter_after=$(grep -c "Starter catalog" "$OUT/logcat-full.txt")
+  [ "$starter_after" = "$starter_before" ] || fail "Guest installed the starter catalog again instead of sharing it"
+  menu_go Watchlist
+  sleep 5
+  shot watchlist-guest
+  screen_has "Your watchlist is empty" || fail "Guest sees a watchlist that is not his"
+  # Back to Adrian: his watchlist is still there
+  menu_go "Profile Avatar"
+  if wait_for "watching" 20; then
+    sleep 2
+    key DPAD_CENTER
+    sleep 10
+    menu_go Watchlist
+    sleep 5
+    shot watchlist-adrian-again
+    if screen_has "Your watchlist is empty"; then fail "Adrian's watchlist was gone after Guest watched"; fi
+  else
+    fail "Change Profile did not open the profile screen from Guest"
+  fi
+else
+  fail "Add Profile did not open the name step"
+fi
 
 # --- Results ----------------------------------------------------------------
 adb shell dumpsys gfxinfo "$PKG" > "$OUT/gfxinfo.txt" 2>&1

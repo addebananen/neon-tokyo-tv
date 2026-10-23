@@ -2,7 +2,11 @@ package com.lumera.app.ui.profiles
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -118,6 +123,8 @@ fun ProfileScreen(
                         onCancel = { viewModel.cancelWizard() }
                     )
                     2 -> WizardAvatarStep(
+                        profileName = viewModel.tempName,
+                        selectedAvatarRef = viewModel.chosenAvatarRef,
                         onNext = { viewModel.setWizardAvatar(it) },
                         onBack = { viewModel.goBackStep() }
                     )
@@ -179,11 +186,9 @@ fun ProfileSelectorView(
     viewModel: ProfileViewModel
 ) {
     var activeProfileForOptions by remember { mutableStateOf<ProfileEntity?>(null) }
-    var setupTargetProfile by remember { mutableStateOf<ProfileEntity?>(null) }
-    var showSetupChoiceDialog by remember { mutableStateOf(false) }
-    var showCopyFromDialog by remember { mutableStateOf(false) }
-    var showScratchConfirmDialog by remember { mutableStateOf(false) }
-    val isInitializingProfile by viewModel.isInitializingProfile.collectAsState()
+    var photoTargetProfile by remember { mutableStateOf<ProfileEntity?>(null) }
+    val preparingProfileId by viewModel.preparingProfileId.collectAsState()
+    val themeColors by viewModel.themeColors.collectAsState()
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -197,18 +202,18 @@ fun ProfileSelectorView(
         Spacer(Modifier.height(50.dp))
 
         // Static centered row (no scrolling)
-        val focusRequesters = remember(profiles.size) { 
-            List(profiles.size) { FocusRequester() } 
+        val focusRequesters = remember(profiles.size) {
+            List(profiles.size) { FocusRequester() }
         }
-        
+
         // Request focus on first profile
-        LaunchedEffect(profiles.size, activeProfileForOptions) {
-            if (profiles.isNotEmpty() && activeProfileForOptions == null) {
+        LaunchedEffect(profiles.size, activeProfileForOptions, photoTargetProfile) {
+            if (profiles.isNotEmpty() && activeProfileForOptions == null && photoTargetProfile == null) {
                 delay(100)
                 focusRequesters[0].requestFocus()
             }
         }
-        
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(32.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -216,18 +221,13 @@ fun ProfileSelectorView(
             profiles.forEachIndexed { index, profile ->
                 ProfileCard(
                     profile = profile,
+                    ringColor = themeColors[profile.themeId]?.let { Color(it.toInt()) } ?: NeonPalette.Magenta,
+                    isPreparing = preparingProfileId == profile.id,
                     onClick = {
-                        if (isInitializingProfile) return@ProfileCard
+                        if (preparingProfileId != null) return@ProfileCard
                         if (viewModel.needsInitialSetup(profile.id)) {
-                            val hasCopySource = profiles.any { it.id != profile.id }
-                            if (!hasCopySource) {
-                                viewModel.initializeProfileFromScratch(profile.id) {
-                                    onSelect(profile)
-                                }
-                            } else {
-                                setupTargetProfile = profile
-                                showSetupChoiceDialog = true
-                            }
+                            // Addons are shared, so a new profile only needs its own empty history
+                            viewModel.prepareProfile(profile.id) { onSelect(profile) }
                         } else {
                             onSelect(profile)
                         }
@@ -242,6 +242,21 @@ fun ProfileSelectorView(
                 AddProfileCard(onClick = onAdd)
             }
         }
+
+        // The first profile on a new TV brings in the starter catalog, which takes a moment
+        Box(modifier = Modifier.height(48.dp), contentAlignment = Alignment.BottomCenter) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = preparingProfileId != null,
+                enter = fadeIn(tween(300)),
+                exit = fadeOut(tween(300))
+            ) {
+                Text(
+                    "Tuning in the city lights…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = NeonPalette.Lilac
+                )
+            }
+        }
     }
 
     if (activeProfileForOptions != null) {
@@ -252,6 +267,10 @@ fun ProfileSelectorView(
                 onEdit(activeProfileForOptions!!)
                 activeProfileForOptions = null
             },
+            onChangePhoto = {
+                photoTargetProfile = activeProfileForOptions
+                activeProfileForOptions = null
+            },
             onDelete = {
                 onDelete(activeProfileForOptions!!)
                 activeProfileForOptions = null
@@ -259,234 +278,15 @@ fun ProfileSelectorView(
         )
     }
 
-    val setupTarget = setupTargetProfile
-    if (showSetupChoiceDialog && setupTarget != null) {
-        val sourceProfiles = profiles.filter { it.id != setupTarget.id }
-        ProfileInitialSetupDialog(
-            profileName = setupTarget.name,
-            canCopy = sourceProfiles.isNotEmpty(),
-            isLoading = isInitializingProfile,
-            onCopy = {
-                showSetupChoiceDialog = false
-                showCopyFromDialog = true
-            },
-            onStartScratch = {
-                showSetupChoiceDialog = false
-                showScratchConfirmDialog = true
-            },
-            onDismiss = {
-                showSetupChoiceDialog = false
-                setupTargetProfile = null
+    photoTargetProfile?.let { target ->
+        ProfilePhotoDialog(
+            profileName = target.name,
+            onDismissRequest = { photoTargetProfile = null },
+            onPhotoChosen = { avatarRef ->
+                viewModel.setProfilePhoto(target, avatarRef)
+                photoTargetProfile = null
             }
         )
-    }
-
-    if (showCopyFromDialog && setupTarget != null) {
-        val sourceProfiles = profiles.filter { it.id != setupTarget.id }
-        CopyProfileSelectionDialog(
-            targetProfileName = setupTarget.name,
-            sourceProfiles = sourceProfiles,
-            isLoading = isInitializingProfile,
-            onSelectProfile = { sourceProfile ->
-                viewModel.initializeProfileByCopy(setupTarget.id, sourceProfile.id) {
-                    showCopyFromDialog = false
-                    setupTargetProfile = null
-                    onSelect(setupTarget)
-                }
-            },
-            onBack = {
-                showCopyFromDialog = false
-                showSetupChoiceDialog = true
-            },
-            onDismiss = {
-                showCopyFromDialog = false
-                setupTargetProfile = null
-            }
-        )
-    }
-
-    if (showScratchConfirmDialog && setupTarget != null) {
-        ScratchConfirmDialog(
-            profileName = setupTarget.name,
-            isLoading = isInitializingProfile,
-            onConfirm = {
-                viewModel.initializeProfileFromScratch(setupTarget.id) {
-                    showScratchConfirmDialog = false
-                    setupTargetProfile = null
-                    onSelect(setupTarget)
-                }
-            },
-            onBack = {
-                showScratchConfirmDialog = false
-                showSetupChoiceDialog = true
-            },
-            onDismiss = {
-                showScratchConfirmDialog = false
-                setupTargetProfile = null
-            }
-        )
-    }
-}
-
-@Composable
-private fun ProfileInitialSetupDialog(
-    profileName: String,
-    canCopy: Boolean,
-    isLoading: Boolean,
-    onCopy: () -> Unit,
-    onStartScratch: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .width(520.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .neonPanel()
-                .padding(32.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                NeonText(
-                    text = "Set Up \"$profileName\"",
-                    style = NeonType.headline(24.sp)
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Choose how this profile should start.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = NeonPalette.Lilac
-                )
-                Spacer(Modifier.height(24.dp))
-
-                VoidButton(
-                    text = if (canCopy) "Copy From Another Profile" else "No Profile Available To Copy",
-                    onClick = onCopy,
-                    enabled = canCopy && !isLoading,
-                    isPrimary = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                VoidButton(
-                    text = "Start From Scratch",
-                    onClick = onStartScratch,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                VoidButton(
-                    text = "Cancel",
-                    onClick = onDismiss,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CopyProfileSelectionDialog(
-    targetProfileName: String,
-    sourceProfiles: List<ProfileEntity>,
-    isLoading: Boolean,
-    onSelectProfile: (ProfileEntity) -> Unit,
-    onBack: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .width(560.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .neonPanel()
-                .padding(32.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                NeonText(
-                    text = "Copy Configuration",
-                    style = NeonType.headline(24.sp)
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "Select the profile to copy into \"$targetProfileName\".",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = NeonPalette.Lilac
-                )
-                Spacer(Modifier.height(20.dp))
-
-                if (sourceProfiles.isEmpty()) {
-                    Text(
-                        text = "No available profiles to copy.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = NeonPalette.Lilac
-                    )
-                } else {
-                    sourceProfiles.forEach { sourceProfile ->
-                        VoidButton(
-                            text = sourceProfile.name,
-                            onClick = { onSelectProfile(sourceProfile) },
-                            enabled = !isLoading,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
-                }
-
-                VoidButton(
-                    text = "Back",
-                    onClick = onBack,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScratchConfirmDialog(
-    profileName: String,
-    isLoading: Boolean,
-    onConfirm: () -> Unit,
-    onBack: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .width(520.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .neonPanel()
-                .padding(32.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                NeonText(
-                    text = "Start From Scratch?",
-                    style = NeonType.headline(24.sp)
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "\"$profileName\" will start with no addons, no integrations, and a fresh home setup.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = NeonPalette.Lilac
-                )
-                Spacer(Modifier.height(24.dp))
-                VoidButton(
-                    text = "Yes, Start Fresh",
-                    onClick = onConfirm,
-                    enabled = !isLoading,
-                    isPrimary = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                VoidButton(
-                    text = "Back",
-                    onClick = onBack,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
     }
 }
 
@@ -495,6 +295,7 @@ fun ProfileOptionsDialog(
     profile: ProfileEntity,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
+    onChangePhoto: () -> Unit,
     onDelete: () -> Unit
 ) {
     val editRequester = remember { FocusRequester() }
@@ -556,6 +357,15 @@ fun ProfileOptionsDialog(
                         isPrimary = false,
                         modifier = Modifier.fillMaxWidth(),
                         focusRequester = editRequester
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    VoidButton(
+                        text = if (ProfileAssets.isCustomAvatar(profile.avatarRef)) "Change Photo" else "Add Your Photo",
+                        onClick = {
+                            if (areButtonsReady) onChangePhoto()
+                        },
+                        isPrimary = false,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(16.dp))
                     VoidButton(
@@ -683,17 +493,26 @@ fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -
 }
 
 @Composable
-fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
-    val avatars = ProfileAssets.AVATAR_MAP.toList()
-    val initialIndex = avatars.size / 2
+fun WizardAvatarStep(
+    profileName: String,
+    selectedAvatarRef: String?,
+    onNext: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    // A photo already chosen comes first, so OK keeps it
+    val avatars = remember(selectedAvatarRef) {
+        val photo = selectedAvatarRef?.takeIf { ProfileAssets.isCustomAvatar(it) }
+        listOfNotNull(photo) + ProfileAssets.AVATAR_MAP.keys
+    }
+    val initialIndex = avatars.indexOf(selectedAvatarRef).takeIf { it >= 0 } ?: (avatars.size / 2)
     val listState = rememberLazyListState()
     val horizontalRepeatGate = remember {
         DpadRepeatGate(horizontalRepeatIntervalMs = PROFILE_HORIZONTAL_REPEAT_INTERVAL_MS)
     }
     val focusRequesters = remember(avatars.size) { List(avatars.size) { FocusRequester() } }
     val uploadButtonRequester = remember { FocusRequester() }
-    
-    var showUploadDialog by remember { mutableStateOf(false) }
+
+    var showPhotoDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         listState.scrollToItem(initialIndex)
@@ -707,9 +526,9 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        NeonText("Choose an avatar", style = NeonType.headline(32.sp))
+        NeonText("Choose your picture", style = NeonType.headline(32.sp))
         Spacer(Modifier.height(16.dp))
-        Text("Select an avatar that represents you.", color = NeonPalette.Lilac)
+        Text("A photo of you makes it feel like yours. Or pick an avatar.", color = NeonPalette.Lilac)
 
         Spacer(Modifier.height(40.dp))
 
@@ -728,38 +547,39 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
             }
         ) {
             items(avatars.size) { index ->
-                val (key, resId) = avatars[index]
+                val key = avatars[index]
                 AvatarGridItem(
-                    resId = resId,
+                    source = ProfileAssets.getAvatarSource(key),
                     onClick = { onNext(key) },
                     focusRequester = focusRequesters[index],
                     modifier = Modifier.size(120.dp)
                 )
             }
         }
-        
+
         Spacer(Modifier.height(32.dp))
-        
+
         Text(
             "Or",
             style = MaterialTheme.typography.bodyLarge,
             color = NeonPalette.Lilac
         )
-        
+
         Spacer(Modifier.height(16.dp))
-        
+
         UploadAvatarButton(
-            onClick = { showUploadDialog = true },
+            onClick = { showPhotoDialog = true },
             focusRequester = uploadButtonRequester
         )
     }
-    
-    if (showUploadDialog) {
-        AvatarUploadDialog(
-            onDismissRequest = { showUploadDialog = false },
-            onAvatarReceived = { avatarPath ->
-                showUploadDialog = false
-                onNext(avatarPath)
+
+    if (showPhotoDialog) {
+        ProfilePhotoDialog(
+            profileName = profileName,
+            onDismissRequest = { showPhotoDialog = false },
+            onPhotoChosen = { avatarRef ->
+                showPhotoDialog = false
+                onNext(avatarRef)
             }
         )
     }
@@ -773,30 +593,33 @@ private fun UploadAvatarButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
-    
-    Box(
+
+    Row(
         modifier = Modifier
             .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(
-                if (isFocused) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.1f)
+                if (isFocused) Brush.horizontalGradient(listOf(NeonPalette.Magenta, NeonPalette.Sun))
+                else Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.08f)))
             )
             .border(
-                width = 2.dp,
-                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp)
+                width = 1.5.dp,
+                color = if (isFocused) Color.Transparent else NeonPalette.Cyan.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(28.dp)
             )
             .focusRequester(focusRequester)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 26.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        val tint = if (isFocused) NeonPalette.Night else NeonPalette.Text
+        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
-            "Upload Your Own",
+            "Use a Photo From Your Phone",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.8f)
+            color = tint
         )
     }
 }
@@ -1021,7 +844,9 @@ fun ProfileCard(
     profile: ProfileEntity,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    focusRequester: FocusRequester? = null
+    focusRequester: FocusRequester? = null,
+    ringColor: Color = MaterialTheme.colorScheme.primary,
+    isPreparing: Boolean = false
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
@@ -1046,16 +871,28 @@ fun ProfileCard(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.scale(scale)
     ) {
-        val bloomColor = MaterialTheme.colorScheme.primary
+        val bloomColor = ringColor
+        val preparingPulse = if (isPreparing) {
+            val transition = rememberInfiniteTransition(label = "profile_preparing")
+            transition.animateFloat(
+                initialValue = 0.45f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+                label = "profile_preparing_pulse"
+            )
+        } else {
+            null
+        }
         Box(
             modifier = Modifier
                 .size(120.dp)
                 // Neon halo that fades in with the focus ring (drawn before the clip so it can spill out)
                 .drawBehind {
-                    if (borderAlpha > 0f) {
+                    val lit = preparingPulse?.value ?: borderAlpha
+                    if (lit > 0f) {
                         drawCircle(
                             brush = Brush.radialGradient(
-                                0.55f to bloomColor.copy(alpha = 0.5f * borderAlpha),
+                                0.55f to bloomColor.copy(alpha = 0.5f * lit),
                                 1f to Color.Transparent,
                                 radius = size.minDimension * 0.85f
                             ),
@@ -1065,7 +902,7 @@ fun ProfileCard(
                 }
                 .clip(CircleShape)
                 .background(NeonPalette.Violet)
-                .border(3.dp, MaterialTheme.colorScheme.primary.copy(alpha = borderAlpha), CircleShape)
+                .border(3.dp, ringColor.copy(alpha = borderAlpha), CircleShape)
                 .then(focusModifier)
                 .onPreviewKeyEvent { event ->
                     val isConfirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -1170,7 +1007,7 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
 
 @Composable
 fun AvatarGridItem(
-    resId: Int, 
+    source: Any,
     onClick: () -> Unit, 
     focusRequester: FocusRequester?,
     modifier: Modifier = Modifier,
@@ -1206,7 +1043,7 @@ fun AvatarGridItem(
         ) {
             AsyncImage(
             model = ImageRequest.Builder(context)
-                .data(resId)
+                .data(source)
                 .size(300, 300)
                 .crossfade(true)
                 .build(),

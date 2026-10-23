@@ -780,8 +780,6 @@ class DetailsViewModel @Inject constructor(
                 }
             }
 
-            profileConfigurationManager.saveActiveRuntimeState()
-
             // Refresh episode progress map
             val streamId = _state.value.resolvedId ?: meta.id
             val updatedMap = if (meta.type == "series") buildEpisodeProgressMap(streamId) else emptyMap()

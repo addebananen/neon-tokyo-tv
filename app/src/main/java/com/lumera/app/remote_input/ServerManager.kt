@@ -9,9 +9,10 @@ import java.net.BindException
  */
 data class ServerInfo(
     val ip: String,
-    val port: Int
+    val port: Int,
+    val path: String = ""
 ) {
-    val url: String get() = "http://$ip:$port"
+    val url: String get() = "http://$ip:$port$path"
 }
 
 /**

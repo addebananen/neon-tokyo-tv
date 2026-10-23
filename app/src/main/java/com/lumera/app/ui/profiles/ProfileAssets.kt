@@ -40,6 +40,13 @@ object ProfileAssets {
     private fun getCustomAvatarPath(avatarRef: String): String {
         return avatarRef.removePrefix(CUSTOM_PREFIX)
     }
+
+    /** The avatar reference for a photo saved at [file]. */
+    fun customRef(file: File): String = CUSTOM_PREFIX + file.absolutePath
+
+    /** The file of a photo avatar, or null for a built-in one. */
+    fun customFile(avatarRef: String): File? =
+        if (isCustomAvatar(avatarRef)) File(getCustomAvatarPath(avatarRef)) else null
     
     /**
      * Get the File object for a custom avatar. Returns null if file doesn't exist.

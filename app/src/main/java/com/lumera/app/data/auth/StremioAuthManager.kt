@@ -126,62 +126,27 @@ class StremioAuthManager @Inject constructor(
     private fun profileScopedAuthKey(profileId: Int): String = "${KEY_AUTH_KEY}_profile_$profileId"
     private fun profileScopedEmail(profileId: Int): String = "${KEY_EMAIL}_profile_$profileId"
 
-    fun saveCredentialsForProfile(profileId: Int) {
-        val authKey = getStoredAuthKey()
-        val email = getStoredEmail()
-        val authProfileKey = profileScopedAuthKey(profileId)
-        val emailProfileKey = profileScopedEmail(profileId)
-
-        encryptedPrefs.edit().apply {
-            if (authKey != null && email != null) {
-                putString(authProfileKey, authKey)
-                putString(emailProfileKey, email)
-            } else {
-                remove(authProfileKey)
-                remove(emailProfileKey)
+    /**
+     * The Stremio account only brings in addons, and addons are the same for every profile, so
+     * the account is shared as well. Profiles used to keep their own copy: when no account is
+     * connected now, the first of [profileIds] that had one brings it in, and the copies go.
+     */
+    fun shareAccount(profileIds: List<Int>) {
+        val editor = encryptedPrefs.edit()
+        if (getStoredAuthKey() == null || getStoredEmail() == null) {
+            profileIds.firstNotNullOfOrNull { id ->
+                val authKey = encryptedPrefs.getString(profileScopedAuthKey(id), null)
+                val email = encryptedPrefs.getString(profileScopedEmail(id), null)
+                if (authKey != null && email != null) authKey to email else null
+            }?.let { (authKey, email) ->
+                editor.putString(KEY_AUTH_KEY, authKey).putString(KEY_EMAIL, email)
             }
-        }.apply()
-    }
-
-    fun loadCredentialsForProfile(profileId: Int) {
-        val authKey = encryptedPrefs.getString(profileScopedAuthKey(profileId), null)
-        val email = encryptedPrefs.getString(profileScopedEmail(profileId), null)
-
-        encryptedPrefs.edit().apply {
-            if (authKey != null && email != null) {
-                putString(KEY_AUTH_KEY, authKey)
-                putString(KEY_EMAIL, email)
-            } else {
-                remove(KEY_AUTH_KEY)
-                remove(KEY_EMAIL)
-            }
-        }.apply()
-
+        }
+        profileIds.forEach { id ->
+            editor.remove(profileScopedAuthKey(id)).remove(profileScopedEmail(id))
+        }
+        editor.apply()
         refreshConnectionState()
-    }
-
-    fun copyCredentialsBetweenProfiles(sourceProfileId: Int, targetProfileId: Int) {
-        val authKey = encryptedPrefs.getString(profileScopedAuthKey(sourceProfileId), null)
-        val email = encryptedPrefs.getString(profileScopedEmail(sourceProfileId), null)
-        val authProfileKey = profileScopedAuthKey(targetProfileId)
-        val emailProfileKey = profileScopedEmail(targetProfileId)
-
-        encryptedPrefs.edit().apply {
-            if (authKey != null && email != null) {
-                putString(authProfileKey, authKey)
-                putString(emailProfileKey, email)
-            } else {
-                remove(authProfileKey)
-                remove(emailProfileKey)
-            }
-        }.apply()
-    }
-
-    fun clearCredentialsForProfile(profileId: Int) {
-        encryptedPrefs.edit()
-            .remove(profileScopedAuthKey(profileId))
-            .remove(profileScopedEmail(profileId))
-            .apply()
     }
 
     /**
