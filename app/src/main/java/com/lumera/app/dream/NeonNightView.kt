@@ -28,9 +28,10 @@ import kotlin.random.Random
 
 /**
  * The Neon Tokyo night for the screensaver: the wallpaper skyline with its grid rolling towards
- * you, twinkling stars, a shooting star now and then, a blinking light on the tower and a neon
- * clock that lights up like a sign and flickers when the minute turns. Everything is drawn in
- * the 1920x1080 units of the wallpaper scene and scaled to fill the screen.
+ * you, twinkling stars, a shooting star now and then, a blinking light on the tower, windows in
+ * the city lighting up and going dark, and a neon clock that lights up like a sign, flickers
+ * when the minute turns and switches off and on again on the hour. Everything is drawn in the
+ * 1920x1080 units of the wallpaper scene and scaled to fill the screen.
  */
 class NeonNightView(context: Context) : View(context) {
 
@@ -72,6 +73,11 @@ class NeonNightView(context: Context) : View(context) {
     private val headPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
 
     private val beaconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BEACON }
+
+    private val windows = frontWindows()
+    private val windowsLitInPicture = windows.count { it.litInPicture }
+    private var nextSwitchAt = started + 3_000L + random.nextLong(3_000L)
+    private val windowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private val vignette = Paint().apply {
         shader = RadialGradient(
@@ -127,6 +133,7 @@ class NeonNightView(context: Context) : View(context) {
         canvas.scale(scale, scale)
 
         if (sky != null) canvas.drawBitmap(sky, null, skyRect, bitmapPaint) else canvas.drawColor(NIGHT)
+        if (sky != null) drawWindows(canvas, now)
         drawGrid(canvas, now)
         if (horizon != null) canvas.drawBitmap(horizon, null, horizonRect, bitmapPaint)
         drawStars(canvas, seconds)
@@ -221,6 +228,45 @@ class NeonNightView(context: Context) : View(context) {
         )
     }
 
+    // Somewhere in the city a light goes on or off every few seconds
+    private fun drawWindows(canvas: Canvas, now: Long) {
+        if (now >= nextSwitchAt) {
+            switchAWindow(now)
+            nextSwitchAt = now + 2_500L + random.nextLong(5_500L)
+        }
+        for (window in windows) {
+            val light = window.light(now)
+            if (window.litInPicture) {
+                // Lit in the picture: going dark is the building's own colour drawn over it
+                if (light >= 1f) continue
+                windowPaint.color = FRONT
+                windowPaint.alpha = ((1f - light) * 255).toInt()
+                canvas.drawRect(window.x - 1f, window.y - 1f, window.x + 5f, window.y + 7f, windowPaint)
+            } else {
+                if (light <= 0f) continue
+                windowPaint.color = WINDOW
+                windowPaint.alpha = (light * 0.7f * 255).toInt()
+                canvas.drawRect(window.x, window.y, window.x + 4f, window.y + 6f, windowPaint)
+            }
+        }
+    }
+
+    // Keeps the city about as bright as in the picture, and leaves a window alone for a while
+    // after it changed
+    private fun switchAWindow(now: Long) {
+        val lit = windows.count { it.lit }
+        val turnOn = when {
+            lit < windowsLitInPicture - 8 -> true
+            lit > windowsLitInPicture + 8 -> false
+            else -> random.nextBoolean()
+        }
+        val candidates = windows.filter { it.lit != turnOn && now - it.switchedAt > 20_000L }
+        if (candidates.isEmpty()) return
+        val window = candidates[random.nextInt(candidates.size)]
+        window.lit = turnOn
+        window.switchedAt = now
+    }
+
     // The red light on top of the tower, one short blink every 1.8 seconds
     private fun drawBeacon(canvas: Canvas, seconds: Float) {
         val phase = (seconds % 1.8f) / 1.8f
@@ -236,12 +282,13 @@ class NeonNightView(context: Context) : View(context) {
         val wall = System.currentTimeMillis()
         val minute = wall / 60_000L
         if (minute != minuteShown) {
+            val minuteOfHour = formatTime(wall)
             if (minuteShown != -1L) {
                 flickerFrom = now
-                flickerKeys = MINUTE_FLICKER
+                // On the hour the whole sign goes dark and lights up again
+                flickerKeys = if (minuteOfHour == 0) IGNITION else MINUTE_FLICKER
             }
             minuteShown = minute
-            formatTime(wall)
         }
 
         // A slow drift so nothing sits on the same pixels all night
@@ -268,7 +315,8 @@ class NeonNightView(context: Context) : View(context) {
         canvas.drawText(date, x + 10f, y + 64f, datePaint)
     }
 
-    private fun formatTime(wall: Long) {
+    /** Formats the clock for [wall] and returns its minute of the hour. */
+    private fun formatTime(wall: Long): Int {
         val calendar = Calendar.getInstance().apply { timeInMillis = wall }
         val locale = Locale.getDefault()
         if (DateFormat.is24HourFormat(context)) {
@@ -285,6 +333,7 @@ class NeonNightView(context: Context) : View(context) {
         hoursWidth = timePaint.measureText(hours)
         colonWidth = timePaint.measureText(":")
         minutesWidth = timePaint.measureText(minutes)
+        return calendar.get(Calendar.MINUTE)
     }
 
     private fun decode(resId: Int): Bitmap? =
@@ -303,6 +352,19 @@ class NeonNightView(context: Context) : View(context) {
         val color: Int,
         val flare: Boolean
     )
+
+    /** A window of the front row of buildings, and whether its light is on now. */
+    private class Window(val x: Float, val y: Float, val litInPicture: Boolean) {
+        var lit = litInPicture
+        var switchedAt = 0L
+
+        /** How lit it looks: a tube that flickers on, or a light that fades out. */
+        fun light(now: Long): Float {
+            val t = now - switchedAt
+            if (switchedAt == 0L || t >= SWITCH_MS) return if (lit) 1f else 0f
+            return if (lit) flicker(t, SWITCH_ON) else 1f - t / SWITCH_MS.toFloat()
+        }
+    }
 
     private class Shot(
         val start: Long,
@@ -332,12 +394,17 @@ class NeonNightView(context: Context) : View(context) {
         const val PINK = 0xFFFF3D9A.toInt()
         const val CYAN = 0xFF3EF0FF.toInt()
         const val BEACON = 0xFFFF4D4D.toInt()
+        // The front buildings and their windows in the picture
+        const val FRONT = 0xFF150A2C.toInt()
+        const val WINDOW = 0xFFFFB3D9.toInt()
+        const val SWITCH_MS = 420L
         const val STAR_PINK = 0xFFFFD6EC.toInt()
         const val STAR_CYAN = 0xFFD6FBFF.toInt()
 
         // (milliseconds, brightness) keyframes
         val IGNITION = floatArrayOf(0f, 0f, 260f, 0f, 300f, 0.8f, 340f, 0.1f, 420f, 0.9f, 470f, 0.3f, 560f, 1f)
         val MINUTE_FLICKER = floatArrayOf(0f, 1f, 50f, 0.25f, 110f, 1f, 170f, 0.45f, 240f, 1f, 330f, 0.7f, 400f, 1f)
+        val SWITCH_ON = floatArrayOf(0f, 0f, 70f, 0.8f, 130f, 0.15f, 210f, 1f, 290f, 0.55f, 380f, 1f)
 
         fun flicker(elapsed: Long, keys: FloatArray): Float {
             val t = elapsed.toFloat()
@@ -356,6 +423,39 @@ class NeonNightView(context: Context) : View(context) {
         fun glow(paint: Paint, lit: Float, radius: Float, color: Int) {
             paint.alpha = (lit.coerceIn(0f, 1f) * 255).toInt()
             paint.setShadowLayer(radius, 0f, 0f, withAlpha(color, 0.85f * lit))
+        }
+
+        /**
+         * The window slots of the front row of buildings in the sky picture, found by replaying
+         * the random numbers it was drawn with (seed 23 in the scene generator): where each one
+         * is and whether it is lit. Rows just under a glowing roof strip are left out, since the
+         * glow reaches over them.
+         */
+        fun frontWindows(): List<Window> {
+            var seed = 23L
+            fun next(): Double {
+                seed = seed * 16807L % 2147483647L
+                return seed / 2147483647.0
+            }
+            val windows = ArrayList<Window>()
+            var bx = -30.0
+            while (bx < W) {
+                val bw = 60 + next() * 150
+                val bh = 40 + next() * 140
+                val strip = next() < 0.22
+                var wy = HY - bh + 18
+                while (wy < HY - 10) {
+                    var wx = bx + 7
+                    while (wx < bx + bw - 7) {
+                        val lit = next() < 0.09
+                        if (!strip || wy >= HY - bh + 36) windows += Window(wx.toFloat(), wy.toFloat(), lit)
+                        wx += 14
+                    }
+                    wy += 16
+                }
+                bx += bw + next() * 6
+            }
+            return windows
         }
 
         // Fixed seed: the same sky every night. Kept above the rooftops and clear of the sun.

@@ -2,31 +2,31 @@ package com.lumera.app.ui.components
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
-import android.util.LruCache
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import coil.size.Size
+import coil.transform.Transformation
+import kotlin.math.sqrt
 
 /**
- * A title's logo. Logos drawn for light backgrounds (black or navy lettering) disappear on the
- * night backdrop, so those are lit in the text colour instead. [fallback] shows when the logo
- * can't be loaded.
+ * A title's logo, cropped to its lettering so it lines up with the text under it however much
+ * empty margin the image came with. Logos drawn for light backgrounds (black or navy lettering)
+ * disappear on the night backdrop, so those are lit in the text colour instead. [fallback] shows
+ * when the logo can't be loaded.
  */
 @Composable
 fun TitleLogo(
@@ -40,59 +40,80 @@ fun TitleLogo(
         fallback()
         return
     }
-    // null until the logo is checked; it stays hidden that long so a dark logo never flashes
-    var dark by remember(url) { mutableStateOf(LogoTone.cached(url)) }
-    val scope = rememberCoroutineScope()
-
+    val context = LocalContext.current
+    // The logo arrives cropped and lit, so it never shows first as it was and then changes
+    val request = remember(url) {
+        ImageRequest.Builder(context)
+            .data(url)
+            .transformations(LogoTransformation)
+            .build()
+    }
     AsyncImage(
-        model = url,
+        model = request,
         contentDescription = name,
         contentScale = ContentScale.Fit,
         alignment = Alignment.BottomStart,
-        colorFilter = if (dark == true) ColorFilter.tint(NeonPalette.Text, BlendMode.SrcIn) else null,
-        onSuccess = { state ->
-            if (dark == null) {
-                val drawable = state.result.drawable
-                scope.launch {
-                    val isDark = withContext(Dispatchers.Default) {
-                        runCatching { LogoTone.isDark(drawable) }.getOrDefault(false)
-                    }
-                    LogoTone.store(url, isDark)
-                    dark = isDark
-                }
-            }
-        },
         onError = { failed = true },
-        modifier = modifier.alpha(if (dark == null) 0f else 1f)
+        modifier = modifier
     )
 }
 
-internal object LogoTone {
-    private val checked = LruCache<String, Boolean>(256)
+/** Crops a logo to its visible pixels, and lights it in the text colour when its lettering is dark. */
+internal object LogoTransformation : Transformation {
+    private val lit = NeonPalette.Text.toArgb()
 
-    fun cached(url: String): Boolean? = checked.get(url)
+    override val cacheKey = "neon-logo-1"
 
-    fun store(url: String, dark: Boolean) {
-        checked.put(url, dark)
-    }
-
-    fun isDark(drawable: Drawable): Boolean {
-        val source = (drawable as? BitmapDrawable)?.bitmap ?: return false
-        // Coil hands out GPU bitmaps, which can't be read; a software copy can
-        val soft = if (source.config == Bitmap.Config.HARDWARE) {
-            source.copy(Bitmap.Config.ARGB_8888, false) ?: return false
-        } else {
-            source
-        }
-        val width = 48
-        val height = (width * soft.height / soft.width.coerceAtLeast(1)).coerceIn(1, 48)
-        val small = Bitmap.createScaledBitmap(soft, width, height, true)
+    override suspend fun transform(input: Bitmap, size: Size): Bitmap {
+        val width = input.width
+        val height = input.height
         val pixels = IntArray(width * height)
-        small.getPixels(pixels, 0, width, 0, 0, width, height)
-        if (small !== soft && small !== source) small.recycle()
-        if (soft !== source) soft.recycle()
-        return isDarkLogo(pixels)
+        input.getPixels(pixels, 0, width, 0, 0, width, height)
+        val box = visibleBounds(pixels, width, height) ?: return input
+        val dark = isDarkLogo(sample(pixels, width, box))
+        if (!dark && box.width == width && box.height == height) return input
+        val output = Bitmap.createBitmap(box.width, box.height, Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        if (dark) paint.colorFilter = PorterDuffColorFilter(lit, PorterDuff.Mode.SRC_IN)
+        Canvas(output).drawBitmap(input, -box.left.toFloat(), -box.top.toFloat(), paint)
+        return output
     }
+
+    /** About 4000 pixels spread evenly over [box], plenty to judge the colours by. */
+    private fun sample(pixels: IntArray, width: Int, box: PixelBounds): IntArray {
+        val step = sqrt(box.width * box.height / 4096.0).toInt().coerceAtLeast(1)
+        val out = IntArray(((box.width + step - 1) / step) * ((box.height + step - 1) / step))
+        var i = 0
+        for (y in box.top until box.bottom step step) {
+            for (x in box.left until box.right step step) out[i++] = pixels[y * width + x]
+        }
+        return if (i == out.size) out else out.copyOf(i)
+    }
+}
+
+/** A box of pixels, [right] and [bottom] exclusive. */
+internal data class PixelBounds(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    val width get() = right - left
+    val height get() = bottom - top
+}
+
+/** The smallest box holding every pixel that is more than faintly visible, or null if none is. */
+internal fun visibleBounds(argb: IntArray, width: Int, height: Int, minAlpha: Int = 16): PixelBounds? {
+    var left = width
+    var top = height
+    var right = -1
+    var bottom = -1
+    for (y in 0 until height) {
+        val row = y * width
+        for (x in 0 until width) {
+            if ((argb[row + x] ushr 24) < minAlpha) continue
+            if (x < left) left = x
+            if (x > right) right = x
+            if (y < top) top = y
+            bottom = y
+        }
+    }
+    return if (right < 0) null else PixelBounds(left, top, right + 1, bottom + 1)
 }
 
 /** Dark when the visible pixels are dark on average and even the bright ones stay dim. */

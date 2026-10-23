@@ -56,6 +56,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.lumera.app.R
 import com.lumera.app.ui.components.NeonPalette
+import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import com.lumera.app.ui.settings.SettingRow
 import com.lumera.app.ui.settings.VoidSegmentedControl
@@ -153,8 +154,8 @@ private fun WallpaperSettings(
                 .width(470.dp)
                 .padding(start = 48.dp, top = 36.dp, bottom = 28.dp)
         ) {
-            Text("PROJECTIVY WALLPAPER", style = NeonType.eyebrow(12.sp))
-            Text(
+            NeonText("PROJECTIVY WALLPAPER", style = NeonType.eyebrow(12.sp))
+            NeonText(
                 "Neon Tokyo",
                 style = NeonType.display(40.sp),
                 modifier = Modifier.padding(top = 2.dp)
@@ -195,7 +196,7 @@ private fun WallpaperSettings(
             }
 
             Spacer(Modifier.height(20.dp))
-            Text("COLOURS", style = NeonType.eyebrow(11.sp, NeonPalette.Lilac))
+            NeonText("COLOURS", style = NeonType.eyebrow(11.sp, NeonPalette.Lilac))
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 NeonWallpaper.entries.forEach { colour ->

@@ -22,6 +22,7 @@ import androidx.tv.material3.Text
 import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.ui.components.NeonAccents
 import com.lumera.app.ui.components.NeonPalette
+import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 
 /**
@@ -33,9 +34,9 @@ import com.lumera.app.ui.components.NeonType
 fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier = Modifier) {
     val accent = remember(title) { NeonAccents.forTitle(title) }
     Column(modifier = modifier.padding(top = 28.dp)) {
-        Text(rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent))
+        NeonText(rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent))
         Spacer(Modifier.height(6.dp))
-        Text(
+        NeonText(
             text = title,
             style = NeonType.display(56.sp, glow = accent),
             maxLines = 1,
@@ -47,7 +48,7 @@ fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier =
             style = MaterialTheme.typography.bodyLarge,
             color = NeonPalette.Lilac,
             maxLines = 2,
-            modifier = Modifier.widthIn(max = 560.dp)
+            modifier = Modifier.widthIn(max = 640.dp)
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.lumera.app.ui.details
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -351,7 +352,7 @@ fun DetailsScreen(
                             .widthIn(max = 450.dp)
                             .heightIn(max = 90.dp),
                         fallback = {
-                            Text(
+                            NeonText(
                                 text = currentMovie.name,
                                 style = titleStyle,
                                 color = textColor,
@@ -362,7 +363,7 @@ fun DetailsScreen(
                         }
                     )
                 } else {
-                    Text(
+                    NeonText(
                         text = currentMovie.name,
                         style = titleStyle,
                         color = textColor,

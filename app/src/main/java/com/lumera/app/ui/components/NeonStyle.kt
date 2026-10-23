@@ -7,23 +7,38 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.sp
 import com.lumera.app.R
 import com.lumera.app.ui.theme.KanitFamily
@@ -40,7 +55,10 @@ object NeonPalette {
     val Sun = Color(0xFFFFC46B)
 }
 
-/** Kanit italic lit like a neon sign: big titles, headings and the small spaced label above them. */
+/**
+ * Kanit italic lit like a neon sign: big titles, headings and the small spaced label above them.
+ * The glow is the style's shadow; show these with [NeonText] so the glow is never cut off.
+ */
 object NeonType {
     fun display(size: TextUnit = 60.sp, glow: Color = NeonPalette.Magenta) = TextStyle(
         fontFamily = KanitFamily,
@@ -81,6 +99,71 @@ object NeonType {
         color = color,
         shadow = Shadow(color = color.copy(alpha = 0.6f), blurRadius = 12f)
     )
+}
+
+/**
+ * Text lit like a neon sign. The glow comes from the style's shadow and is drawn in a margin of
+ * its own around the text, so it fades out softly instead of stopping in a hard box at the edges
+ * of the text. [glow] scales it from 0 to 1 and is read while drawing, so animating it never
+ * recomposes or re-lays out the text.
+ */
+@Composable
+fun NeonText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    textAlign: TextAlign = TextAlign.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    softWrap: Boolean = true,
+    glow: () -> Float = { 1f }
+) {
+    val shadow = style.shadow
+    val plain = remember(style, color, textAlign) {
+        style.copy(
+            color = if (color.isSpecified) color else if (style.color.isSpecified) style.color else NeonPalette.Text,
+            textAlign = if (textAlign != TextAlign.Unspecified) textAlign else style.textAlign,
+            shadow = null
+        )
+    }
+    if (shadow == null || shadow.blurRadius <= 0f) {
+        BasicText(text, modifier, plain, overflow = overflow, softWrap = softWrap, maxLines = maxLines)
+        return
+    }
+    val density = LocalDensity.current
+    // A little more than the blur radius, which is where the glow has faded out
+    val margin = remember(shadow, density) { with(density) { (shadow.blurRadius * 1.15f + 2f).toDp() } }
+    val layout = remember { mutableStateOf<TextLayoutResult?>(null) }
+    BasicText(
+        text = text,
+        style = plain,
+        onTextLayout = { layout.value = it },
+        overflow = overflow,
+        softWrap = softWrap,
+        maxLines = maxLines,
+        modifier = modifier
+            .overhang(margin)
+            .drawBehind {
+                val result = layout.value ?: return@drawBehind
+                val strength = glow().coerceIn(0f, 1f)
+                if (strength == 0f) return@drawBehind
+                val lit = shadow.copy(color = shadow.color.copy(alpha = shadow.color.alpha * strength))
+                // The glyphs drawn here sit under the text itself; only their glow shows
+                val inset = margin.roundToPx().toFloat()
+                drawText(result, color = lit.color, topLeft = Offset(inset, inset), shadow = lit)
+            }
+            .padding(margin)
+    )
+}
+
+/** Lays the content out with [margin] of room on every side that hangs over its neighbours. */
+private fun Modifier.overhang(margin: Dp): Modifier = layout { measurable, constraints ->
+    val room = margin.roundToPx()
+    val placeable = measurable.measure(constraints.offset(2 * room, 2 * room))
+    val width = (placeable.width - 2 * room).coerceAtLeast(0)
+    val height = (placeable.height - 2 * room).coerceAtLeast(0)
+    layout(width, height) { placeable.place(-room, -room) }
 }
 
 /**

@@ -1,6 +1,7 @@
 package com.lumera.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -420,7 +421,7 @@ fun CinematicLayout(
                                             .widthIn(max = 500.dp)
                                             .heightIn(max = 90.dp),
                                         fallback = {
-                                            Text(
+                                            NeonText(
                                                 text = item.name,
                                                 style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                                 color = Color.White,
@@ -432,7 +433,7 @@ fun CinematicLayout(
                                         }
                                     )
                                 } else {
-                                    Text(
+                                    NeonText(
                                         text = item.name,
                                         style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                         color = Color.White,
@@ -1261,21 +1262,21 @@ fun CinematicBackground(item: MetaItem?) {
     // Use the theme's actual background color
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
     
-    // Only fade LEFT and BOTTOM edges - top/right are at screen edge
+    // Only fade LEFT and BOTTOM edges - top/right are at screen edge. The left fade reaches
+    // past the end of the description, so lettering in a backdrop stays behind the title.
     val leftFade = Brush.horizontalGradient(
         colorStops = arrayOf(
             0.0f to backgroundColor,
-            0.1f to backgroundColor.copy(0.95f),
-            0.2f to backgroundColor.copy(0.85f),
-            0.3f to backgroundColor.copy(0.72f),
-            0.4f to backgroundColor.copy(0.55f),
-            0.55f to backgroundColor.copy(0.35f),
-            0.7f to backgroundColor.copy(0.18f),
-            0.85f to backgroundColor.copy(0.07f),
+            0.1f to backgroundColor.copy(0.96f),
+            0.25f to backgroundColor.copy(0.86f),
+            0.4f to backgroundColor.copy(0.7f),
+            0.55f to backgroundColor.copy(0.5f),
+            0.7f to backgroundColor.copy(0.3f),
+            0.85f to backgroundColor.copy(0.12f),
             1.0f to Color.Transparent
         ),
         startX = 0f,
-        endX = 500f
+        endX = 640f
     )
     
     // Bottom fade: blend into the rows area

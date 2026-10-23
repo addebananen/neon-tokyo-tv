@@ -12,7 +12,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -33,8 +32,8 @@ import com.lumera.app.ui.theme.KanitFamily
  * card's accent colour, a glowing horizon and a perspective grid, with the title
  * lit like a neon tube. Everything is cached per size, so it is as cheap as a bitmap.
  *
- * On focus the sign flickers on like a real tube. The flicker only changes layer
- * alpha and draw-phase values, so it never recomposes or re-measures the text.
+ * On focus the sign flickers on like a real tube. The flicker only changes draw-phase
+ * values, so it never recomposes or re-measures the text.
  */
 @Composable
 fun NeonCardArt(
@@ -111,26 +110,25 @@ fun NeonCardArt(
         val textModifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 18.dp)
         // Poster placeholders skip the glow: there can be many of them while a row loads
         if (glow) {
+            NeonText(
+                text = title,
+                modifier = textModifier,
+                style = textStyle.copy(shadow = Shadow(color = accent, blurRadius = 22f)),
+                textAlign = TextAlign.Center,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis,
+                glow = { 0.55f + 0.45f * lit.value }
+            )
+        } else {
             Text(
                 text = title,
-                modifier = textModifier.graphicsLayer { alpha = 0.55f + 0.45f * lit.value },
-                style = textStyle.copy(
-                    color = lerp(accent, Color.White, 0.55f),
-                    shadow = Shadow(color = accent, blurRadius = 22f)
-                ),
+                modifier = textModifier,
+                style = textStyle,
                 textAlign = TextAlign.Center,
                 maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
-            text = title,
-            modifier = textModifier,
-            style = textStyle,
-            textAlign = TextAlign.Center,
-            maxLines = maxLines,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

@@ -52,6 +52,7 @@ import com.lumera.app.ui.addons.VoidInput
 import com.lumera.app.ui.components.CenterCarouselRow
 import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonSkylineBackdrop
+import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import com.lumera.app.ui.components.neonPanel
 import com.lumera.app.ui.home.DpadRepeatGate
@@ -145,9 +146,9 @@ fun WelcomeView(onStart: () -> Unit) {
                 .padding(start = 96.dp)
                 .widthIn(max = 520.dp)
         ) {
-            Text("WELCOME TO", style = NeonType.eyebrow(15.sp))
+            NeonText("WELCOME TO", style = NeonType.eyebrow(15.sp))
             Spacer(Modifier.height(6.dp))
-            Text("NEON TOKYO", style = NeonType.display(64.sp))
+            NeonText("NEON TOKYO", style = NeonType.display(64.sp))
             Spacer(Modifier.height(14.dp))
             Text(
                 "Films, series and anime, after dark.",
@@ -189,9 +190,9 @@ fun ProfileSelectorView(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("NEON TOKYO", style = NeonType.eyebrow())
+        NeonText("NEON TOKYO", style = NeonType.eyebrow())
         Spacer(Modifier.height(8.dp))
-        Text("Who's watching?", style = NeonType.headline(36.sp))
+        NeonText("Who's watching?", style = NeonType.headline(36.sp))
 
         Spacer(Modifier.height(50.dp))
 
@@ -345,7 +346,7 @@ private fun ProfileInitialSetupDialog(
                 .padding(32.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
+                NeonText(
                     text = "Set Up \"$profileName\"",
                     style = NeonType.headline(24.sp)
                 )
@@ -401,7 +402,7 @@ private fun CopyProfileSelectionDialog(
                 .padding(32.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
+                NeonText(
                     text = "Copy Configuration",
                     style = NeonType.headline(24.sp)
                 )
@@ -459,7 +460,7 @@ private fun ScratchConfirmDialog(
                 .padding(32.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
+                NeonText(
                     text = "Start From Scratch?",
                     style = NeonType.headline(24.sp)
                 )
@@ -540,7 +541,7 @@ fun ProfileOptionsDialog(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Text(
+                    NeonText(
                         text = profile.name.uppercase(),
                         style = NeonType.headline(24.sp)
                     )
@@ -610,7 +611,7 @@ fun DeleteConfirmationDialog(
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
+                NeonText(
                     text = "Delete Profile?",
                     style = NeonType.headline(24.sp)
                 )
@@ -663,7 +664,7 @@ fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
+        NeonText(
             if(initialName.isEmpty()) "What should we call you?" else "Update your name",
             style = NeonType.headline(32.sp)
         )
@@ -706,7 +707,7 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Choose an avatar", style = NeonType.headline(32.sp))
+        NeonText("Choose an avatar", style = NeonType.headline(32.sp))
         Spacer(Modifier.height(16.dp))
         Text("Select an avatar that represents you.", color = NeonPalette.Lilac)
 
@@ -834,7 +835,7 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             // Offset for theme name labels below circles (not present in avatar selector)
             Spacer(Modifier.height(32.dp))
             
-            Text("Choose a theme", style = NeonType.headline(32.sp))
+            NeonText("Choose a theme", style = NeonType.headline(32.sp))
             Spacer(Modifier.height(16.dp))
             Text("Select a color scheme for your experience.", color = NeonPalette.Lilac)
 
