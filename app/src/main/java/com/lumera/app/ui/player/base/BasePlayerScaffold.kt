@@ -215,6 +215,8 @@ fun BasePlayerScaffold(
     var autoplayCancelled by remember(playbackController) { mutableStateOf(false) }
     var countdownSeconds by remember(playbackController) { mutableIntStateOf(10) }
     var countdownActive by remember(playbackController) { mutableStateOf(false) }
+    // The countdown and the end of the video both start the next episode; only the first one counts
+    var autoplayFired by remember(playbackController) { mutableStateOf(false) }
 
     val isNearCompletion = remember(uiState.positionMs, uiState.durationMs, skipSegmentInfo, autoplayThresholdMode, autoplayThresholdPercent, autoplayThresholdSeconds, hasError) {
         if (hasError) return@remember false
@@ -283,14 +285,16 @@ fun BasePlayerScaffold(
             countdownSeconds--
         }
         // Countdown finished
-        if (countdownActive && !autoplayCancelled) {
+        if (countdownActive && !autoplayCancelled && !autoplayFired) {
+            autoplayFired = true
             onAutoplayNextEpisode?.invoke(currentSourceUrl)
         }
     }
 
     // Auto-trigger on STATE_ENDED if overlay is showing
     LaunchedEffect(uiState.isEnded) {
-        if (uiState.isEnded && countdownActive && !autoplayCancelled) {
+        if (uiState.isEnded && countdownActive && !autoplayCancelled && !autoplayFired) {
+            autoplayFired = true
             onAutoplayNextEpisode?.invoke(currentSourceUrl)
         }
     }

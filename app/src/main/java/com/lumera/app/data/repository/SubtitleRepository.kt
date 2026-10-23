@@ -222,8 +222,8 @@ class SubtitleRepository @Inject constructor(
         }.getOrNull() ?: return emptyList()
 
         val addonName = addon.nickname?.takeIf { it.isNotBlank() } ?: addon.name
-        return response.subtitles.mapNotNull { subtitle ->
-            subtitle.toAddonSubtitle(addonName = addonName, addonBaseUrl = addon.transportUrl)
+        return response.subtitles.orEmpty().mapNotNull { subtitle ->
+            subtitle?.toAddonSubtitle(addonName = addonName, addonBaseUrl = addon.transportUrl)
         }
     }
 

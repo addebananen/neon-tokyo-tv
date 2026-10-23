@@ -37,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -512,7 +513,7 @@ class DetailsViewModel @Inject constructor(
         val itemId = _state.value.resolvedId ?: meta.id
         val isCurrentlyWatched = _state.value.isMovieWatched
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             if (isCurrentlyWatched) {
                 dao.deleteHistoryItem(itemId)
                 traktSyncManager.pushMovieUnwatched(itemId)
@@ -546,7 +547,7 @@ class DetailsViewModel @Inject constructor(
         val currentProgress = _state.value.episodeProgressMap[key]
         val isCurrentlyWatched = currentProgress?.watched ?: false
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             if (isCurrentlyWatched) {
                 // Unmark: remove watched entry from history
                 val playbackId = "$streamId:${episode.season}:${episode.episode}"
@@ -602,14 +603,33 @@ class DetailsViewModel @Inject constructor(
         prefetchedSubtitles = null
         prefetchStreamsJob = viewModelScope.launch {
             try {
-                val streamsDeferred = async { repository.getStreams(type, id) }
-                val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
-                prefetchedStreams = streamsDeferred.await()
-                prefetchedSubtitles = subtitlesDeferred.await()
+                val (streams, subtitles) = fetchSources(type, id)
+                prefetchedStreams = streams
+                prefetchedSubtitles = subtitles
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // Prefetch failed silently — loadStreams will fetch fresh
             }
         }
+    }
+
+    /**
+     * The sources and addon subtitles for one title, fetched side by side. Subtitles are extra:
+     * an addon that fails them costs nothing, and a failure never escapes past the caller's catch.
+     */
+    private suspend fun fetchSources(type: String, id: String): Pair<List<Stream>, List<AddonSubtitle>> = coroutineScope {
+        val streams = async { repository.getStreams(type, id) }
+        val subtitles = async {
+            try {
+                subtitleRepository.getSubtitles(type, id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+        streams.await() to subtitles.await()
     }
 
     // 2. Open Sources (Movie OR Specific Episode)
@@ -640,26 +660,13 @@ class DetailsViewModel @Inject constructor(
             )
 
             try {
-                val rawStreams: List<Stream>
-                val addonSubtitles: List<AddonSubtitle>
                 val prefetchKey = "$type:$id"
-
-                if (prefetchedStreamKey == prefetchKey) {
-                    prefetchStreamsJob?.join()
-                    if (prefetchedStreams != null) {
-                        rawStreams = prefetchedStreams!!
-                        addonSubtitles = prefetchedSubtitles ?: emptyList()
-                    } else {
-                        val streamsDeferred = async { repository.getStreams(type, id) }
-                        val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
-                        rawStreams = streamsDeferred.await()
-                        addonSubtitles = subtitlesDeferred.await()
-                    }
+                if (prefetchedStreamKey == prefetchKey) prefetchStreamsJob?.join()
+                val prefetched = prefetchedStreams?.takeIf { prefetchedStreamKey == prefetchKey }
+                val (rawStreams, addonSubtitles) = if (prefetched != null) {
+                    prefetched to (prefetchedSubtitles ?: emptyList())
                 } else {
-                    val streamsDeferred = async { repository.getStreams(type, id) }
-                    val subtitlesDeferred = async { subtitleRepository.getSubtitles(type, id) }
-                    rawStreams = streamsDeferred.await()
-                    addonSubtitles = subtitlesDeferred.await()
+                    fetchSources(type, id)
                 }
 
                 // Read sorting preferences from the active profile
@@ -715,8 +722,15 @@ class DetailsViewModel @Inject constructor(
                     autoPlayStream = null,
                     addonSubtitles = addonSubtitles,
                     availableStreams = streams,
-                    sidebarState = SidebarState.Sources(displayTitle, streams)
+                    sidebarState = SidebarState.Sources(
+                        displayTitle,
+                        streams,
+                        hiddenByFilters = (rawStreams.size - streams.size).coerceAtLeast(0)
+                    )
                 )
+            } catch (e: CancellationException) {
+                // Closed or replaced by newer sources: leave the screen to whoever cancelled
+                throw e
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isLoadingStreams = false,
@@ -796,7 +810,7 @@ class DetailsViewModel @Inject constructor(
     fun toggleWatchlist() {
         val meta = _state.value.meta ?: return
         val itemId = _state.value.resolvedId ?: meta.id
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             if (dao.isInWatchlist(itemId)) {
                 dao.removeFromWatchlist(itemId)
                 traktSyncManager.pushRemove(itemId, meta.type)

@@ -256,6 +256,34 @@ fun PlayerScreen(
         )
     }
 
+    // Leaving this episode for another one keeps its place: finished when the next one follows
+    // on, the exact spot when another one is picked from the list
+    val playNextEpisode: ((String?) -> Unit)? = onAutoplayNextEpisode?.let { playNext ->
+        { sourceUrl: String? ->
+            val duration = playbackController.uiState.value.durationMs
+            if (duration > 0L) {
+                viewModel.saveProgress(id = movieId, type = mediaType, title = title, poster = poster, position = duration, duration = duration)
+            }
+            playNext(sourceUrl)
+        }
+    }
+    val pickEpisode: ((MetaVideo, String?) -> Unit)? = onEpisodeSelected?.let { pick ->
+        { episode: MetaVideo, sourceUrl: String? ->
+            val state = playbackController.uiState.value
+            if (state.positionMs > 0L && state.errorMessage.isNullOrBlank()) {
+                viewModel.saveProgress(
+                    id = movieId,
+                    type = mediaType,
+                    title = title,
+                    poster = poster,
+                    position = state.positionMs,
+                    duration = state.durationMs.takeIf { it > 0L }
+                )
+            }
+            pick(episode, sourceUrl)
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         BasePlayerScaffold(
             playbackController = playbackController,
@@ -267,14 +295,14 @@ fun PlayerScreen(
             onBack = persistAndBack,
             skipSegmentInfo = skipSegmentInfo,
             nextEpisodeInfo = nextEpisodeInfo,
-            onAutoplayNextEpisode = onAutoplayNextEpisode,
+            onAutoplayNextEpisode = playNextEpisode,
             autoplayEnabled = playbackSettings.autoplayNextEpisode,
             autoplayThresholdMode = playbackSettings.autoplayThresholdMode,
             autoplayThresholdPercent = playbackSettings.autoplayThresholdPercent,
             autoplayThresholdSeconds = playbackSettings.autoplayThresholdSeconds,
             episodes = episodes,
             currentPlaybackId = currentPlaybackId,
-            onEpisodeSelected = onEpisodeSelected,
+            onEpisodeSelected = pickEpisode,
             episodeSwitchSources = episodeSwitchSources,
             isEpisodeSwitchLoading = isEpisodeSwitchLoading,
             episodeSwitchTitle = episodeSwitchTitle,

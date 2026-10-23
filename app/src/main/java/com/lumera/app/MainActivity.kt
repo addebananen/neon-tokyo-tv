@@ -98,6 +98,7 @@ import com.lumera.app.ui.theme.LocalHubRoundCorners
 import com.lumera.app.ui.theme.LumeraTheme
 import com.lumera.app.ui.theme.ThemeManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -145,6 +146,8 @@ private class PlayerState {
     var currentStream by mutableStateOf<Stream?>(null)
     var pendingEpisodeSwitch by mutableStateOf<PendingEpisodeSwitch?>(null)
     var isEpisodeSwitchLoading by mutableStateOf(false)
+    // Looking up the sources of the next episode; stopped when the player closes or another switch starts
+    var episodeSwitchJob: Job? = null
 }
 
 private fun resolveSubtitleUrl(rawUrl: String, addonTransportUrl: String?): String? {
@@ -606,7 +609,9 @@ private fun handlePlayerSessionEnd(
     pendingSourceSelection: PendingSourceSelection?,
     onConsumePendingSelection: () -> Unit,
     onResumeHintResolved: (String?) -> Unit,
-    rememberSourceSelection: Boolean = true
+    rememberSourceSelection: Boolean = true,
+    // Left for another episode on purpose: the source worked, so it isn't forgotten as a failed one
+    switchedAway: Boolean = false
 ) {
     val playbackId = selectedPlaybackId.trim()
     if (playbackId.isBlank()) {
@@ -653,7 +658,7 @@ private fun handlePlayerSessionEnd(
                 sessionResult.positionMs >= SOURCE_SELECTION_COMMIT_MIN_POSITION_MS)
             if (shouldCommitSource) {
                 sourceSelectionStore.rememberSelection(pendingPlaybackId, selectedStream)
-            } else if (sessionResult.positionMs <= SOURCE_SELECTION_FAILURE_RESET_MAX_POSITION_MS) {
+            } else if (!switchedAway && sessionResult.positionMs <= SOURCE_SELECTION_FAILURE_RESET_MAX_POSITION_MS) {
                 val wasPreferred = sourceSelectionStore.findPreferredStream(
                     playbackId = pendingPlaybackId,
                     streams = listOf(selectedStream)
@@ -1788,7 +1793,8 @@ class MainActivity : ComponentActivity() {
                                         val nextStreamId = episodeStreamId(selectedMovieId, nextEpisode)
                                         val nextPlaybackTitle = episodeDisplayTitle(nextEpisode)
 
-                                        uiScope.launch {
+                                        playerState.episodeSwitchJob?.cancel()
+                                        playerState.episodeSwitchJob = uiScope.launch {
                                             // Show loading feedback immediately
                                             val autoplay = currentProfile?.autoplayNextEpisode == true
                                             val autoSelect = currentProfile?.autoSelectSource == true
@@ -1941,7 +1947,8 @@ class MainActivity : ComponentActivity() {
                                         val epStreamId = episodeStreamId(selectedMovieId, episode)
                                         val epTitle = episodeDisplayTitle(episode)
 
-                                        uiScope.launch {
+                                        playerState.episodeSwitchJob?.cancel()
+                                        playerState.episodeSwitchJob = uiScope.launch {
                                             // Show loading feedback immediately
                                             val autoplay = currentProfile?.autoplayNextEpisode == true
                                             val autoSelect = currentProfile?.autoSelectSource == true
@@ -2050,7 +2057,8 @@ class MainActivity : ComponentActivity() {
                                                 pendingSourceSelection = playerState.pendingSourceSelection,
                                                 onConsumePendingSelection = { playerState.pendingSourceSelection = null },
                                                 onResumeHintResolved = { detailsResumePlaybackHint = it },
-                                                rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true
+                                                rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
+                                                switchedAway = true
                                             )
 
                                             val subtitlePayload = buildSubtitlePayload(streamToPlay, addonSubs)
@@ -2140,7 +2148,8 @@ class MainActivity : ComponentActivity() {
                                             pendingSourceSelection = playerState.pendingSourceSelection,
                                             onConsumePendingSelection = { playerState.pendingSourceSelection = null },
                                             onResumeHintResolved = { detailsResumePlaybackHint = it },
-                                            rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true
+                                            rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
+                                            switchedAway = true
                                         )
 
                                         val subtitlePayload = buildSubtitlePayload(streamToPlay, pending.addonSubs)
@@ -2213,6 +2222,11 @@ class MainActivity : ComponentActivity() {
                                 torrentProgress = torrentProgress,
                                 onBack = { sessionResult ->
                                     torrentProgress = null
+                                    // A next episode still being looked up must not start after the player is gone
+                                    playerState.episodeSwitchJob?.cancel()
+                                    playerState.episodeSwitchJob = null
+                                    playerState.isEpisodeSwitchLoading = false
+                                    playerState.pendingEpisodeSwitch = null
                                     handlePlayerSessionEnd(
                                         sessionResult = sessionResult,
                                         selectedPlaybackId = selectedPlaybackId,

@@ -200,7 +200,8 @@ fun DetailsScreen(
         }
     }
 
-    BackHandler(enabled = sidebarState !is SidebarState.Closed) {
+    // Back also stops a source that is still being picked behind the spinner, instead of leaving the page
+    BackHandler(enabled = sidebarState !is SidebarState.Closed || (isCurrentMovie && state.isLoadingStreams)) {
         viewModel.goBackInSidebar()
     }
 

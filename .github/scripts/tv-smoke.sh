@@ -158,7 +158,10 @@ photo_from_phone() {
   shot photo-preview
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"preview"' || fail "the phone was told $state instead of preview"
-  if [ "$(focused_label)" != "USE THIS PHOTO" ]; then fail "Use This Photo does not have the focus"; fi
+  # A dialog's focus does not show in the UI tree, so this only catches focus on the wrong button;
+  # the phone hearing "done" after OK below is what proves Use This Photo had it
+  label=$(focused_label)
+  if [ -n "$label" ] && [ "$label" != "USE THIS PHOTO" ]; then fail "Use This Photo does not have the focus ($label does)"; fi
   key DPAD_CENTER
   sleep 1
   state=$(curl -s -m 5 "$base/status")
@@ -460,10 +463,11 @@ screen_has "Change Photo" || fail "the options of a photo profile do not offer C
 shot profile-options
 key BACK
 sleep 2
-# Add Guest next to Adrian
+# Add Guest next to Adrian. The keyboard can open over the name step at once, and then the UI
+# tree shows the keyboard instead, so an open keyboard counts as being on the name step too
 key DPAD_RIGHT DPAD_CENTER
 sleep 2
-if screen_has "What should we call you"; then
+if screen_has "What should we call you" || adb shell dumpsys input_method | grep -q "mInputShown=true"; then
   adb shell input text "Guest"
   sleep 1
   key ENTER
