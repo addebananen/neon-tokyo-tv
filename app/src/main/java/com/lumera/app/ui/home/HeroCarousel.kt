@@ -3,6 +3,8 @@ package com.lumera.app.ui.home
 import androidx.compose.animation.AnimatedContent
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.NeonMetaDot
+import com.lumera.app.ui.components.Synopsis
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -324,20 +326,19 @@ fun HeroCarousel(
 
                     if (item.description != null) {
                         Spacer(Modifier.height(10.dp))
-                        Text(
+                        // Three lines fill the fixed height that keeps the layout from shifting
+                        Synopsis(
                             text = item.description!!,
-                            maxLines = 5,
-                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 3,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 14.sp,
                                 letterSpacing = 0.sp,
                                 lineHeight = 1.3.em
                             ),
                             color = Color.White.copy(0.75f),
-                            textAlign = TextAlign.Start,
                             modifier = Modifier
                                 .width(500.dp)
-                                .height(60.dp) // Fixed height to prevent layout shift
+                                .height(60.dp)
                         )
                     }
                 }
@@ -415,11 +416,7 @@ private fun HeroMetaStrip(item: MetaItem) {
 
 @Composable
 private fun HeroMetaDot() {
-    Text(
-        text = ".",
-        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-        color = Color.White.copy(alpha = 0.55f)
-    )
+    NeonMetaDot(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
 }
 
 @Composable

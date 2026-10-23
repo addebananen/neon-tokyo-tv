@@ -2,6 +2,7 @@ package com.lumera.app.launcher
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NeonHomeTest {
@@ -60,5 +61,15 @@ class NeonHomeTest {
     fun appsWithoutAnIconKeepTheirColour() {
         assertEquals(HomeCatalog.monogramColor("Kodi"), HomeCatalog.monogramColor("kodi"))
         assertNull(HomeCatalog.known("org.xbmc.kodi", "Kodi"))
+    }
+
+    @Test
+    fun theGearIconIsAClosedOutlineOfThirtyTwoCorners() {
+        val outline = gear(50f, 50f, 38f, 28f, 8)
+        assertTrue(outline.startsWith("M") && outline.trimEnd().endsWith("Z"))
+        // Dots, never commas, whatever language the TV is set to
+        val numbers = Regex("-?\\d+\\.\\d+").findAll(outline).map { it.value.toFloat() }.toList()
+        assertEquals(64, numbers.size)
+        assertTrue(numbers.all { it in 11f..89f })
     }
 }

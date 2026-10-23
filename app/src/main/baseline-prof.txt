@@ -91,13 +91,20 @@ HSPLcom/lumera/app/ui/home/ViewMoreCardKt;->**(**)**
 HSPLcom/lumera/app/ui/home/DpadRepeatGateKt;->**(**)**
 HSPLcom/lumera/app/ui/home/FocusPivotSpecKt;->**(**)**
 
-# Card & background components
-HSPLcom/lumera/app/ui/components/LumeraBackgroundKt;->**(**)**
-HSPLcom/lumera/app/ui/components/GlassComponentsKt;->**(**)**
-HSPLcom/lumera/app/ui/components/CenterCarouselRowKt;->**(**)**
+# Card, background and neon text components
+HSPLcom/lumera/app/ui/components/**;->**(**)**
 
 # Navigation
 HSPLcom/lumera/app/ui/navigation/**;->**(**)**
+
+# ============================================================================
+# NEON TOKYO TV EXTRAS - Neon Home answers the Home button, so it starts cold
+# after a reboot; the screensaver and the Projectivy wallpaper start alone too
+# ============================================================================
+
+HSPLcom/lumera/app/launcher/**;->**(**)**
+HSPLcom/lumera/app/dream/**;->**(**)**
+HSPLcom/lumera/app/projectivy/**;->**(**)**
 
 # ============================================================================
 # LUMERA UI - Secondary screens

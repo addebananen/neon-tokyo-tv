@@ -1,5 +1,6 @@
 package com.lumera.app.ui.search
 
+import com.lumera.app.ui.components.NeonType
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -209,9 +210,8 @@ fun SearchScreen(
                     ) {
                         Text(
                             text = "Discover",
-                            style = TvMaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold
-                            ),
+                            // The same neon italic as the row titles on the home screen
+                            style = NeonType.rowTitle(18.sp),
                             color = Color.White.copy(0.9f),
                             modifier = Modifier.padding(bottom = filterGap)
                         )
@@ -329,9 +329,8 @@ fun SearchScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "Movies",
-                                    style = TvMaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
+                                    // The same neon italic as the row titles on the home screen
+                                    style = NeonType.rowTitle(18.sp),
                                     color = Color.White.copy(0.9f),
                                     modifier = Modifier.padding(bottom = if (isTopNav) 12.dp else 4.dp)
                                 )
@@ -384,9 +383,8 @@ fun SearchScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "Series",
-                                    style = TvMaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
+                                    // The same neon italic as the row titles on the home screen
+                                    style = NeonType.rowTitle(18.sp),
                                     color = Color.White.copy(0.9f),
                                     modifier = Modifier.padding(bottom = if (isTopNav) 12.dp else 4.dp)
                                 )

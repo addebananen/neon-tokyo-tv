@@ -8,6 +8,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -194,6 +196,92 @@ fun NeonText(
 private class Shortened(val text: String, val room: Constraints)
 
 private const val ELLIPSIS = "…"
+
+/**
+ * The dot between the parts of a title's details ("Series · Animation · 2012"), drawn rather
+ * than typed so it sits in the middle of the line instead of on the baseline.
+ */
+@Composable
+fun NeonMetaDot(color: Color, modifier: Modifier = Modifier) {
+    Box(modifier.size(4.dp).background(color, CircleShape))
+}
+
+/**
+ * A title's description. When it doesn't fit it ends on a whole word ("...that they'll be…"
+ * instead of "...that they'll be tra…"), and so does a description its catalog cut short.
+ */
+@Composable
+fun Synopsis(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    maxLines: Int,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start
+) {
+    val whole = remember(text) { tidySynopsis(text) }
+    val plain = remember(style, color, textAlign) { style.copy(color = color, textAlign = textAlign) }
+    val measurer = rememberTextMeasurer()
+    var shortened by remember(whole, plain, maxLines) { mutableStateOf<Shortened?>(null) }
+    BasicText(
+        text = shortened?.text ?: whole,
+        style = plain,
+        onTextLayout = { result ->
+            val room = result.layoutInput.constraints
+            val cut = shortened
+            if (cut != null && cut.room != room) {
+                shortened = null
+            } else if (cut == null && result.hasVisualOverflow) {
+                val fitted = shortenToWords(whole) { candidate ->
+                    !measurer.measure(AnnotatedString(candidate), style = plain, maxLines = maxLines, constraints = room).hasVisualOverflow
+                }
+                shortened = Shortened(fitted, room)
+            }
+        },
+        overflow = TextOverflow.Ellipsis,
+        maxLines = maxLines,
+        modifier = modifier
+    )
+}
+
+/**
+ * Some catalogs cut a long description short themselves and end it in "...", often in the
+ * middle of a word. Cut after a whole sentence ("prize....") it now just ends there; cut inside
+ * a word ("they'll be tra...") the start of that word goes and it ends in a real ellipsis.
+ */
+internal fun tidySynopsis(text: String): String {
+    val trimmed = text.trim()
+    var end = trimmed.length
+    while (end > 0 && (trimmed[end - 1] == '.' || trimmed[end - 1] == '…')) end--
+    val run = trimmed.substring(end)
+    val dots = run.count { it == '.' } + 3 * run.count { it == '…' }
+    // A short text ending in dots means them; a long one was cut short by its catalog
+    if (dots < 3 || trimmed.length < 120) return trimmed
+    val body = trimmed.substring(0, end).trimEnd()
+    if (body.isEmpty()) return trimmed
+    if (body.last() == '!' || body.last() == '?') return body
+    if (dots >= 4) return "$body."
+    val space = body.lastIndexOf(' ')
+    val kept = if (space >= body.length * 0.6f) body.substring(0, space) else body
+    return kept.trimEnd(' ', ',', ';', ':', '-', '–', '—') + ELLIPSIS
+}
+
+/** Like [shorten], but ending on a whole word when there is one close by. */
+internal fun shortenToWords(text: String, fits: (String) -> Boolean): String {
+    val cut = shorten(text, fits)
+    val kept = cut.removeSuffix(ELLIPSIS)
+    if (kept.isEmpty()) return cut
+    val betweenWords = kept.length >= text.length || text[kept.length].isWhitespace() || !kept.last().isLetterOrDigit()
+    val words = if (betweenWords) {
+        kept
+    } else {
+        val space = kept.lastIndexOf(' ')
+        // One very long word is cut where it has to be
+        if (space < kept.length * 0.6f) return cut
+        kept.substring(0, space)
+    }
+    return words.trimEnd(' ', ',', ';', ':', '-', '–', '—', '.') + ELLIPSIS
+}
 
 /** The longest start of [text] that still [fits] with an ellipsis after it. */
 internal fun shorten(text: String, fits: (String) -> Boolean): String {

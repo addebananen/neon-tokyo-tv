@@ -11,11 +11,13 @@ import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -56,7 +58,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +71,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.CacheDrawScope
+import androidx.compose.ui.draw.DrawResult
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -74,15 +82,22 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
@@ -90,6 +105,9 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -97,6 +115,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,6 +142,11 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.random.Random
 
 private enum class HomeTab { Home, Apps }
 
@@ -212,6 +236,27 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
 
     var tab by rememberSaveable { mutableStateOf(HomeTab.Home) }
     var wallpaper by remember { mutableStateOf(NeonWallpaper.TOKYO) }
+    // The light on the floor under the tile in focus, off while the focus is anywhere else
+    var spot by remember { mutableStateOf<Spot?>(null) }
+    var spotOn by remember { mutableStateOf(false) }
+    // The lights come on once when the home screen first shows: the clock flickers to life like
+    // a neon sign and the tabs and tiles rise into place
+    val ignite = remember { Animatable(0f) }
+    val clockLight = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        launch {
+            clockLight.animateTo(1f, keyframes {
+                durationMillis = 780
+                0f at 90
+                0.9f at 150
+                0.12f at 215
+                1f at 300
+                0.5f at 400
+                1f at 540
+            })
+        }
+        ignite.animateTo(1f, tween(640, delayMillis = 160, easing = FastOutSlowInEasing))
+    }
     var linking by remember { mutableStateOf<Console?>(null) }
     var showInputs by remember { mutableStateOf(false) }
     val firstFavourite = remember { FocusRequester() }
@@ -263,30 +308,54 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
         val tabsTop = maxHeight * 0.415f
         val rowsTop = maxHeight * 0.485f
         SkylineBackdrop(wallpaper)
+        SkySparkles()
+        FloorLight(spot, spotOn, ignite = { ignite.value })
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 30.dp),
             verticalAlignment = Alignment.Top
         ) {
-            HomeClock(resumes)
+            HomeClock(resumes, light = { clockLight.value }, ignite = { ignite.value })
             Spacer(Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(top = 6.dp)) {
-                Pill("Search", onClick = { openSearch(context) }, onFocus = { wallpaper = NeonWallpaper.TOKYO })
-                Pill("Inputs", onClick = { showInputs = true }, onFocus = { wallpaper = NeonWallpaper.OCEAN })
-                Pill("Settings", onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = { wallpaper = NeonWallpaper.TOKYO })
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = ignite.value }
+            ) {
+                Pill("Search", Glyph.Search, onClick = { openSearch(context) }, onFocus = {
+                    wallpaper = NeonWallpaper.TOKYO
+                    spotOn = false
+                })
+                Pill("Inputs", Glyph.Hdmi, onClick = { showInputs = true }, onFocus = {
+                    wallpaper = NeonWallpaper.OCEAN
+                    spotOn = false
+                })
+                Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
+                    wallpaper = NeonWallpaper.TOKYO
+                    spotOn = false
+                })
             }
         }
 
         Row(
             modifier = Modifier
                 .padding(start = Side, top = tabsTop)
+                .graphicsLayer {
+                    alpha = ignite.value
+                    translationY = (1f - ignite.value) * 14.dp.toPx()
+                }
                 // Up from the tiles lands on the open tab, never on the other one, which would open it
                 .focusProperties { enter = { if (tab == HomeTab.Home) homeTab else appsTab } }
                 .focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            TabPill("Home", tab == HomeTab.Home, homeTab, onFocus = { tab = HomeTab.Home }, onClick = { focusFirst++ })
-            TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = { tab = HomeTab.Apps }, onClick = { focusFirst++ })
+            TabPill("Home", tab == HomeTab.Home, homeTab, onFocus = {
+                tab = HomeTab.Home
+                spotOn = false
+            }, onClick = { focusFirst++ })
+            TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = {
+                tab = HomeTab.Apps
+                spotOn = false
+            }, onClick = { focusFirst++ })
         }
 
         AnimatedContent(
@@ -296,7 +365,12 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                     .togetherWith(fadeOut(tween(110)))
             },
             label = "HomeTab",
-            modifier = Modifier.padding(top = rowsTop).fillMaxSize()
+            modifier = Modifier
+                .padding(top = rowsTop)
+                .fillMaxSize()
+                // Rising by layout rather than by layer, so the light under the focused tile rises with it
+                .offset { IntOffset(0, ((1f - ignite.value) * 26.dp.toPx()).roundToInt()) }
+                .graphicsLayer { alpha = ignite.value }
         ) { shown ->
             when (shown) {
                 HomeTab.Home -> HomeRows(
@@ -304,6 +378,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                     live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
                     firstFavourite = firstFavourite,
                     onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
+                    onSpot = {
+                        spot = it
+                        spotOn = true
+                    },
                     onOpenApp = { HomeApps.open(context, it) },
                     onOpenConsole = { openConsole(it) },
                     onLinkConsole = { linking = it }
@@ -311,7 +389,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                 HomeTab.Apps -> AllApps(
                     apps = apps,
                     firstApp = firstApp,
-                    onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
+                    onFocusColor = { pkg, title, color ->
+                        wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb())
+                        spotOn = false
+                    },
                     onOpen = { HomeApps.open(context, it.packageName) }
                 )
             }
@@ -355,6 +436,7 @@ private fun HomeRows(
     live: (Console) -> Boolean,
     firstFavourite: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
+    onSpot: (Spot) -> Unit,
     onOpenApp: (KnownApp) -> Unit,
     onOpenConsole: (Console) -> Unit,
     onLinkConsole: (Console) -> Unit
@@ -372,8 +454,10 @@ private fun HomeRows(
                     onFocus = { onFocusColor(app.packages.first(), app.name, app.color) },
                     focusRequester = if (index == 0) firstFavourite else null,
                     // Not on the TV yet: dimmed, and opening it goes to its Play Store page
-                    dimmed = app !in installed
-                ) {
+                    dimmed = app !in installed,
+                    onFocusRect = { onSpot(Spot(it, app.color)) }
+                ) { focused ->
+                    TileScene(app, focused, TileShape)
                     Row(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -398,6 +482,7 @@ private fun HomeRows(
                     onClick = { onOpenConsole(console) },
                     onLongClick = { onLinkConsole(console) },
                     onFocus = { onFocusColor(null, console.name, console.color) },
+                    onFocusRect = { onSpot(Spot(it, console.color)) },
                     behind = { LiveHalo(light, console.color, 8.dp) },
                     front = { LiveEdge(light, live(console), console.color, 8.dp) }
                 ) {
@@ -471,7 +556,11 @@ private fun AllApps(
     }
 }
 
-/** A tile on the home screen. It grows a little on focus, and [behind] and [front] can draw past its edges. */
+/**
+ * A tile on the home screen. It pops forward on focus and its edge lights up like a neon tube;
+ * [behind] and [front] can draw past its edges, and [onFocusRect] hears where it is on the
+ * screen when the focus lands on it.
+ */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun NeonTile(
@@ -485,26 +574,52 @@ private fun NeonTile(
     onLongClick: (() -> Unit)? = null,
     focusRequester: FocusRequester? = null,
     dimmed: Boolean = false,
+    onFocusRect: ((Rect) -> Unit)? = null,
     behind: @Composable BoxScope.() -> Unit = {},
     front: @Composable BoxScope.() -> Unit = {},
-    content: @Composable BoxScope.() -> Unit
+    content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    // A spring that overshoots a touch, so the tile pops when the focus lands on it
     val scale by animateFloatAsState(
         targetValue = when {
             pressed -> 1.03f
             focused -> 1.07f
             else -> 1f
         },
-        animationSpec = tween(durationMillis = if (focused && !pressed) 90 else 140, easing = FastOutSlowInEasing),
+        animationSpec = if (focused && !pressed) spring(dampingRatio = 0.55f, stiffness = 650f) else spring(stiffness = 900f),
         label = "TileScale"
     )
+    val tube by animateFloatAsState(if (focused) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
+    // Where the tile was laid out and last said it was, kept out of state so that moving it
+    // never recomposes anything. A focused tile that moves, as its row slides in, says so again.
+    val placed = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val told = remember { arrayOfNulls<Rect>(1) }
+    fun tellWhere(always: Boolean) {
+        val coordinates = placed[0] ?: return
+        if (onFocusRect == null || !coordinates.isAttached) return
+        val bounds = coordinates.boundsInRoot()
+        if (always || bounds != told[0]) {
+            told[0] = bounds
+            onFocusRect(bounds)
+        }
+    }
     Box(
         modifier = modifier
             .size(width, height)
             .zIndex(if (focused) 1f else 0f)
+            .then(
+                if (onFocusRect != null) {
+                    Modifier.onGloballyPositioned {
+                        placed[0] = it
+                        if (focused) tellWhere(always = false)
+                    }
+                } else {
+                    Modifier
+                }
+            )
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -519,7 +634,10 @@ private fun NeonTile(
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged {
                     focused = it.isFocused
-                    if (it.isFocused) onFocus()
+                    if (it.isFocused) {
+                        onFocus()
+                        tellWhere(always = true)
+                    }
                 },
             shape = ClickableSurfaceDefaults.shape(shape = shape),
             scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f, pressedScale = 1f),
@@ -546,15 +664,42 @@ private fun NeonTile(
                     .fillMaxSize()
                     .background(TileFill, shape)
                     .graphicsLayer { alpha = if (dimmed) 0.5f else 1f }
-            ) { content() }
+            ) { content(focused) }
         }
         front()
+        TubeCore(shape, color, lit = { tube })
     }
+}
+
+/**
+ * The white hot core of a focused tile's edge, drawn down the middle of its coloured line, so
+ * the edge reads as a lit neon tube rather than a painted border.
+ */
+@Composable
+private fun BoxScope.TubeCore(shape: RoundedCornerShape, color: Color, lit: () -> Float) {
+    val core = remember(color) { lerp(color, Color.White, 0.62f) }
+    Spacer(
+        Modifier
+            .matchParentSize()
+            .drawWithCache {
+                // The tile's border is 1.5 dp wide and drawn inside its edge
+                val inset = 0.75.dp.toPx()
+                val radius = (shape.topStart.toPx(size, this) - inset).coerceAtLeast(0f)
+                val line = Stroke(0.7.dp.toPx())
+                val topLeft = Offset(inset, inset)
+                val inner = Size(size.width - 2 * inset, size.height - 2 * inset)
+                onDrawBehind {
+                    val a = lit()
+                    if (a <= 0f) return@onDrawBehind
+                    drawRoundRect(core, topLeft, inner, CornerRadius(radius), style = line, alpha = 0.9f * a)
+                }
+            }
+    )
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun Pill(text: String, onClick: () -> Unit, onFocus: () -> Unit) {
+private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Surface(
         onClick = onClick,
@@ -573,11 +718,17 @@ private fun Pill(text: String, onClick: () -> Unit, onFocus: () -> Unit) {
         ),
         glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = NeonPalette.Magenta.copy(alpha = 0.55f), elevation = 12.dp))
     ) {
-        BasicText(
-            text = text,
-            style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, color = NeonPalette.Text),
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
-        )
+        Row(
+            modifier = Modifier.padding(start = 9.dp, end = 11.dp, top = 5.dp, bottom = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            NeonGlyph(glyph, NeonPalette.Cyan, Modifier.size(13.dp))
+            Spacer(Modifier.width(5.dp))
+            BasicText(
+                text = text,
+                style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, color = NeonPalette.Text)
+            )
+        }
     }
 }
 
@@ -637,18 +788,28 @@ private fun TabPill(text: String, selected: Boolean, focusRequester: FocusReques
 
 @Composable
 private fun RowTitle(text: String) {
-    NeonText(
-        text = text.uppercase(),
-        style = TextStyle(
-            fontFamily = KanitFamily,
-            fontWeight = FontWeight.Medium,
-            fontStyle = FontStyle.Italic,
-            fontSize = 13.sp,
-            letterSpacing = 1.sp,
-            color = NeonPalette.Text,
-            shadow = Shadow(NeonPalette.Cyan.copy(alpha = 0.6f), blurRadius = 12f)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        NeonText(
+            text = text.uppercase(),
+            style = TextStyle(
+                fontFamily = KanitFamily,
+                fontWeight = FontWeight.Medium,
+                fontStyle = FontStyle.Italic,
+                fontSize = 13.sp,
+                letterSpacing = 1.sp,
+                color = NeonPalette.Text,
+                shadow = Shadow(NeonPalette.Cyan.copy(alpha = 0.6f), blurRadius = 12f)
+            )
         )
-    )
+        Spacer(Modifier.width(10.dp))
+        // A thin neon rule that runs out from the title and fades away
+        Spacer(
+            Modifier
+                .width(150.dp)
+                .height(1.dp)
+                .background(Brush.horizontalGradient(listOf(NeonPalette.Cyan.copy(alpha = 0.55f), Color.Transparent)))
+        )
+    }
 }
 
 @Composable
@@ -839,9 +1000,388 @@ private fun starPath(size: Size): Path {
     }
 }
 
-/** The time in big neon letters and the date under it, kept right by the TV's minute tick. */
+/** How long a tile has been in focus, in seconds, counting on from where it stopped last time. */
 @Composable
-private fun HomeClock(resumes: Int) {
+private fun rememberFocusClock(focused: Boolean): State<Float> {
+    val seconds = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(focused) {
+        if (!focused) return@LaunchedEffect
+        var last = withFrameNanos { it }
+        while (true) {
+            withFrameNanos { now ->
+                seconds.floatValue += (now - last) / 1_000_000_000f
+                last = now
+            }
+        }
+    }
+    return seconds
+}
+
+private enum class Scene { Video, Record, Equalizer, Film }
+
+/**
+ * A little scene behind a big tile's name about what the app is for: a video playing for
+ * YouTube, a record turning for YT Music, an equalizer for Spotify and a film strip for Stremio.
+ * It holds still while the tile rests and plays while it is in focus. Only the drawing changes,
+ * so it never recomposes or lays anything out again.
+ */
+@Composable
+private fun BoxScope.TileScene(app: KnownApp, focused: Boolean, shape: RoundedCornerShape) {
+    val scene = when (app) {
+        HomeCatalog.YouTube -> Scene.Video
+        HomeCatalog.YtMusic -> Scene.Record
+        HomeCatalog.Spotify -> Scene.Equalizer
+        HomeCatalog.Stremio -> Scene.Film
+        else -> return
+    }
+    val clock = rememberFocusClock(focused)
+    val lit = animateFloatAsState(if (focused) 1f else 0f, tween(320, easing = FastOutSlowInEasing), label = "SceneLight")
+    val time = { clock.value }
+    val light = { lit.value }
+    Spacer(
+        Modifier
+            .matchParentSize()
+            .clip(shape)
+            .drawWithCache {
+                when (scene) {
+                    Scene.Video -> videoScene(app.color, time, light)
+                    Scene.Record -> recordScene(app.color, time, light)
+                    Scene.Equalizer -> equalizerScene(app.color, time, light)
+                    Scene.Film -> filmScene(app.color, time, light)
+                }
+            }
+    )
+}
+
+/** How strongly a scene shows: half lit while its tile rests, fully lit in focus. */
+private fun sceneStrength(lit: Float) = 0.55f + 0.45f * lit
+
+/** A screen's glow with scanlines drifting down it, and the progress bar of the video playing. */
+private fun CacheDrawScope.videoScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {
+    val w = size.width
+    val h = size.height
+    val glow = Brush.radialGradient(
+        0f to color.copy(alpha = 0.28f),
+        1f to Color.Transparent,
+        center = Offset(w * 0.9f, h * 0.42f),
+        radius = h * 1.05f
+    )
+    // The scanlines fade out towards the name on the left
+    val scanline = Brush.horizontalGradient(0.42f to Color.Transparent, 1f to color.copy(alpha = 0.17f), startX = 0f, endX = w)
+    val gap = 4.dp.toPx()
+    val drift = 5.dp.toPx()
+    val from = w * 0.42f
+    val to = w - 12.dp.toPx()
+    val barY = h - 10.dp.toPx()
+    val thick = 2.dp.toPx()
+    val head = lerp(color, Color.White, 0.5f)
+    return onDrawBehind {
+        val strength = sceneStrength(lit())
+        val t = time()
+        drawRect(glow, alpha = strength)
+        var y = (t * drift) % gap
+        while (y < h) {
+            drawLine(scanline, Offset(0f, y), Offset(w, y), strokeWidth = 1f, alpha = strength)
+            y += gap
+        }
+        // A seven second video on a loop, a third of the way in when it first shows
+        val played = (0.32f + t / 7f) % 1f
+        val x = from + (to - from) * played
+        drawLine(Color.White, Offset(from, barY), Offset(to, barY), thick, StrokeCap.Round, alpha = 0.16f * strength)
+        drawLine(color, Offset(from, barY), Offset(x, barY), thick, StrokeCap.Round, alpha = strength)
+        drawCircle(color, radius = 6.dp.toPx(), center = Offset(x, barY), alpha = 0.3f * strength)
+        drawCircle(head, radius = 3.dp.toPx(), center = Offset(x, barY), alpha = strength)
+    }
+}
+
+/** A record at the right edge with the light catching its grooves, turning at 33 rpm. */
+private fun CacheDrawScope.recordScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {
+    val w = size.width
+    val h = size.height
+    val radius = h * 0.66f
+    val center = Offset(w - radius * 0.15f, h * 0.5f)
+    val groove = Stroke(0.7.dp.toPx())
+    val step = 3.2.dp.toPx()
+    val grooves = generateSequence(radius * 0.42f) { it + step }.takeWhile { it < radius - 1.dp.toPx() }.toList()
+    val vinyl = Brush.radialGradient(0f to Color(0xFF1C0C30), 1f to Color(0xFF0B0516), center = center, radius = radius)
+    val glow = Brush.radialGradient(0f to color.copy(alpha = 0.32f), 1f to Color.Transparent, center = center, radius = radius * 1.4f)
+    val disc = Size(radius * 2f, radius * 2f)
+    val corner = Offset(center.x - radius, center.y - radius)
+    val rim = lerp(color, Color.White, 0.35f)
+    val label = Stroke(1.dp.toPx())
+    val hole = 2.dp.toPx()
+    return onDrawBehind {
+        val strength = sceneStrength(lit())
+        drawCircle(glow, radius = radius * 1.4f, center = center, alpha = strength)
+        drawCircle(vinyl, radius = radius, center = center)
+        grooves.forEach { r -> drawCircle(color, radius = r, center = center, style = groove, alpha = 0.15f * strength) }
+        // Two soft highlights opposite each other, turning with the record
+        val turn = time() * 200f
+        for (side in 0..1) {
+            val start = turn + side * 180f
+            drawArc(Color.White, start - 14f, 28f, useCenter = true, topLeft = corner, size = disc, alpha = 0.045f * strength)
+            drawArc(Color.White, start - 6f, 12f, useCenter = true, topLeft = corner, size = disc, alpha = 0.06f * strength)
+        }
+        drawCircle(color, radius = radius * 0.3f, center = center, alpha = 0.78f * strength)
+        drawCircle(rim, radius = radius * 0.3f, center = center, style = label, alpha = strength)
+        drawCircle(Color(0xFF0B0516), radius = hole, center = center)
+    }
+}
+
+/** An equalizer whose bars dance while the tile is in focus and settle down when it rests. */
+private fun CacheDrawScope.equalizerScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {
+    val w = size.width
+    val h = size.height
+    val bars = 9
+    val barW = 3.5.dp.toPx()
+    val gapW = 3.dp.toPx()
+    val right = w - 13.dp.toPx()
+    val left = right - bars * barW - (bars - 1) * gapW
+    val base = h - 15.dp.toPx()
+    val tallest = h * 0.6f
+    val fill = Brush.verticalGradient(
+        0f to lerp(color, Color.White, 0.3f),
+        1f to color.copy(alpha = 0.35f),
+        startY = base - tallest,
+        endY = base
+    )
+    val rest = floatArrayOf(0.3f, 0.48f, 0.66f, 0.85f, 0.72f, 0.56f, 0.78f, 0.44f, 0.28f)
+    val round = CornerRadius(barW / 2f)
+    val gapBelow = 2.dp.toPx()
+    return onDrawBehind {
+        val l = lit()
+        val strength = sceneStrength(l)
+        val t = time()
+        for (i in 0 until bars) {
+            // Every bar on two beats of its own
+            val beat = abs(sin(t * (2.1f + i * 0.37f) + i * 1.3f)) * (0.62f + 0.38f * sin(t * (0.9f + i * 0.23f) + i))
+            val dance = (0.22f + 0.78f * beat).coerceIn(0.12f, 1f)
+            val level = rest[i] + (dance - rest[i]) * l
+            val barH = tallest * level
+            val x = left + i * (barW + gapW)
+            drawRoundRect(fill, Offset(x, base - barH), Size(barW, barH), round, alpha = strength)
+            // Its reflection on the glass under it
+            drawRoundRect(color, Offset(x, base + gapBelow), Size(barW, barH * 0.22f), round, alpha = 0.16f * strength)
+        }
+    }
+}
+
+/** A film strip running up through a projector's beam. */
+private fun CacheDrawScope.filmScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {
+    val w = size.width
+    val h = size.height
+    val band = 24.dp.toPx()
+    val pivot = Offset(w * 0.8f, h * 0.52f)
+    val from = w * 0.44f
+    val to = w * 1.25f
+    val top = pivot.y - band / 2f
+    val beam = Brush.radialGradient(0f to color.copy(alpha = 0.3f), 1f to Color.Transparent, center = Offset(w, 0f), radius = h * 1.1f)
+    val strip = Brush.horizontalGradient(0f to Color.Transparent, 0.22f to Color(0xF20E0619), startX = from, endX = to)
+    val edge = Brush.horizontalGradient(0f to Color.Transparent, 0.3f to color.copy(alpha = 0.6f), startX = from, endX = to)
+    val hole = Size(2.6.dp.toPx(), 3.2.dp.toPx())
+    val holeStep = 6.5.dp.toPx()
+    val holeRound = CornerRadius(0.8.dp.toPx())
+    val holeInset = 2.dp.toPx()
+    val frame = Size(14.dp.toPx(), band - 14.dp.toPx())
+    val frameStep = 17.dp.toPx()
+    val frameRound = CornerRadius(1.5.dp.toPx())
+    val frameTop = top + 7.dp.toPx()
+    val speed = 16.dp.toPx()
+    val edgeLine = 0.8.dp.toPx()
+    // The left end of the strip fades out towards the name
+    val fadeWidth = w * 0.22f
+    return onDrawBehind {
+        val strength = sceneStrength(lit())
+        val run = time() * speed
+        drawRect(beam, alpha = strength)
+        rotate(-16f, pivot) {
+            drawRect(strip, Offset(from, top), Size(to - from, band))
+            drawLine(edge, Offset(from, top), Offset(to, top), strokeWidth = edgeLine, alpha = strength)
+            drawLine(edge, Offset(from, top + band), Offset(to, top + band), strokeWidth = edgeLine, alpha = strength)
+            var x = from - run % holeStep
+            while (x < to) {
+                val a = 0.6f * ((x - from) / fadeWidth).coerceIn(0f, 1f) * strength
+                if (a > 0f) {
+                    drawRoundRect(color, Offset(x, top + holeInset), hole, holeRound, alpha = a)
+                    drawRoundRect(color, Offset(x, top + band - holeInset - hole.height), hole, holeRound, alpha = a)
+                }
+                x += holeStep
+            }
+            // Every third frame is lit, and the frames keep their places as the strip runs
+            val first = (run / frameStep).toInt()
+            var k = 0
+            var fx = from - run % frameStep
+            while (fx < to) {
+                val a = (if ((first + k) % 3 == 0) 0.36f else 0.15f) * ((fx - from) / fadeWidth).coerceIn(0f, 1f) * strength
+                if (a > 0f) drawRoundRect(color, Offset(fx, frameTop), frame, frameRound, alpha = a)
+                fx += frameStep
+                k++
+            }
+        }
+    }
+}
+
+/** The tile in focus on the Home tab: where it is on the screen, and its colour. */
+private data class Spot(val bounds: Rect, val color: Color)
+
+/**
+ * The light the tile in focus throws on the floor of the skyline, and its reflection, the way
+ * a neon sign lights a wet street at night. It glides from tile to tile with the focus.
+ */
+@Composable
+private fun FloorLight(spot: Spot?, on: Boolean, ignite: () -> Float) {
+    val target = spot ?: return
+    val center by animateOffsetAsState(
+        Offset(target.bounds.center.x, target.bounds.bottom),
+        spring(dampingRatio = 0.86f, stiffness = 240f),
+        label = "LightSpot"
+    )
+    val width by animateFloatAsState(target.bounds.width, spring(dampingRatio = 0.86f, stiffness = 240f), label = "LightWidth")
+    val color by animateColorAsState(target.color, tween(360), label = "LightColor")
+    val strength by animateFloatAsState(if (on) 1f else 0f, tween(if (on) 240 else 420), label = "LightOn")
+    Spacer(
+        Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val a = strength * ignite()
+                if (a <= 0f) return@drawBehind
+                val c = center
+                val pool = Offset(c.x, c.y + 12.dp.toPx())
+                val rx = width * 0.72f
+                val ry = 20.dp.toPx()
+                // A round pool of light squashed flat, as it lies on the floor
+                scale(scaleX = 1f, scaleY = ry / rx, pivot = pool) {
+                    drawCircle(
+                        Brush.radialGradient(
+                            0f to color.copy(alpha = 0.34f),
+                            0.55f to color.copy(alpha = 0.12f),
+                            1f to Color.Transparent,
+                            center = pool,
+                            radius = rx
+                        ),
+                        radius = rx,
+                        center = pool,
+                        alpha = a
+                    )
+                }
+                // The tile's reflection, fading down the floor
+                val top = c.y + 3.dp.toPx()
+                val depth = 32.dp.toPx()
+                val side = 6.dp.toPx()
+                drawRect(
+                    Brush.verticalGradient(0f to color.copy(alpha = 0.16f), 1f to Color.Transparent, startY = top, endY = top + depth),
+                    topLeft = Offset(c.x - width / 2f + side, top),
+                    size = Size((width - 2 * side).coerceAtLeast(0f), depth),
+                    alpha = a
+                )
+            }
+    )
+}
+
+/**
+ * Every few seconds a star in the sky twinkles, and once in a while a shooting star crosses it.
+ * In between nothing moves, so the home screen asks for no frames while it rests.
+ */
+@Composable
+private fun SkySparkles() {
+    val twinkle = remember { Animatable(0f) }
+    val shooting = remember { Animatable(0f) }
+    // Where they are, as fractions of the screen
+    var star by remember { mutableStateOf(Offset(0.5f, 0.1f)) }
+    var streak by remember { mutableStateOf(Offset(0.5f, 0.06f)) }
+    LaunchedEffect(Unit) {
+        val random = Random(System.nanoTime())
+        launch {
+            while (true) {
+                delay(1800L + random.nextLong(3600L))
+                star = skySpot(random)
+                twinkle.snapTo(0f)
+                twinkle.animateTo(1f, tween(1500, easing = LinearEasing))
+            }
+        }
+        launch {
+            delay(8000L + random.nextLong(10000L))
+            while (true) {
+                // From high in the middle of the sky, down to the left between the clock and the sun
+                streak = Offset(0.4f + random.nextFloat() * 0.22f, 0.03f + random.nextFloat() * 0.09f)
+                shooting.snapTo(0f)
+                shooting.animateTo(1f, tween(950, easing = LinearEasing))
+                delay(24000L + random.nextLong(36000L))
+            }
+        }
+    }
+    Spacer(
+        Modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val starSize = 11.dp.toPx()
+                val shape = starPath(Size(starSize, starSize))
+                val middle = Offset(starSize / 2f, starSize / 2f)
+                val travel = 270.dp.toPx()
+                val tail = 80.dp.toPx()
+                val direction = Offset(-0.9f, 0.42f)
+                val trail = 1.6.dp.toPx()
+                val halo = 3.dp.toPx()
+                val spark = 1.2.dp.toPx()
+                onDrawBehind {
+                    val t = twinkle.value
+                    if (t > 0f && t < 1f) {
+                        val p = sin(t * PI.toFloat())
+                        val c = Offset(star.x * size.width, star.y * size.height)
+                        drawCircle(
+                            Brush.radialGradient(0f to Color.White.copy(alpha = 0.5f), 1f to Color.Transparent, center = c, radius = starSize * 1.4f),
+                            radius = starSize * 1.4f,
+                            center = c,
+                            alpha = p
+                        )
+                        withTransform({
+                            translate(c.x - middle.x, c.y - middle.y)
+                            scale(0.4f + 0.6f * p, 0.4f + 0.6f * p, pivot = middle)
+                            rotate(t * 40f, pivot = middle)
+                        }) {
+                            drawPath(shape, Color(0xFFFFF4FB), alpha = p)
+                        }
+                    }
+                    val s = shooting.value
+                    if (s > 0f && s < 1f) {
+                        val rising = (s / 0.15f).coerceAtMost(1f)
+                        val a = rising * ((1f - s) / 0.4f).coerceAtMost(1f)
+                        val start = Offset(streak.x * size.width, streak.y * size.height)
+                        val head = start + direction * (travel * s)
+                        val end = head - direction * (tail * (0.4f + 0.6f * rising))
+                        drawLine(
+                            Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.85f)), start = end, end = head),
+                            end,
+                            head,
+                            strokeWidth = trail,
+                            cap = StrokeCap.Round,
+                            alpha = a
+                        )
+                        drawCircle(Color.White, radius = halo, center = head, alpha = 0.35f * a)
+                        drawCircle(Color.White, radius = spark, center = head, alpha = a)
+                    }
+                }
+            }
+    )
+}
+
+/** A place in the open sky: clear of the clock, the buttons at the top and the sun. */
+private fun skySpot(random: Random): Offset {
+    while (true) {
+        val x = 0.3f + random.nextFloat() * 0.66f
+        val y = 0.03f + random.nextFloat() * 0.3f
+        val buttons = x > 0.72f && y < 0.15f
+        val sun = x > 0.55f && y > 0.2f
+        if (!buttons && !sun) return Offset(x, y)
+    }
+}
+
+/**
+ * The time in big neon letters and the date under it, kept right by the TV's minute tick.
+ * [light] is the sign's power, which flickers on when the home screen first shows.
+ */
+@Composable
+private fun HomeClock(resumes: Int, light: () -> Float, ignite: () -> Float) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(resumes) { now = System.currentTimeMillis() }
@@ -876,7 +1416,14 @@ private fun HomeClock(resumes: Int) {
                 letterSpacing = (-0.5).sp,
                 color = Color(0xFFFFF1F8),
                 shadow = Shadow(NeonPalette.Magenta.copy(alpha = 0.85f), blurRadius = 26f)
-            )
+            ),
+            // An unlit tube still shows a little. The alpha goes on each stroke rather than on an
+            // offscreen copy of the text, which would cut the glow off at the edges of the text
+            modifier = Modifier.graphicsLayer {
+                alpha = 0.14f + 0.86f * light()
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            },
+            glow = light
         )
         BasicText(
             text = date,
@@ -887,7 +1434,8 @@ private fun HomeClock(resumes: Int) {
                 fontSize = 13.sp,
                 letterSpacing = 0.6.sp,
                 color = Dim
-            )
+            ),
+            modifier = Modifier.graphicsLayer { alpha = ignite() }
         )
     }
 }

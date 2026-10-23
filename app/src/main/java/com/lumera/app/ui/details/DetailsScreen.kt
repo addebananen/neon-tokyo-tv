@@ -3,6 +3,8 @@ package com.lumera.app.ui.details
 import androidx.activity.compose.BackHandler
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.NeonMetaDot
+import com.lumera.app.ui.components.Synopsis
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -73,6 +75,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -296,7 +299,8 @@ fun DetailsScreen(
                 model = backdrop?.request,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().alpha(if (backdrop?.wash == true) 0.45f else 0.6f)
+                // The artwork in its own colours on the right, where nothing is written over it
+                modifier = Modifier.fillMaxSize().alpha(if (backdrop?.wash == true) 0.5f else 0.84f)
             )
 
             Box(
@@ -306,17 +310,24 @@ fun DetailsScreen(
                         Brush.horizontalGradient(
                             colorStops = arrayOf(
                                 0.0f to bg,
-                                0.1f to bg.copy(alpha = 0.95f),
-                                0.2f to bg.copy(alpha = 0.85f),
-                                0.3f to bg.copy(alpha = 0.72f),
-                                0.4f to bg.copy(alpha = 0.58f),
-                                0.55f to bg.copy(alpha = 0.38f),
-                                0.7f to bg.copy(alpha = 0.20f),
-                                0.85f to bg.copy(alpha = 0.08f),
+                                0.12f to bg.copy(alpha = 0.96f),
+                                0.24f to bg.copy(alpha = 0.88f),
+                                0.36f to bg.copy(alpha = 0.74f),
+                                0.48f to bg.copy(alpha = 0.55f),
+                                0.6f to bg.copy(alpha = 0.34f),
+                                0.74f to bg.copy(alpha = 0.16f),
+                                0.88f to bg.copy(alpha = 0.05f),
                                 1.0f to Color.Transparent
                             ),
                             startX = 0f,
-                            endX = 1500f
+                            endX = 1700f
+                        )
+                    )
+                    // And a floor of shade under the buttons and the rows below them
+                    .background(
+                        Brush.verticalGradient(
+                            0.5f to Color.Transparent,
+                            1f to bg.copy(alpha = 0.78f)
                         )
                     )
             )
@@ -449,13 +460,15 @@ fun DetailsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
                 // Kept to the shaded left side so it stays readable over bright artwork
-                Text(
+                Synopsis(
                     text = currentMovie.description ?: "",
-                    style = MaterialTheme.typography.bodyLarge,
+                    // A soft shade under the letters keeps them clear over bright artwork
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        shadow = Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 10f)
+                    ),
                     color = textColor,
                     maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 640.dp)
+                    modifier = Modifier.widthIn(max = 600.dp)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -1046,12 +1059,8 @@ private fun DialogButton(
 }
 
 @Composable
-private fun MetaDot(textColor: Color) {
-    Text(
-        text = ".",
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = textColor.copy(alpha = 0.55f)
-    )
+private fun MetaDot(@Suppress("UNUSED_PARAMETER") textColor: Color) {
+    NeonMetaDot(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
 }
 
 @Composable

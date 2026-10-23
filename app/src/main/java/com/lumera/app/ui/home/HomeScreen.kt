@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.NeonMetaDot
+import com.lumera.app.ui.components.Synopsis
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
@@ -457,13 +459,11 @@ fun CinematicLayout(
                             Spacer(modifier = Modifier.height(10.dp))
                             HomeMetaStrip(item = item)
                             Spacer(modifier = Modifier.height(10.dp))
-                            Text(
+                            Synopsis(
                                 text = item.description ?: "",
                                 maxLines = if (isTopNav) 3 else 4,
-                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, letterSpacing = 0.sp, lineHeight = 1.2.em),
                                 color = Color.White.copy(0.85f),
-                                textAlign = TextAlign.Start,
                                 modifier = Modifier.width(450.dp)
                             )
                         }
@@ -1419,11 +1419,7 @@ private fun HomeMetaStrip(item: MetaItem) {
 
 @Composable
 private fun HomeMetaDot() {
-    Text(
-        text = ".",
-        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-        color = Color.White.copy(alpha = 0.55f)
-    )
+    NeonMetaDot(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
 }
 
 @Composable

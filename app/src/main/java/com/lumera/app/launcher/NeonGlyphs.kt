@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.PathParser
+import java.util.Locale
 
 /**
  * The neon line icons of the home screen, the same ones as on the Projectivy banners: drawn
@@ -41,7 +42,12 @@ enum class Glyph(pathData: String) {
     Wii(rect(38, 10, 24, 80, 11) + "M50 22 v14 M43 29 h14" + circle(50, 49, 4.5f) + circle(50, 70, 2) + circle(50, 78, 2)),
     WiiU(rect(8, 27, 84, 46, 16) + rect(31, 33, 38, 30, 2) + circle(19, 41, 4) + circle(81, 59, 4)),
     /** The ring around the first letter of an app the home screen has no icon of its own for. */
-    Ring(circle(50, 50, 36));
+    Ring(circle(50, 50, 36)),
+
+    // The buttons at the top of the home screen
+    Search(circle(43, 43, 25) + "M62 62 L84 84"),
+    Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
+    Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11));
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
@@ -53,6 +59,19 @@ private fun rect(x: Number, y: Number, w: Number, h: Number, r: Number): String 
     return "M${l + rx} $t H${right - rx} A$rx $rx 0 0 1 $right ${t + rx} V${bottom - rx} " +
         "A$rx $rx 0 0 1 ${right - rx} $bottom H${l + rx} A$rx $rx 0 0 1 $l ${bottom - rx} V${t + rx} " +
         "A$rx $rx 0 0 1 ${l + rx} $t Z "
+}
+
+/** A cog wheel with [teeth] square teeth between radius [inner] and [outer]. */
+internal fun gear(cx: Float, cy: Float, outer: Float, inner: Float, teeth: Int): String {
+    val corners = teeth * 4
+    return (0 until corners).joinToString(" ", postfix = " Z ") { k ->
+        // Two corners out on a tooth, two in between, turned so a tooth points straight up
+        val angle = 2.0 * Math.PI * (k - 0.5) / corners - Math.PI / 2
+        val r = if (k % 4 < 2) outer else inner
+        val x = cx + r * Math.cos(angle)
+        val y = cy + r * Math.sin(angle)
+        (if (k == 0) "M" else "L") + String.format(Locale.ROOT, "%.2f %.2f", x, y)
+    }
 }
 
 private fun circle(cx: Number, cy: Number, r: Number): String {
