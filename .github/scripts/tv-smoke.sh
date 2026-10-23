@@ -501,14 +501,35 @@ if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity
   fail "Back on the Home tab did not leave the Neon Home preview"
 fi
 
-# Neon Home on the Home button, switched on and off the way the TV setup script does it
-home_resumed() { adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q NeonHomeActivity; }
+# Neon Home on the Home button, switched on and off the way the TV setup script does it. The
+# stock launcher answers Home ahead of any default for as long as it is on, so like the script
+# the test turns it off meanwhile, and on again afterwards
+home_resumed() { adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q NeonHome; }
 switch_home() { adb shell am broadcast --include-stopped-packages -n "$PKG/com.lumera.app.launcher.NeonHomeSwitch" --es home "$1" 2>&1 | tr -d '\r'; }
-stock_home=$(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | tr -d '\r' | tail -n 1)
+resolve_home() { adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | tr -d '\r' | tail -n 1; }
+log_homes() {
+  {
+    echo "--- $1"
+    echo "resolves to: $(resolve_home)"
+    adb shell cmd role get-role-holders --user 0 android.app.role.HOME
+    adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME
+  } >> "$OUT/neon-home-switch.txt" 2>&1
+}
+stock_home=$(resolve_home)
+stock_pkg=${stock_home%%/*}
+case "$stock_pkg" in
+  ""|android|"$PKG") fail "no stock home screen to stand in for ($stock_home)"; stock_pkg="" ;;
+esac
 answer=$(switch_home neon)
 echo "$answer" > "$OUT/neon-home-switch.txt"
 echo "$answer" | grep -q 'data="neon"' || fail "the app did not turn its Home button entry on ($answer)"
+[ -n "$stock_pkg" ] && adb shell pm disable-user --user 0 "$stock_pkg" >> "$OUT/neon-home-switch.txt" 2>&1
 adb shell cmd package set-home-activity "$PKG/$PKG.NeonHome" >> "$OUT/neon-home-switch.txt" 2>&1
+log_homes "Neon Home on"
+case "$(resolve_home)" in
+  "$PKG/"*) ;;
+  *) fail "the Home button does not resolve to Neon Home once it was made the home screen ($(resolve_home))" ;;
+esac
 adb shell input keyevent KEYCODE_HOME
 sleep 6
 shot neon-home-as-home
@@ -524,13 +545,17 @@ adb shell input keyevent KEYCODE_HOME
 sleep 2
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Home on Neon Home did not go back to its first tile ($label has the focus)"
+# Back to the stock launcher, the way undo does it: the original home first, then the alias off
+[ -n "$stock_pkg" ] && adb shell pm enable "$stock_pkg" >> "$OUT/neon-home-switch.txt" 2>&1
 adb shell cmd package set-home-activity "$stock_home" >> "$OUT/neon-home-switch.txt" 2>&1
 answer=$(switch_home off)
 echo "$answer" >> "$OUT/neon-home-switch.txt"
 echo "$answer" | grep -q 'data="off"' || fail "the app did not turn its Home button entry off ($answer)"
+log_homes "Neon Home off"
 if adb shell cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | grep -q "$PKG"; then
   fail "Neon Home still answers the Home button after it was turned off"
 fi
+[ "$(resolve_home)" = "$stock_home" ] || fail "the stock home screen did not get the Home button back ($(resolve_home) instead of $stock_home)"
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3
 
