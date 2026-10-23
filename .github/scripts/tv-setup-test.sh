@@ -36,6 +36,20 @@ run -Ip 192.168.1.77:41234 -Step launcher
 check "Projectivy is the Home activity" 'grep -q projengmenu "$FAKE_ADB_STATE/home"'
 check "the Google TV home screen is off" 'grep -qx com.google.android.apps.tv.launcherx "$FAKE_ADB_STATE/disabled"'
 
+# Neon Home on the Home button, and back to Projectivy
+run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen neon
+check "Neon Home is the Home activity" 'grep -qx com.neontokyo.tv/com.neontokyo.tv.NeonHome "$FAKE_ADB_STATE/home"'
+check "the app turned its Home button entry on" '[ -f "$FAKE_ADB_STATE/neonhome" ]'
+check "Projectivy stays on as the spare" '! grep -qx com.spocky.projengmenu "$FAKE_ADB_STATE/disabled"'
+run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen projectivy
+check "the Home button is back on Projectivy" 'grep -q projengmenu "$FAKE_ADB_STATE/home"'
+check "Neon Home's Home button entry is off again" '[ ! -f "$FAKE_ADB_STATE/neonhome" ]'
+FAKE_NO_NEON_HOME=1 run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen neon
+check "a Neon Tokyo without Neon Home leaves Projectivy on the Home button" 'grep -q projengmenu "$FAKE_ADB_STATE/home"'
+check "and says so" 'grep -q "has no Neon Home yet" "$WORK/out.txt"'
+# Undo below has to take Neon Home off the Home button too
+run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen neon
+
 run -Ip 192.168.1.77:41234 -Step tune
 check "window animations at 0.5x" '[ "$(setting global/window_animation_scale)" = 0.5 ]'
 check "app animations untouched" '[ "$(setting global/animator_duration_scale)" = 1.0 ]'
@@ -54,6 +68,7 @@ check "every package is back on" '[ ! -s "$FAKE_ADB_STATE/disabled" ]'
 check "window animations restored" '[ "$(setting global/window_animation_scale)" = 1.0 ]'
 check "Ambient mode is the screensaver again" '[ "$(setting secure/screensaver_components)" = com.google.android.apps.tv.dreamx/.service.Backdrop ]'
 check "the Google TV home screen opens on Home again" 'grep -q launcherx "$FAKE_ADB_STATE/home"'
+check "Neon Home's Home button entry is off after undo" '[ ! -f "$FAKE_ADB_STATE/neonhome" ]'
 check "no step stopped with an error" '! grep -q "Stopped:" "$WORK/out.txt"'
 
 if [ "$failures" -gt 0 ]; then

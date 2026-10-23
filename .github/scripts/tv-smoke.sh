@@ -91,6 +91,18 @@ if focused and focused[-1]:
 '
 }
 
+# focused_width: the width in pixels of the element that has the D-pad focus
+focused_width() {
+  timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
+  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+import re, sys
+nodes = re.findall(r"<node [^>]*>", sys.stdin.read())
+focused = [n for n in nodes if "focused=\"true\"" in n]
+m = re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", focused[-1]) if focused else None
+print(int(m.group(3)) - int(m.group(1)) if m else -1)
+'
+}
+
 # focus_down_to <label> <max presses>: presses Down until the focused element shows that label
 focus_down_to() {
   local i=0
@@ -471,6 +483,9 @@ key DPAD_DOWN
 sleep 1
 label=$(focused_label)
 [ "$label" = "Neon Tokyo" ] || fail "All apps does not start with Neon Tokyo ($label has the focus)"
+# Six small tiles to a row: 116dp, a little more while focused (2 px to the dp here)
+width=$(focused_width)
+[ "$width" -ge 200 ] && [ "$width" -le 270 ] || fail "All apps tiles are $width px wide instead of the small tile size, so six do not fit"
 key DPAD_RIGHT
 sleep 2
 shot neon-home-apps-focus
@@ -484,6 +499,37 @@ sleep 3
 shot neon-home-left noalive
 if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q NeonHomeActivity; then
   fail "Back on the Home tab did not leave the Neon Home preview"
+fi
+
+# Neon Home on the Home button, switched on and off the way the TV setup script does it
+home_resumed() { adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q NeonHomeActivity; }
+switch_home() { adb shell am broadcast --include-stopped-packages -n "$PKG/com.lumera.app.launcher.NeonHomeSwitch" --es home "$1" 2>&1 | tr -d '\r'; }
+stock_home=$(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | tr -d '\r' | tail -n 1)
+answer=$(switch_home neon)
+echo "$answer" > "$OUT/neon-home-switch.txt"
+echo "$answer" | grep -q 'data="neon"' || fail "the app did not turn its Home button entry on ($answer)"
+adb shell cmd package set-home-activity "$PKG/$PKG.NeonHome" >> "$OUT/neon-home-switch.txt" 2>&1
+adb shell input keyevent KEYCODE_HOME
+sleep 6
+shot neon-home-as-home
+home_resumed || fail "the Home button did not open Neon Home once it was made the home screen"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Neon Home as the home screen does not start on YouTube ($label has the focus)"
+# The home screen stays on Back, and Home brings its first tile back
+key DPAD_DOWN BACK
+sleep 2
+home_resumed || fail "Back left Neon Home while it is the home screen"
+key DPAD_RIGHT
+adb shell input keyevent KEYCODE_HOME
+sleep 2
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Home on Neon Home did not go back to its first tile ($label has the focus)"
+adb shell cmd package set-home-activity "$stock_home" >> "$OUT/neon-home-switch.txt" 2>&1
+answer=$(switch_home off)
+echo "$answer" >> "$OUT/neon-home-switch.txt"
+echo "$answer" | grep -q 'data="off"' || fail "the app did not turn its Home button entry off ($answer)"
+if adb shell cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | grep -q "$PKG"; then
+  fail "Neon Home still answers the Home button after it was turned off"
 fi
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3

@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -437,6 +438,9 @@ private fun AllApps(
         verticalArrangement = Arrangement.spacedBy(Gap),
         contentPadding = PaddingValues(start = room, end = room, top = 7.dp + room, bottom = 48.dp),
         modifier = Modifier
+            // The tab holder hands down the full screen width, which would stretch the six
+            // columns past the right edge; the grid keeps the width of six small tiles
+            .wrapContentWidth(Alignment.Start)
             .offset(x = Side - room, y = -room)
             .width(SmallTile.first * 6 + Gap * 5 + room * 2)
             .fillMaxHeight()

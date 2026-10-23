@@ -3,6 +3,7 @@ Neon Tokyo setup for a TCL Google TV, run from a Windows PC on the same network.
 
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1              # everything
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step undo   # put it all back
+  powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step launcher -HomeScreen neon   # Neon Home on the Home button
 
 Steps: connect, inventory, debloat, launcher, tune, art, app, dream, restart, report, undo.
 Nothing is uninstalled: apps are only disabled, and every change is written to
@@ -16,6 +17,9 @@ using the address and code the TV shows under "Pair device with pairing code".
 param(
     [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'restart', 'report', 'undo')]
     [string]$Step = 'all',
+    # What the Home button opens: Neon Home, the home screen in the Neon Tokyo app, or Projectivy Launcher
+    [ValidateSet('neon', 'projectivy')]
+    [string]$HomeScreen = 'projectivy',
     [string]$Ip = '',
     [string]$Pair = '',
     [string]$Code = '',
@@ -34,6 +38,8 @@ $Raw = 'https://raw.githubusercontent.com/addebananen/neon-tokyo-tv'
 $Projectivy = 'com.spocky.projengmenu'
 $NeonApp = 'com.neontokyo.tv'
 $NeonDream = "$NeonApp/com.lumera.app.dream.NeonDreamService"
+$NeonHome = "$NeonApp/$NeonApp.NeonHome"
+$NeonHomeSwitch = "$NeonApp/com.lumera.app.launcher.NeonHomeSwitch"
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 
 # Never disabled, whatever a list says: inputs, remote, Wi-Fi, updates, Play, voice, casting.
@@ -208,13 +214,47 @@ function Remove-Bloat {
     foreach ($p in $Bloat) { Disable-Package $p }
 }
 
+function Get-Homes { Shell 'cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME' }
+
 function Get-ProjectivyHome {
-    $all = Shell 'cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME'
-    $m = [regex]::Match($all, [regex]::Escape($Projectivy) + '/\S+')
+    $m = [regex]::Match((Get-Homes), [regex]::Escape($Projectivy) + '/\S+')
     if ($m.Success) { $m.Value } else { '' }
 }
 
+# Android lets only the Neon Tokyo app turn its own Home button entry on and off, so the script
+# asks it to. It answers "neon" or "off"; a Neon Tokyo without Neon Home answers nothing.
+function Switch-NeonHome([string]$state) {
+    if (-not (Shell "pm path $NeonApp")) { return '' }
+    $out = Shell "am broadcast --include-stopped-packages -n $NeonHomeSwitch --es home $state"
+    $m = [regex]::Match($out, 'data="(\w+)"')
+    if ($m.Success) { $m.Groups[1].Value } else { '' }
+}
+
+function Set-HomeActivity([string]$activity, [string]$pkg) {
+    Say (Shell "cmd package set-home-activity $activity")
+    $resolved = Shell 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME'
+    if ($resolved -notmatch [regex]::Escape($pkg)) {
+        Say 'Something else still claims the Home button. Turning off the Google TV setup screen as well.'
+        Disable-Package $SetupHome
+        Shell "cmd package set-home-activity $activity" | Out-Null
+    }
+}
+
+function Set-NeonHome {
+    if ((Switch-NeonHome 'neon') -ne 'neon') {
+        Say 'The Neon Tokyo on the TV has no Neon Home yet (it comes with 0.2), so Projectivy is the home screen for now.'
+        return $false
+    }
+    foreach ($p in $StockHome) { Disable-Package $p }
+    Say "Making Neon Home the home screen ($NeonHome)..."
+    Set-HomeActivity $NeonHome $NeonApp
+    if (Shell "pm path $Projectivy") { Say 'Projectivy stays installed as the spare: -HomeScreen projectivy switches back.' }
+    Shell 'input keyevent KEYCODE_HOME' | Out-Null
+    return $true
+}
+
 function Set-Launcher {
+    if ($HomeScreen -eq 'neon' -and (Set-NeonHome)) { return }
     if (-not (Shell "pm path $Projectivy")) {
         Say 'Opening Projectivy Launcher in the Play Store on the TV: press Install with the remote.'
         Shell "am start -a android.intent.action.VIEW -d 'market://details?id=$Projectivy'" | Out-Null
@@ -231,12 +271,11 @@ function Set-Launcher {
     Start-Sleep 8
     foreach ($p in $StockHome) { Disable-Package $p }
     Say "Making Projectivy the home screen ($homeActivity)..."
-    Say (Shell "cmd package set-home-activity $homeActivity")
-    $resolved = Shell 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME'
-    if ($resolved -notmatch [regex]::Escape($Projectivy)) {
-        Say 'Something else still claims the Home button. Turning off the Google TV setup screen as well.'
-        Disable-Package $SetupHome
-        Shell "cmd package set-home-activity $homeActivity" | Out-Null
+    Set-HomeActivity $homeActivity $Projectivy
+    # Back from Neon Home: its Home button entry goes off again, the app keeps the screen itself
+    if ((Get-Homes) -match [regex]::Escape($NeonHome)) {
+        Switch-NeonHome 'off' | Out-Null
+        Say 'Neon Home is no longer the home screen. Settings > Personalization in Neon Tokyo still opens it.'
     }
     Shell 'input keyevent KEYCODE_HOME' | Out-Null
 }
@@ -315,7 +354,7 @@ function Install-NeonApp {
 }
 
 function Restart-Tv {
-    Say 'Restarting the TV to check that it starts in Projectivy...'
+    Say 'Restarting the TV to check that it starts on its new home screen...'
     Adb reboot | Out-Null
     Start-Sleep 25
     $booted = $false
@@ -366,7 +405,9 @@ function Show-Report {
     Adb pull /sdcard/neontv-after.png (Join-Path $Work 'screen-after.png') | Out-Null
     Shell 'rm /sdcard/neontv-after.png' | Out-Null
     Say "Screenshot of the TV: $(Join-Path $Work 'screen-after.png')"
-    if (Shell "pm path $Projectivy") {
+    if ((Shell 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME') -match [regex]::Escape($NeonApp)) {
+        Say 'Tip: in Neon Home, hold OK on a console to pick which HDMI input it is on.'
+    } elseif (Shell "pm path $Projectivy") {
         Say 'Tip: in Projectivy, Settings > Appearance > Wallpaper > Neon Tokyo makes the skyline follow the app you point at.'
     }
 }
@@ -388,6 +429,8 @@ function Undo-All {
     if ($original -and $original -notmatch [regex]::Escape($Projectivy)) {
         Say "Home button: $original $(Shell "cmd package set-home-activity $original")"
     }
+    # Neon Home's Home button entry goes off again; Neon Tokyo itself stays
+    if ((Get-Homes) -match [regex]::Escape($NeonHome)) { Say "Neon Home: $(Switch-NeonHome 'off')" }
     Shell 'input keyevent KEYCODE_HOME' | Out-Null
     Say 'Everything is back the way it was. Projectivy and Neon Tokyo stay installed; uninstall them on the TV if you want them gone.'
 }
@@ -406,7 +449,7 @@ try {
     Banner
     Connect-Tv
     switch ($Step) {
-        'all'       { Save-Inventory; Remove-Bloat; Set-Launcher; Set-Tuning; Push-Art; Install-NeonApp; Set-Screensaver; Restart-Tv; Show-Report }
+        'all'       { Save-Inventory; Remove-Bloat; Install-NeonApp; Set-Launcher; Set-Tuning; Push-Art; Set-Screensaver; Restart-Tv; Show-Report }
         'connect'   { }
         'inventory' { Save-Inventory }
         'debloat'   { Save-Inventory; Remove-Bloat }

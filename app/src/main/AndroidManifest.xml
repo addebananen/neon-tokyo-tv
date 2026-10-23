@@ -69,8 +69,8 @@
             android:configChanges="keyboard|keyboardHidden|navigation|uiMode|screenSize|smallestScreenSize|screenLayout|orientation|density"
             android:theme="@style/Theme.NeonHome" />
 
-        <!-- Off until the TV setup script turns it on: a second app that answers the Home button
-             would make the TV ask which home screen to use -->
+        <!-- Off until the TV setup script turns it on, through NeonHomeSwitch below: a second app
+             that answers the Home button would make the TV ask which home screen to use -->
         <activity-alias
             android:name="${applicationId}.NeonHome"
             android:enabled="false"
@@ -82,6 +82,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
+
+        <!-- How the TV setup script turns the alias above on and off. Only senders with this
+             permission get through: the TV's shell and the system, never another app -->
+        <receiver
+            android:name="com.lumera.app.launcher.NeonHomeSwitch"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS" />
 
         <!-- Projectivy Launcher wallpaper provider: the skyline follows the focused app -->
         <service
