@@ -3,6 +3,7 @@ package com.lumera.app.ui.settings
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -26,14 +27,45 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lumera.app.dream.NeonDreamPreviewActivity
 import com.lumera.app.dream.NeonDreamService
+import com.lumera.app.launcher.NeonHomeActivity
 import com.lumera.app.projectivy.NeonWallpaperSettingsActivity
 
-/** Personalization rows for the screensaver and the Projectivy wallpaper. */
+/** Personalization rows for the home screen, the screensaver and the Projectivy wallpaper. */
 @Composable
 fun NeonExtrasSettings(onGoBack: () -> Unit) {
     val context = LocalContext.current
     var dreamActive by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { dreamActive = isNeonDreamActive(context) }
+    var homeActive by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        dreamActive = isNeonDreamActive(context)
+        homeActive = isNeonHomeActive(context)
+    }
+
+    SettingRow("Home screen") {
+        Column {
+            Text(
+                if (homeActive) {
+                    "Neon Home is your TV's home screen: your apps, your consoles on HDMI 1 to 6, lit up when they are on."
+                } else {
+                    "Neon Home: your apps, and your consoles on HDMI 1 to 6, lit up when they are on. The TV setup script makes it your home screen."
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = Color.White.copy(0.6f),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            VoidSegmentedControl(
+                options = listOf("Open Neon Home" to 0),
+                selectedOption = -1,
+                onOptionSelected = {
+                    context.startActivity(Intent(context, NeonHomeActivity::class.java))
+                },
+                onBack = onGoBack
+            )
+        }
+    }
+    Spacer(Modifier.height(15.dp))
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+    Spacer(Modifier.height(15.dp))
 
     SettingRow("Screensaver") {
         Column {
@@ -80,6 +112,14 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
         }
     }
 }
+
+/** True when the Home button opens Neon Home, which only the TV setup script can arrange. */
+private fun isNeonHomeActive(context: Context): Boolean = runCatching {
+    val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+    @Suppress("DEPRECATION")
+    val target = context.packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo
+    target?.packageName == context.packageName
+}.getOrDefault(false)
 
 // Android 11 lets apps read this; newer versions may not, which only changes the wording above
 private fun isNeonDreamActive(context: Context): Boolean = runCatching {

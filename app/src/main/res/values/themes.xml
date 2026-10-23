@@ -8,4 +8,9 @@
         <!-- Enable hardware acceleration for faster first frame -->
         <item name="android:hardwareAccelerated">true</item>
     </style>
+
+    <!-- The home screen starts on its skyline, so the TV never shows a blank screen at boot -->
+    <style name="Theme.NeonHome" parent="Theme.Lumera">
+        <item name="android:windowBackground">@drawable/nt_wall_tokyo</item>
+    </style>
 </resources>

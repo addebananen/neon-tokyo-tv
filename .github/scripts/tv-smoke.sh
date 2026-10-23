@@ -434,6 +434,60 @@ adb shell input keyevent DPAD_UP
 sleep 3
 adb shell settings delete secure screensaver_components
 
+# --- Neon Home: the home screen the TV setup script can turn on ---------------
+# Nothing answers the Home button with it until the script turns its alias on
+if adb shell cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.HOME 2>/dev/null | grep -q "$PKG"; then
+  fail "Neon Home answers the Home button before the setup script turned it on"
+fi
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" > "$OUT/neon-home-start.txt" 2>&1
+sleep 8
+shot neon-home
+screen_has "WATCH &amp; LISTEN" || fail "Neon Home has no Watch and listen row"
+screen_has "HDMI 6" || fail "Neon Home does not show the consoles with their HDMI numbers"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Neon Home does not start on YouTube ($label has the focus)"
+key DPAD_DOWN
+sleep 1
+label=$(focused_label)
+[ "$label" = "PC" ] || fail "Down from YouTube did not reach the PC console ($label has the focus)"
+shot neon-home-consoles
+# A long press on a console asks which TV input it is on
+adb shell input keyevent --longpress DPAD_CENTER
+sleep 2
+shot neon-home-link
+screen_has "Which input is PC on" || fail "a long press on PC did not ask which input it is on"
+key BACK
+sleep 2
+if screen_has "Which input is PC on"; then fail "Back did not close the input picker"; fi
+# Up from the tiles lands on the open tab, and pointing at All apps opens it
+key DPAD_UP DPAD_UP
+sleep 1
+label=$(focused_label)
+[ "$label" = "HOME" ] || fail "Up from YouTube did not land on the Home tab ($label has the focus)"
+key DPAD_RIGHT
+sleep 2
+shot neon-home-apps
+key DPAD_DOWN
+sleep 1
+label=$(focused_label)
+[ "$label" = "Neon Tokyo" ] || fail "All apps does not start with Neon Tokyo ($label has the focus)"
+key DPAD_RIGHT
+sleep 2
+shot neon-home-apps-focus
+# Back goes to the Home tab first, then leaves the preview
+key BACK
+sleep 2
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Back on All apps did not return to YouTube ($label has the focus)"
+key BACK
+sleep 3
+shot neon-home-left noalive
+if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q NeonHomeActivity; then
+  fail "Back on the Home tab did not leave the Neon Home preview"
+fi
+adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
+sleep 3
+
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
 menu_go Home
 sleep 8

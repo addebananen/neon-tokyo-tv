@@ -14,9 +14,22 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
-    <!-- Projectivy Launcher, for the wallpaper provider's refresh broadcast -->
     <queries>
+        <!-- Projectivy Launcher, for the wallpaper provider's refresh broadcast -->
         <package android:name="com.spocky.projengmenu" />
+        <!-- The Neon home screen lists and opens the TV's apps -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- ...and the TV's HDMI inputs, whose input services belong to the TV's own apps -->
+        <intent>
+            <action android:name="android.media.tv.TvInputService" />
+        </intent>
     </queries>
 
     <application
@@ -42,6 +55,33 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The Neon home screen. The alias below makes it the TV's home screen -->
+        <activity
+            android:name="com.lumera.app.launcher.NeonHomeActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
+            android:resumeWhilePausing="true"
+            android:configChanges="keyboard|keyboardHidden|navigation|uiMode|screenSize|smallestScreenSize|screenLayout|orientation|density"
+            android:theme="@style/Theme.NeonHome" />
+
+        <!-- Off until the TV setup script turns it on: a second app that answers the Home button
+             would make the TV ask which home screen to use -->
+        <activity-alias
+            android:name="${applicationId}.NeonHome"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity="com.lumera.app.launcher.NeonHomeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Projectivy Launcher wallpaper provider: the skyline follows the focused app -->
         <service
