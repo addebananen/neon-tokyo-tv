@@ -7,7 +7,7 @@ What it does:
 - Turns off bloat that nothing depends on: TCL Safety Guard, TCL browser, TCL Channel, TCL Home, Google feedback and Play Games. Apps are only disabled, never uninstalled.
 - Makes Projectivy Launcher the home screen and turns off the Google TV home screen, which is where the ads come from.
 - Speeds up menus: window and screen transitions run at 0.5x. Animations inside apps keep their normal speed.
-- Copies the Neon Tokyo wallpaper, banners and icons to `Pictures/NeonTokyo` on the TV.
+- Copies the Neon Tokyo wallpaper, banners and icons to `Pictures/NeonTokyo` on the TV: a neon banner and icon for every app, with just its name, and HDMI 1–6 on the consoles (PC, Switch 2, Xbox 360, Wii U, Wii, Xbox).
 - Installs the latest Neon Tokyo release (0.2 or newer).
 - Makes *Neon Tokyo night* the screensaver: the skyline with its grid rolling towards you, a neon clock, twinkling stars and the odd shooting star. Google TV only lists its own Ambient mode, so this can only be picked over ADB.
 - Restarts the TV and checks that it boots straight into Projectivy.

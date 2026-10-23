@@ -252,7 +252,9 @@ function Set-Tuning {
 
 function Push-Art {
     $files = @('wallpaper.png')
-    foreach ($n in 'pc', 'spotify', 'stremio', 'switch-2', 'wii-u', 'wii', 'xbox-360', 'xbox', 'youtube', 'yt-music') {
+    # Favourites and consoles (their banners say which HDMI input they are on), then the rest of the apps
+    foreach ($n in 'youtube', 'yt-music', 'spotify', 'stremio', 'pc', 'switch-2', 'xbox-360', 'wii-u', 'wii', 'xbox',
+                   'neon-tokyo', 'netflix', 'prime-video', 'disney', 'hbo-max', 'play-store', 'media-player') {
         $files += "banners/$n.png"; $files += "icons/$n.png"
     }
     $sep = [IO.Path]::DirectorySeparatorChar
