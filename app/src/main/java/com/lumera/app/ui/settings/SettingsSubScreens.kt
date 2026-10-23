@@ -5,8 +5,10 @@ import com.lumera.app.ui.details.FilterDropdown
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,13 +39,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -61,6 +68,7 @@ import com.lumera.app.data.model.ThemeEntity
 import com.lumera.app.data.update.AppUpdateManager
 import com.lumera.app.data.update.UpdateState
 import com.lumera.app.ui.details.GlassSidebarScaffold
+import com.lumera.app.ui.components.neonFocusRing
 import com.lumera.app.ui.theme.ThemeManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -611,13 +619,9 @@ fun SettingToggleRow(
     }
 
     val scale by animateFloatAsState(if (isFocused) 1.02f else 1f)
-    val borderColor by animateColorAsState(
-        when {
-            isFocused -> Color.White
-            isChecked -> accentColor.copy(0.5f)
-            else -> Color.Transparent
-        }
-    )
+    // The focus lights a neon tube around the row; a ticked row keeps a quieter line of its own
+    val lit by animateFloatAsState(if (isFocused) 1f else 0f, tween(if (isFocused) 140 else 240), label = "ToggleRowFocus")
+    val borderColor by animateColorAsState(if (isChecked) accentColor.copy(0.5f) else Color.Transparent)
 
     val backModifier = if (onBack != null) {
         Modifier.onPreviewKeyEvent {
@@ -640,9 +644,10 @@ fun SettingToggleRow(
             .then(backModifier)
             .then(upBlockModifier)
             .scale(scale)
+            .neonFocusRing(accentColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.White.copy(0.05f))
-            .border(if (isFocused || isChecked) 1.dp else 0.dp, borderColor, RoundedCornerShape(8.dp))
+            .background(Color.White.copy(if (isFocused) 0.08f else 0.05f))
+            .border(if (isChecked) 1.dp else 0.dp, borderColor, RoundedCornerShape(8.dp))
             .clickable(interactionSource = interactionSource, indication = null) {
                 onCheckedChange(!isChecked)
             }
@@ -697,13 +702,8 @@ fun SettingToggleChip(
     val accentColor = MaterialTheme.colorScheme.primary
 
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
-    val borderColor by animateColorAsState(
-        when {
-            isFocused -> Color.White
-            isChecked -> accentColor.copy(0.5f)
-            else -> Color.White.copy(0.15f)
-        }
-    )
+    val lit by animateFloatAsState(if (isFocused) 1f else 0f, tween(if (isFocused) 140 else 240), label = "ToggleChipFocus")
+    val borderColor by animateColorAsState(if (isChecked) accentColor.copy(0.5f) else Color.White.copy(0.15f))
 
     val backModifier = if (onBack != null) {
         Modifier.onPreviewKeyEvent {
@@ -717,6 +717,7 @@ fun SettingToggleChip(
         modifier = Modifier
             .then(backModifier)
             .scale(scale)
+            .neonFocusRing(accentColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(if (isChecked) accentColor.copy(0.15f) else Color.White.copy(0.05f))
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
@@ -810,16 +811,11 @@ fun <T> SettingOptionRow(
                 }
 
                 val scale by animateFloatAsState(if (isFocused) 1.06f else 1f)
-                val chipBorder by animateColorAsState(
-                    when {
-                        isFocused -> Color.White
-                        isSelected -> accentColor
-                        else -> Color.White.copy(0.15f)
-                    }
-                )
+                val lit by animateFloatAsState(if (isFocused) 1f else 0f, tween(if (isFocused) 140 else 240), label = "OptionChipFocus")
+                val chipBorder by animateColorAsState(if (isSelected) accentColor else Color.White.copy(0.15f))
                 val chipTextColor = when {
-                    isSelected -> accentColor
                     isFocused -> Color.White
+                    isSelected -> accentColor
                     else -> Color.White.copy(0.6f)
                 }
 
@@ -829,10 +825,11 @@ fun <T> SettingOptionRow(
                         .then(if (index == 0) backModifier else Modifier)
                         .then(if (index == 0) upBlockModifier else Modifier)
                         .scale(scale)
+                        .neonFocusRing(accentColor, 6.dp) { lit }
                         .clip(RoundedCornerShape(6.dp))
                         .background(if (isSelected) accentColor.copy(0.1f) else Color.Transparent)
                         .border(
-                            if (isFocused || isSelected) 1.5.dp else 1.dp,
+                            if (isSelected) 1.5.dp else 1.dp,
                             chipBorder,
                             RoundedCornerShape(6.dp)
                         )
@@ -884,12 +881,44 @@ fun <T> VoidSegmentedControl(
     blockUp: Boolean = false,
     onFocus: () -> Unit = {}
 ) {
+    val accent = MaterialTheme.colorScheme.primary
+    val gap = 12.dp
+    // A lit pill sits behind the chosen option and glides over to the next one chosen. A row of
+    // one is a button, with nothing chosen.
+    val chosen = options.indexOfFirst { it.second == selectedOption }
+    val slide = remember { Animatable(chosen.coerceAtLeast(0).toFloat()) }
+    LaunchedEffect(chosen) {
+        if (chosen >= 0) slide.animateTo(chosen.toFloat(), spring(dampingRatio = 0.8f, stiffness = 480f))
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(40.dp)
-            .then(modifier),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .then(modifier)
+            .drawWithCache {
+                val count = options.size.coerceAtLeast(1)
+                val gapPx = gap.toPx()
+                // The options share the row evenly
+                val width = (size.width - gapPx * (count - 1)) / count
+                val radius = CornerRadius(6.dp.toPx())
+                val inset = 0.75.dp.toPx()
+                val edge = Stroke(1.5.dp.toPx())
+                val edgeRadius = CornerRadius(6.dp.toPx() - inset)
+                onDrawBehind {
+                    if (chosen < 0) return@onDrawBehind
+                    val x = slide.value * (width + gapPx)
+                    drawRoundRect(accent, Offset(x, 0f), Size(width, size.height), radius, alpha = 0.14f)
+                    drawRoundRect(
+                        accent,
+                        Offset(x + inset, inset),
+                        Size(width - 2 * inset, size.height - 2 * inset),
+                        edgeRadius,
+                        style = edge,
+                        alpha = 0.8f
+                    )
+                }
+            },
+        horizontalArrangement = Arrangement.spacedBy(gap)
     ) {
         options.forEachIndexed { index, (label, value) ->
             val isSelected = selectedOption == value
@@ -925,6 +954,11 @@ fun <T> VoidSegmentedControl(
     }
 }
 
+/**
+ * One option of a [VoidSegmentedControl], which draws the chosen one's light. The focus lights
+ * a neon tube around it rather than growing it, as a wide option that grows pushes past the
+ * edges of the ones beside it.
+ */
 @Composable
 fun RowScope.SegmentItem(
     label: String,
@@ -939,24 +973,17 @@ fun RowScope.SegmentItem(
     LaunchedEffect(isFocused) {
         if (isFocused) onFocus()
     }
-    
-    val scale by animateFloatAsState(if (isFocused) 1.04f else 1f)
 
-    val bgColor = Color.White.copy(0.05f)
-    val textColor = when {
-        isSelected -> MaterialTheme.colorScheme.primary
-        isFocused -> Color.White
-        else -> Color.White.copy(0.7f)
-    }
-    
-    val borderColor by animateColorAsState(
+    val accent = MaterialTheme.colorScheme.primary
+    val lit by animateFloatAsState(if (isFocused) 1f else 0f, tween(if (isFocused) 140 else 240), label = "SegmentFocus")
+    val textColor by animateColorAsState(
         when {
             isFocused -> Color.White
-            isSelected -> MaterialTheme.colorScheme.primary
-            else -> Color.Transparent
-        }
+            isSelected -> accent
+            else -> Color.White.copy(0.7f)
+        },
+        label = "SegmentText"
     )
-    val borderWidth = if (isFocused || isSelected) 2.dp else 0.dp
 
     Box(
         modifier = Modifier
@@ -964,10 +991,9 @@ fun RowScope.SegmentItem(
             .widthIn(min = 100.dp)
             .fillMaxHeight()
             .then(keyModifier)
-            .scale(scale)
+            .neonFocusRing(accent, 6.dp) { lit }
             .clip(RoundedCornerShape(6.dp))
-            .background(bgColor)
-            .border(borderWidth, borderColor, RoundedCornerShape(6.dp))
+            .background(Color.White.copy(if (isFocused) 0.08f else 0.05f))
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 12.dp),
@@ -975,7 +1001,7 @@ fun RowScope.SegmentItem(
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium),
             color = textColor
         )
     }

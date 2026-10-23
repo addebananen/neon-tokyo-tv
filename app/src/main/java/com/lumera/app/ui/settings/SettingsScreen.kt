@@ -5,6 +5,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,11 +23,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.res.painterResource
@@ -131,7 +137,9 @@ fun SettingsScreen(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                // Let a little of the theme's backdrop through, the sunset glow and the grid in
+                // the Neon Tokyo theme, so the page has the depth of the rest of the app
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.8f))
                 .padding(start = rowStartPadding)
         ) {
 
@@ -336,7 +344,24 @@ fun SettingsSidebarItem(
         if (showHighlight) Color.White else Color.White.copy(0.4f), 
         label = "Content"
     )
-    
+    val accent = MaterialTheme.colorScheme.primary
+    // The open section's icon takes the accent colour and a neon mark lights up beside it; the
+    // mark springs, so as the focus runs down the list the light seems to run with it
+    val iconColor by animateColorAsState(
+        when {
+            isSelected -> accent
+            isFocused -> Color.White
+            else -> Color.White.copy(0.4f)
+        },
+        label = "Icon"
+    )
+    val mark by animateFloatAsState(
+        if (isSelected) 1f else 0f,
+        spring(dampingRatio = 0.7f, stiffness = 600f),
+        label = "SectionMark"
+    )
+    val focusLight by animateFloatAsState(if (isFocused) 1f else 0f, tween(160), label = "SectionFocus")
+
     // Scale only when focused
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
 
@@ -346,6 +371,28 @@ fun SettingsSidebarItem(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
+            .drawBehind {
+                if (focusLight > 0f) {
+                    drawRoundRect(Color.White, cornerRadius = CornerRadius(12.dp.toPx()), alpha = 0.06f * focusLight)
+                }
+                val m = mark
+                if (m > 0f) {
+                    val bloom = 40.dp.toPx()
+                    drawRect(
+                        Brush.horizontalGradient(listOf(accent.copy(alpha = 0.3f), Color.Transparent), startX = 0f, endX = bloom),
+                        topLeft = Offset(0f, (size.height - bloom) / 2f),
+                        size = Size(bloom, bloom),
+                        alpha = m.coerceAtMost(1f)
+                    )
+                    val bar = 22.dp.toPx() * m
+                    drawRoundRect(
+                        accent,
+                        topLeft = Offset(0f, (size.height - bar) / 2f),
+                        size = Size(3.dp.toPx(), bar),
+                        cornerRadius = CornerRadius(1.5.dp.toPx())
+                    )
+                }
+            }
             .then(modifier)
             .focusable(interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
@@ -354,7 +401,7 @@ fun SettingsSidebarItem(
         Icon(
             painter = painterResource(id = iconRes), 
             contentDescription = null, 
-            tint = contentColor, 
+            tint = iconColor, 
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(16.dp))

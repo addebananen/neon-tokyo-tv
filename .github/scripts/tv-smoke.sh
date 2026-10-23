@@ -574,7 +574,7 @@ shot stress-back-top
 menu_go Watchlist
 sleep 5
 shot watchlist-adrian
-if screen_has "Your watchlist is empty"; then fail "Adrian's watchlist lost the title he added"; fi
+if screen_has "Nothing saved yet"; then fail "Adrian's watchlist lost the title he added"; fi
 menu_go "Profile Avatar"
 if ! wait_for "watching" 20; then fail "Change Profile did not open the profile screen"; fi
 sleep 2
@@ -621,7 +621,7 @@ if screen_has "What should we call you" || adb shell dumpsys input_method | grep
   menu_go Watchlist
   sleep 5
   shot watchlist-guest
-  screen_has "Your watchlist is empty" || fail "Guest sees a watchlist that is not his"
+  screen_has "Nothing saved yet" || fail "Guest sees a watchlist that is not his"
   # Back to Adrian: his watchlist is still there
   menu_go "Profile Avatar"
   if wait_for "watching" 20; then
@@ -631,7 +631,7 @@ if screen_has "What should we call you" || adb shell dumpsys input_method | grep
     menu_go Watchlist
     sleep 5
     shot watchlist-adrian-again
-    if screen_has "Your watchlist is empty"; then fail "Adrian's watchlist was gone after Guest watched"; fi
+    if screen_has "Nothing saved yet"; then fail "Adrian's watchlist was gone after Guest watched"; fi
   else
     fail "Change Profile did not open the profile screen from Guest"
   fi

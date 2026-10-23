@@ -468,7 +468,8 @@ fun DetailsScreen(
                     ),
                     color = textColor,
                     maxLines = 4,
-                    modifier = Modifier.widthIn(max = 600.dp)
+                    // About seventy letters a line, which reads easily from the sofa
+                    modifier = Modifier.widthIn(max = 560.dp)
                 )
                 Spacer(modifier = Modifier.height(32.dp))
 

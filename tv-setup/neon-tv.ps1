@@ -3,7 +3,7 @@ Neon Tokyo setup for a TCL Google TV, run from a Windows PC on the same network.
 
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1              # everything
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step undo   # put it all back
-  powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step launcher -HomeScreen neon   # Neon Home on the Home button
+  powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step launcher -HomeScreen projectivy   # Projectivy on the Home button instead of Neon Home
 
 Steps: connect, inventory, debloat, launcher, tune, art, app, dream, restart, report, undo.
 Nothing is uninstalled: apps are only disabled, and every change is written to
@@ -17,9 +17,10 @@ using the address and code the TV shows under "Pair device with pairing code".
 param(
     [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'restart', 'report', 'undo')]
     [string]$Step = 'all',
-    # What the Home button opens: Neon Home, the home screen in the Neon Tokyo app, or Projectivy Launcher
+    # What the Home button opens: Neon Home, the home screen in the Neon Tokyo app, or Projectivy
+    # Launcher. A Neon Tokyo too old to have Neon Home gets Projectivy.
     [ValidateSet('neon', 'projectivy')]
-    [string]$HomeScreen = 'projectivy',
+    [string]$HomeScreen = 'neon',
     [string]$Ip = '',
     [string]$Pair = '',
     [string]$Code = '',

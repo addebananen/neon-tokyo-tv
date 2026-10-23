@@ -32,19 +32,19 @@ check "TCL Safety Guard is off" 'grep -qx com.tcl.guard "$FAKE_ADB_STATE/disable
 check "Play Services were left alone" '! grep -qx com.google.android.gms "$FAKE_ADB_STATE/disabled"'
 check "TV inputs were left alone" '! grep -qx com.tcl.tvinput "$FAKE_ADB_STATE/disabled"'
 
-run -Ip 192.168.1.77:41234 -Step launcher
+run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen projectivy
 check "Projectivy is the Home activity" 'grep -q projengmenu "$FAKE_ADB_STATE/home"'
 check "the Google TV home screen is off" 'grep -qx com.google.android.apps.tv.launcherx "$FAKE_ADB_STATE/disabled"'
 
-# Neon Home on the Home button, and back to Projectivy
-run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen neon
+# Neon Home on the Home button, which it is unless asked otherwise, and back to Projectivy
+run -Ip 192.168.1.77:41234 -Step launcher
 check "Neon Home is the Home activity" 'grep -qx com.neontokyo.tv/com.neontokyo.tv.NeonHome "$FAKE_ADB_STATE/home"'
 check "the app turned its Home button entry on" '[ -f "$FAKE_ADB_STATE/neonhome" ]'
 check "Projectivy stays on as the spare" '! grep -qx com.spocky.projengmenu "$FAKE_ADB_STATE/disabled"'
 run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen projectivy
 check "the Home button is back on Projectivy" 'grep -q projengmenu "$FAKE_ADB_STATE/home"'
 check "Neon Home's Home button entry is off again" '[ ! -f "$FAKE_ADB_STATE/neonhome" ]'
-FAKE_NO_NEON_HOME=1 run -Ip 192.168.1.77:41234 -Step launcher -HomeScreen neon
+FAKE_NO_NEON_HOME=1 run -Ip 192.168.1.77:41234 -Step launcher
 check "a Neon Tokyo without Neon Home leaves Projectivy on the Home button" 'grep -q projengmenu "$FAKE_ADB_STATE/home"'
 check "and says so" 'grep -q "has no Neon Home yet" "$WORK/out.txt"'
 # Undo below has to take Neon Home off the Home button too

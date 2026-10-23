@@ -20,12 +20,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.toRect
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -348,6 +357,40 @@ fun NeonSkylineBackdrop(
                     }
                 }
         )
+    }
+}
+
+/**
+ * The neon tube around a control in focus: a soft glow outside its edge, the lit tube and a
+ * white hot line down the middle of it. [lit] runs from 0 to 1 as the focus arrives and is read
+ * while drawing, so the light comes and goes without recomposing anything. Put it before the
+ * control's clip, or the glow is cut off.
+ */
+fun Modifier.neonFocusRing(color: Color, corner: Dp, lit: () -> Float): Modifier = drawWithCache {
+    val radius = CornerRadius(corner.toPx())
+    val outline = Path().apply { addRoundRect(RoundRect(size.toRect(), radius)) }
+    // Wider and fainter strokes around the edge, which read as one soft glow
+    val halo = listOf(3f to 0.3f, 7f to 0.15f, 12f to 0.07f, 18f to 0.03f)
+        .map { (width, alpha) -> Stroke(width.dp.toPx()) to alpha }
+    val inset = 0.75.dp.toPx()
+    val tubeTopLeft = Offset(inset, inset)
+    val tubeSize = Size(size.width - 2 * inset, size.height - 2 * inset)
+    val tubeRadius = CornerRadius((corner.toPx() - inset).coerceAtLeast(0f))
+    val tube = Stroke(1.5.dp.toPx())
+    val core = Stroke(0.6.dp.toPx())
+    val hot = lerp(color, Color.White, 0.65f)
+    onDrawWithContent {
+        val a = lit().coerceIn(0f, 1f)
+        if (a > 0f) {
+            clipPath(outline, ClipOp.Difference) {
+                halo.forEach { (stroke, alpha) -> drawRoundRect(color, cornerRadius = radius, style = stroke, alpha = alpha * a) }
+            }
+        }
+        drawContent()
+        if (a > 0f) {
+            drawRoundRect(color, tubeTopLeft, tubeSize, tubeRadius, style = tube, alpha = a)
+            drawRoundRect(hot, tubeTopLeft, tubeSize, tubeRadius, style = core, alpha = 0.9f * a)
+        }
     }
 }
 

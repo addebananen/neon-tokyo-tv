@@ -1242,6 +1242,8 @@ private fun FloorLight(spot: Spot?, on: Boolean, ignite: () -> Float) {
     Spacer(
         Modifier
             .fillMaxSize()
+            // A layer of its own, so a gliding light redraws only itself
+            .graphicsLayer()
             .drawBehind {
                 val a = strength * ignite()
                 if (a <= 0f) return@drawBehind
@@ -1313,6 +1315,8 @@ private fun SkySparkles() {
     Spacer(
         Modifier
             .fillMaxSize()
+            // A layer of its own, so a twinkle redraws only itself
+            .graphicsLayer()
             .drawWithCache {
                 val starSize = 11.dp.toPx()
                 val shape = starPath(Size(starSize, starSize))
