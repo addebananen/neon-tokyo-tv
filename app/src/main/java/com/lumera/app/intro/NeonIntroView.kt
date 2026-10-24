@@ -51,6 +51,9 @@ class NeonIntroView(
     private val speed = 1.0 / animatorScale(context).coerceAtLeast(0.01f)
     @Volatile private var appReady = false
     @Volatile private var drawing = false
+    // When the window first drew. The surface only shows once the window does, so the intro's clock
+    // waits for it: frames before that would play to nobody
+    @Volatile private var windowDrawnAt = 0L
     private var painter: Painter? = null
     private var done = false
 
@@ -81,6 +84,11 @@ class NeonIntroView(
         // A surface that never comes, or a painter that stops, must not keep the app covered
         postDelayed({ if (!drawing) finish() }, FIRST_FRAME_DEADLINE_MS)
         postDelayed({ finish() }, LAST_RESORT_MS + (if (holdAt >= 0) (HOLD_FOR * 1000).toLong() else 0L))
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        if (windowDrawnAt == 0L) windowDrawnAt = System.nanoTime()
+        super.dispatchDraw(canvas)
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -114,15 +122,24 @@ class NeonIntroView(
         override fun run() {
             Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
             val scene = IntroScene(resources)
+            var first = 0L
             var start = 0L
             var leaveAt = -1.0
             var frames = 0
             try {
                 while (running) {
-                    val canvas = holder.lockHardwareCanvas()
+                    // No canvas while the window is hidden: try again until it is back or the intro is over
+                    val canvas = holder.lockHardwareCanvas() ?: continue
                     val now = System.nanoTime()
-                    if (start == 0L) start = now
-                    val t = clock((now - start) / 1e9 * speed)
+                    if (first == 0L) first = now
+                    // The clock starts as the window comes on screen, a few frames after it first drew;
+                    // until then the picture is the night the window opens on
+                    if (start == 0L) {
+                        val drawn = windowDrawnAt
+                        if (drawn != 0L) start = max(now, drawn + SHOW_DELAY_NS)
+                        else if (now - first > WINDOW_WAIT_NS) start = now
+                    }
+                    val t = if (start == 0L || now < start) 0.0 else clock((now - start) / 1e9 * speed)
                     if (leaveAt < 0 && t >= scene.earliestExit(t) && (appReady || t >= MAX_WAIT)) leaveAt = t
                     val leave = if (leaveAt < 0) -1.0 else (t - leaveAt) / LEAVE
                     try {
@@ -139,7 +156,10 @@ class NeonIntroView(
             } catch (e: Exception) {
                 Log.w(TAG, "the intro stopped early", e)
             }
-            if (start != 0L) Log.i(TAG, "played $frames frames in ${(System.nanoTime() - start) / 1_000_000} ms")
+            if (first != 0L) {
+                val waited = (if (start == 0L) 0L else max(0L, start - first)) / 1_000_000
+                Log.i(TAG, "played $frames frames in ${(System.nanoTime() - first) / 1_000_000} ms, $waited ms of them waiting for the window")
+            }
             post { finish() }
         }
 
@@ -153,7 +173,11 @@ class NeonIntroView(
     companion object {
         private const val FIRST_FRAME_DEADLINE_MS = 2000L
         private const val LAST_RESORT_MS = 8000L
-        private const val HOLD_FOR = 8.0
+        private const val HOLD_FOR = 14.0
+        // From the window's first draw to its picture on the screen: the render thread, the window
+        // manager and the compositor each take a frame or two
+        private const val SHOW_DELAY_NS = 80_000_000L
+        private const val WINDOW_WAIT_NS = 1_000_000_000L
 
         /** False when the system's animations are switched off, and the app opens without the intro. */
         fun animationsOn(context: Context): Boolean = animatorScale(context) > 0f

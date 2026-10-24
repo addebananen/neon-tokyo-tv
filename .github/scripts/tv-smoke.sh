@@ -272,18 +272,20 @@ LOGCAT_PID=$!
 # they are switched on for the intro, which is held still a little way in to photograph it and
 # filmed with what follows.
 adb shell settings put global animator_duration_scale 1
-adb shell screenrecord --time-limit 16 --size 1280x720 /sdcard/intro.mp4 > "$OUT/intro-record.txt" 2>&1 &
+adb shell screenrecord --time-limit 24 --size 1280x720 /sdcard/intro.mp4 > "$OUT/intro-record.txt" 2>&1 &
 REC_PID=$!
 sleep 1
 adb shell am start -n "$PKG/$ACTIVITY" --ez nt_ci true --ef nt_intro_hold 0.4
 sleep 6
+# Photographed first, since screencap takes its picture as it starts and the emulator is slow to
+# hand it over. The intro holds still for 14 s, which covers both.
+shot intro
 # The sun has risen to its place, where the skyline under it has dark buildings
 read -r r g b < <(pixel 1250 560)
 if [ "${r:-0}" -lt 200 ] || [ "${b:-255}" -gt 180 ]; then
   fail "the intro's sun is not on the screen (pixel $r $g $b)"
 fi
-shot intro
-sleep 8
+sleep 12
 adb shell settings put global animator_duration_scale 0
 read -r r g b < <(pixel 1250 560)
 [ "${r:-255}" -lt 110 ] || fail "the intro is still on the screen (pixel $r $g $b)"
