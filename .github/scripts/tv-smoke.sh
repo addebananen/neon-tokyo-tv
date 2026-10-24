@@ -42,6 +42,19 @@ key() {
   done
 }
 
+# pixel <x> <y>: prints "r g b" of a pixel on the screen now
+pixel() {
+  adb exec-out screencap > "$OUT/screen.raw" 2>/dev/null
+  python3 - "$OUT/screen.raw" "$1" "$2" <<'PY'
+import struct, sys
+d = open(sys.argv[1], 'rb').read()
+w, h = struct.unpack('<II', d[:8])
+o = len(d) - w * h * 4 + (int(sys.argv[3]) * w + int(sys.argv[2])) * 4
+print(d[o], d[o + 1], d[o + 2])
+PY
+  rm -f "$OUT/screen.raw"
+}
+
 # screen_has <text>: true when the current UI tree contains the text
 screen_has() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
@@ -255,10 +268,31 @@ adb logcat -c
 adb logcat -v time > "$OUT/logcat-full.txt" 2>&1 &
 LOGCAT_PID=$!
 
-# nt_ci turns off the update popup for this session
-adb shell am start -n "$PKG/$ACTIVITY" --ez nt_ci true
-sleep 12
+# nt_ci turns off the update popup for this session. The emulator runs with animations off, so
+# they are switched on for the intro, which is held still a little way in to photograph it and
+# filmed with what follows.
+adb shell settings put global animator_duration_scale 1
+adb shell screenrecord --time-limit 16 --size 1280x720 /sdcard/intro.mp4 > "$OUT/intro-record.txt" 2>&1 &
+REC_PID=$!
+sleep 1
+adb shell am start -n "$PKG/$ACTIVITY" --ez nt_ci true --ef nt_intro_hold 0.4
+sleep 6
+# The sun has risen to its place, where the skyline under it has dark buildings
+read -r r g b < <(pixel 1250 560)
+if [ "${r:-0}" -lt 200 ] || [ "${b:-255}" -gt 180 ]; then
+  fail "the intro's sun is not on the screen (pixel $r $g $b)"
+fi
+shot intro
+sleep 8
+adb shell settings put global animator_duration_scale 0
+read -r r g b < <(pixel 1250 560)
+[ "${r:-255}" -lt 110 ] || fail "the intro is still on the screen (pixel $r $g $b)"
 shot launch
+wait "$REC_PID" 2>/dev/null
+adb pull /sdcard/intro.mp4 "$OUT/intro.mp4" > /dev/null 2>&1 || true
+grep -q "NeonIntro.*played" "$OUT/logcat-full.txt" || fail "the intro did not finish"
+grep "NeonIntro" "$OUT/logcat-full.txt" > "$OUT/intro-log.txt" || true
+grep -q "the intro stopped early" "$OUT/logcat-full.txt" && fail "the intro stopped early: $(grep -A3 'the intro stopped early' "$OUT/logcat-full.txt" | head -4)"
 
 # --- First run: create a profile -------------------------------------------
 if screen_has "Create First Profile"; then
@@ -637,6 +671,23 @@ if screen_has "What should we call you" || adb shell dumpsys input_method | grep
   fi
 else
   fail "Add Profile did not open the name step"
+fi
+
+# --- Leaving: two quick presses of Back switch the app off like an old TV ------
+menu_go Home
+sleep 6
+adb shell settings put global animator_duration_scale 1
+adb shell screenrecord --time-limit 5 --size 1280x720 /sdcard/power-off.mp4 > "$OUT/power-off-record.txt" 2>&1 &
+REC_PID=$!
+sleep 1.5
+adb shell input keyevent KEYCODE_BACK KEYCODE_BACK
+sleep 3
+wait "$REC_PID" 2>/dev/null
+adb shell settings put global animator_duration_scale 0
+adb pull /sdcard/power-off.mp4 "$OUT/power-off.mp4" > /dev/null 2>&1 || true
+shot after-power-off noalive
+if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then
+  fail "two quick presses of Back did not close the app"
 fi
 
 # --- Results ----------------------------------------------------------------

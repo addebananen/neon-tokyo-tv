@@ -49,6 +49,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lumera.app.data.update.AppUpdateManager
+import com.lumera.app.intro.NeonIntroView
+import com.lumera.app.intro.NeonPowerOffView
 import com.lumera.app.data.update.UpdateInfo
 import com.lumera.app.data.update.UpdateState
 import com.lumera.app.data.player.PlaybackTrackSelectionStore
@@ -103,7 +105,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import android.media.MediaPlayer
 import com.lumera.app.data.local.AddonDao
 import com.lumera.app.data.profile.ProfileConfigurationManager
 import kotlinx.coroutines.runBlocking
@@ -700,12 +701,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var streamSortingService: StreamSortingService
 
-    private var splashPlayer: MediaPlayer? = null
-    private var splashOverlay: android.view.View? = null
-    private var splashIndicator: android.view.View? = null
-    private var splashPausedAtLogo = false
-    private var splashAppReady = false
+    private var splashOverlay: NeonIntroView? = null
     private val _splashFinished = mutableStateOf(false)
+    private var poweringOff = false
 
     override fun onDestroy() {
         dismissSplash()
@@ -719,96 +717,66 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** The first screen has something to show: the intro leaves as soon as it has played. */
     private fun onSplashAppReady() {
-        if (splashAppReady) return
-        splashAppReady = true
-        val player = splashPlayer ?: return
-        if (splashPausedAtLogo) {
-            splashPausedAtLogo = false
-            splashIndicator?.visibility = android.view.View.GONE
-            player.start()
-        }
+        splashOverlay?.appReady()
     }
 
     private fun dismissSplash() {
         splashOverlay?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
         splashOverlay = null
-        splashIndicator = null
-        splashPlayer?.release()
-        splashPlayer = null
         _splashFinished.value = true
     }
 
     private fun attachSplashOverlay() {
-        val player = splashPlayer ?: return
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
-        val density = resources.displayMetrics.density
-
-        val container = android.widget.FrameLayout(this).apply {
-            // Same night violet the intro fades into, so there is no black flash
-            setBackgroundColor(0xFF0D0721.toInt())
-        }
-
-        val surfaceView = android.view.SurfaceView(this)
-        container.addView(surfaceView, android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-
-        val indicator = android.widget.ProgressBar(this).apply {
-            indeterminateTintList =
-                android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
-            visibility = android.view.View.GONE
-        }
-        container.addView(indicator, android.widget.FrameLayout.LayoutParams(
-            (36 * density).toInt(), (36 * density).toInt()
-        ).apply {
-            gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
-            bottomMargin = (80 * density).toInt()
-        })
-        splashIndicator = indicator
-
-        player.setOnCompletionListener { dismissSplash() }
-
-        surfaceView.holder.addCallback(object : android.view.SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                player.setDisplay(holder)
-                player.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
-                player.start()
-
-                val pollRunnable = object : Runnable {
-                    override fun run() {
-                        try {
-                            if (player.isPlaying && player.currentPosition >= SPLASH_PAUSE_MS) {
-                                if (splashAppReady) {
-                                    // App loaded before pause point — let video play through
-                                } else {
-                                    player.pause()
-                                    splashPausedAtLogo = true
-                                    indicator.visibility = android.view.View.VISIBLE
-                                }
-                            } else if (player.isPlaying) {
-                                handler.postDelayed(this, 50)
-                            }
-                        } catch (_: IllegalStateException) { /* released */ }
-                    }
-                }
-                handler.postDelayed(pollRunnable, 50)
-            }
-
-            override fun surfaceChanged(
-                h: android.view.SurfaceHolder, f: Int, w: Int, height: Int
-            ) {}
-
-            override fun surfaceDestroyed(h: android.view.SurfaceHolder) {}
-        })
-
-        addContentView(container, android.view.ViewGroup.LayoutParams(
+        // The emulator test holds the intro still for a moment to photograph it
+        val holdAt = intent?.getFloatExtra("nt_intro_hold", -1f) ?: -1f
+        val intro = NeonIntroView(this, holdAt.toDouble()) { dismissSplash() }
+        addContentView(intro, android.view.ViewGroup.LayoutParams(
             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             android.view.ViewGroup.LayoutParams.MATCH_PARENT
         ))
-        splashOverlay = container
+        splashOverlay = intro
     }
+
+    /**
+     * Leaves the app the way an old TV switches off: the picture folds into a neon line, which
+     * runs back into a dot that goes out. Keys are ignored meanwhile.
+     */
+    private fun powerOff() {
+        if (poweringOff || isFinishing) return
+        poweringOff = true
+        // An intro still playing just goes; the update popup it holds back stays away too
+        splashOverlay?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        splashOverlay = null
+        val content = findViewById<android.view.ViewGroup>(android.R.id.content)
+        if (content == null || content.width == 0 || !NeonIntroView.animationsOn(this)) {
+            closeApp()
+            return
+        }
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
+        val powerOff = NeonPowerOffView(this, content) { closeApp() }
+        (window.decorView as android.view.ViewGroup).addView(powerOff, android.view.ViewGroup.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        powerOff.start()
+    }
+
+    /** Closes the app, with the black it ends on fading into the home screen. */
+    private fun closeApp() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, android.R.anim.fade_out)
+            finishAffinity()
+        } else {
+            finishAffinity()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, android.R.anim.fade_out)
+        }
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        poweringOff || super.dispatchKeyEvent(event)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Sanitize saved state: R8 can obfuscate Parcelable class names, causing
@@ -835,23 +803,10 @@ class MainActivity : ComponentActivity() {
         val splashEnabledInProfile = profileConfigurationManager.getLastActiveProfileId()?.let { id ->
             runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
         }?.splashEnabled ?: true
-        val showSplash = splashEnabledInProfile && safeState?.getBoolean(KEY_SPLASH_SHOWN) != true
+        // No intro when the system's animations are switched off
+        val showSplash = splashEnabledInProfile && safeState?.getBoolean(KEY_SPLASH_SHOWN) != true &&
+            NeonIntroView.animationsOn(this)
         if (!showSplash) _splashFinished.value = true
-
-        if (showSplash) {
-            // Pre-prepare splash video — synchronous but near-instant for a small raw resource.
-            splashPlayer = try {
-                MediaPlayer().apply {
-                    resources.openRawResourceFd(R.raw.splash_video).use { afd ->
-                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                    }
-                    isLooping = false
-                    prepare()
-                }
-            } catch (_: Exception) {
-                null
-            }
-        }
 
         setContent {
 
@@ -914,9 +869,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Signal native splash to resume once first composition is done
-            LaunchedEffect(Unit) { onSplashAppReady() }
-
             // Auto-check for updates on launch
             val updateState by appUpdateManager.state.collectAsState()
             var updateDismissed by rememberSaveable { mutableStateOf(false) }
@@ -938,7 +890,7 @@ class MainActivity : ComponentActivity() {
                         BackHandler {
                             val now = SystemClock.uptimeMillis()
                             if (now - lastBackPressMs < DOUBLE_BACK_EXIT_WINDOW_MS) {
-                                finishAffinity()
+                                powerOff()
                             } else {
                                 lastBackPressMs = now
                             }
@@ -951,6 +903,9 @@ class MainActivity : ComponentActivity() {
                             LumeraTheme(theme = DefaultThemes.NEON_TOKYO) {
                                 val profileViewModel = hiltViewModel<ProfileViewModel>()
                                 val profiles by profileViewModel.profiles.collectAsState()
+                                // The intro fades into the profiles, so it waits for them to be there
+                                val profilesLoading by profileViewModel.isLoading.collectAsState()
+                                LaunchedEffect(profilesLoading) { if (!profilesLoading) onSplashAppReady() }
 
                                 ProfileScreen(
                                     profiles = profiles,
@@ -964,6 +919,7 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         // MAIN APP CONTENT
+                        LaunchedEffect(Unit) { onSplashAppReady() }
                         var currentNav by remember { mutableStateOf(NavDestination.Home) }
                         
                         // Grid view state
@@ -1046,7 +1002,7 @@ class MainActivity : ComponentActivity() {
                                 // Shared navigation handler
                                 val handleNavigate: (NavDestination) -> Unit = { destination ->
                                     if (destination == NavDestination.Exit) {
-                                        finishAffinity()
+                                        powerOff()
                                     } else if (currentNav == destination) {
                                         // Already here - just focus content
                                         when(destination) {
@@ -1082,7 +1038,7 @@ class MainActivity : ComponentActivity() {
                                             if (event.key == Key.Back && event.type == KeyEventType.KeyDown) {
                                                 val now = SystemClock.uptimeMillis()
                                                 if (now - lastBackPressMs < DOUBLE_BACK_EXIT_WINDOW_MS) {
-                                                    finishAffinity()
+                                                    powerOff()
                                                     true
                                                 } else {
                                                     lastBackPressMs = now
@@ -1109,7 +1065,7 @@ class MainActivity : ComponentActivity() {
                                             themeManager.resetTheme()
                                             mainViewModel.logout()
                                         },
-                                        onExit = { finishAffinity() },
+                                        onExit = { powerOff() },
                                         content = {
                                             when (currentNav) {
                                                 NavDestination.Home, NavDestination.Movies, NavDestination.Series -> {
@@ -2356,7 +2312,6 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val SPLASH_PAUSE_MS = 1200
         private const val KEY_SPLASH_SHOWN = "splash_shown"
     }
 }

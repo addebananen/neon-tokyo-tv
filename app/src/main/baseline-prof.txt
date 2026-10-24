@@ -20,6 +20,9 @@ HSPLcom/lumera/app/StartupOptimizer;->warmup()V
 # MainActivity lifecycle
 HSPLcom/lumera/app/MainActivity;->onCreate(Landroid/os/Bundle;)V
 
+# The intro plays on every start, and the power-off on the way out
+HSPLcom/lumera/app/intro/**;->**(**)**
+
 # Hilt DI initialization
 HSPLdagger/hilt/android/internal/**;->**(**)**
 

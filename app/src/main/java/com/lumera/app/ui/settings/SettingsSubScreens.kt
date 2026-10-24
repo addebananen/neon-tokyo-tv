@@ -220,8 +220,8 @@ fun PersonalizationSettings(
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
         Spacer(Modifier.height(15.dp))
 
-        // SPLASH SCREEN
-        SettingRow("Splash Screen") {
+        // STARTUP ANIMATION
+        SettingRow("Startup Animation") {
             VoidSegmentedControl(
                 options = listOf("On" to true, "Off" to false),
                 selectedOption = currentProfile.splashEnabled,
