@@ -55,6 +55,25 @@ PY
   rm -f "$OUT/screen.raw"
 }
 
+# brightness: the screen's average brightness now, 0 to 255, from a grid of points
+brightness() {
+  adb exec-out screencap > "$OUT/screen.raw" 2>/dev/null
+  python3 - "$OUT/screen.raw" <<'PY'
+import struct, sys
+d = open(sys.argv[1], 'rb').read()
+w, h = struct.unpack('<II', d[:8])
+base = len(d) - w * h * 4
+total = n = 0
+for gy in range(1, 10):
+    for gx in range(1, 16):
+        o = base + ((h * gy // 10) * w + w * gx // 16) * 4
+        total += (d[o] + d[o + 1] + d[o + 2]) // 3
+        n += 1
+print(total // n)
+PY
+  rm -f "$OUT/screen.raw"
+}
+
 # screen_has <text>: true when the current UI tree contains the text
 screen_has() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
@@ -194,6 +213,39 @@ photo_from_phone() {
   sleep 6
   if curl -s -m 3 "$base/status" >/dev/null 2>&1; then fail "the photo page still answers after the photo was chosen"; fi
   adb forward --remove tcp:18080 >/dev/null 2>&1
+  return 0
+}
+
+# video_from_phone: with the screensaver video dialog open, sends what a phone would: first a file
+# that is no video, which the TV must turn down, then a real one, which must become the screensaver
+video_from_phone() {
+  local ip port token base code state
+  read -r ip port token < <(photo_address)
+  if [ -z "${token:-}" ]; then fail "the video dialog shows no address"; return 1; fi
+  echo "video page at http://$ip:$port/$token"
+  adb forward tcp:18081 tcp:"$port" >/dev/null
+  base="http://127.0.0.1:18081/$token"
+  if ! curl -fsS -m 10 "$base" -o "$OUT/video-page.html"; then fail "the video page did not open"; return 1; fi
+  if grep -q "{{" "$OUT/video-page.html"; then fail "the video page kept its placeholders"; fi
+  grep -q "Choose a video" "$OUT/video-page.html" || fail "the video page has no Choose a video button"
+  code=$(curl -s -m 10 -H "Expect:" -o /dev/null -w "%{http_code}" --data-binary "hello" "http://127.0.0.1:18081/zzzzzz/video")
+  [ "$code" = 404 ] || fail "a wrong address answered $code instead of 404"
+  sleep 2
+  screen_has "Phone connected" || fail "the TV did not notice the phone"
+  shot video-qr
+  head -c 300000 /dev/urandom > "$OUT/not-a-video.bin"
+  code=$(curl -s -m 30 -H "Expect:" -H "Content-Type: application/octet-stream" -o /dev/null -w "%{http_code}" --data-binary "@$OUT/not-a-video.bin" "$base/video")
+  [ "$code" = 200 ] || fail "sending a file answered $code"
+  sleep 4
+  state=$(curl -s -m 5 "$base/status")
+  echo "$state" | grep -q '"error"' || fail "a file that is no video left the phone at $state instead of error"
+  screen_has "play that video" || fail "the TV did not say it can't play a file that is no video"
+  code=$(curl -s -m 60 -H "Expect:" -H "Content-Type: application/octet-stream" -o "$OUT/video-post.txt" -w "%{http_code}" --data-binary "@.github/scripts/video-fixture.mp4" "$base/video")
+  if [ "$code" != 200 ]; then fail "sending the video answered $code: $(cat "$OUT/video-post.txt")"; return 1; fi
+  if ! wait_for "Your video is on" 20; then fail "the TV never took the video"; return 1; fi
+  state=$(curl -s -m 5 "$base/status")
+  echo "$state" | grep -q '"done"' || fail "the phone was told $state instead of done"
+  adb forward --remove tcp:18081 >/dev/null 2>&1
   return 0
 }
 
@@ -445,6 +497,35 @@ if focus_down_to "Preview" 8; then
   key BACK
   sleep 3
   if ! screen_has "Screensaver"; then fail "Back did not return from the screensaver preview to settings"; fi
+
+  # --- Your own video as the screensaver, sent from a phone ------------------
+  key DPAD_UP
+  sleep 1
+  if focus_right_to "Your video" 3; then
+    key DPAD_CENTER
+    if wait_for "Your own video" 12; then
+      if video_from_phone; then
+        sleep 2
+        shot video-ready
+        key DPAD_CENTER
+        sleep 7
+        shot dream-video
+        lit=$(brightness)
+        echo "video screensaver brightness: $lit"
+        if [ "${lit:-0}" -lt 30 ]; then fail "the video screensaver stayed black (brightness $lit)"; fi
+        key BACK
+        sleep 3
+        key BACK
+        sleep 2
+        screen_has "Change video" || fail "Settings offers no Change video once a video is on"
+        shot settings-video
+      fi
+    else
+      fail "Your video did not open the video dialog"
+    fi
+  else
+    fail "the screensaver row has no Your video option"
+  fi
 else
   fail "Screensaver row not found in Personalization"
 fi
@@ -492,6 +573,7 @@ sleep 8
 shot neon-home
 screen_has "WATCH &amp; LISTEN" || fail "Neon Home has no Watch and listen row"
 screen_has "HDMI 6" || fail "Neon Home does not show the consoles with their HDMI numbers"
+screen_has "Neon Tokyo" || fail "Neon Home has no Neon Tokyo tile where Stremio used to be"
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Neon Home does not start on YouTube ($label has the focus)"
 key DPAD_DOWN
