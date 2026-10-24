@@ -492,6 +492,7 @@ sleep 8
 shot neon-home
 screen_has "WATCH &amp; LISTEN" || fail "Neon Home has no Watch and listen row"
 screen_has "HDMI 6" || fail "Neon Home does not show the consoles with their HDMI numbers"
+screen_has "Neon Tokyo" || fail "Neon Home has no Neon Tokyo tile where Stremio used to be"
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Neon Home does not start on YouTube ($label has the focus)"
 key DPAD_DOWN

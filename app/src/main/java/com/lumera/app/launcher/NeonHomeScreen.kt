@@ -167,7 +167,7 @@ private val SelectKeys = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_EN
 
 /**
  * The Neon Tokyo home screen: the clock, Search, Inputs and Settings at the top, and two tabs.
- * Home has the big tiles for YouTube, YT Music, Spotify and Stremio and a row of consoles, each
+ * Home has the big tiles for YouTube, YT Music, Spotify and Neon Tokyo and a row of consoles, each
  * with the HDMI number Adrian gave it; All apps has every app on the TV with its neon icon.
  * A console that is switched on gets a glowing outline that breathes and a small white star
  * that twinkles in its corner. The skyline behind takes the colour of the tile in focus.
@@ -1022,7 +1022,7 @@ private enum class Scene { Video, Record, Equalizer, Film }
 
 /**
  * A little scene behind a big tile's name about what the app is for: a video playing for
- * YouTube, a record turning for YT Music, an equalizer for Spotify and a film strip for Stremio.
+ * YouTube, a record turning for YT Music, an equalizer for Spotify and a film strip for Neon Tokyo.
  * It holds still while the tile rests and plays while it is in focus. Only the drawing changes,
  * so it never recomposes or lays anything out again.
  */
@@ -1032,7 +1032,7 @@ private fun BoxScope.TileScene(app: KnownApp, focused: Boolean, shape: RoundedCo
         HomeCatalog.YouTube -> Scene.Video
         HomeCatalog.YtMusic -> Scene.Record
         HomeCatalog.Spotify -> Scene.Equalizer
-        HomeCatalog.Stremio -> Scene.Film
+        HomeCatalog.NeonTokyo, HomeCatalog.Stremio -> Scene.Film
         else -> return
     }
     val clock = rememberFocusClock(focused)

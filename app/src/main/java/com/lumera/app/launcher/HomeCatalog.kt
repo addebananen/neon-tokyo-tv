@@ -22,8 +22,8 @@ object HomeCatalog {
     val Stremio = KnownApp("Stremio", Glyph.Stremio, Color(0xFFB58CFF), listOf("com.stremio.one"))
     val NeonTokyo = KnownApp("Neon Tokyo", Glyph.NeonTokyo, Color(0xFFFF3D9A), listOf("com.neontokyo.tv", "com.neontokyo.tv.test"))
 
-    /** The big tiles on the Home tab. */
-    val favourites = listOf(YouTube, YtMusic, Spotify, Stremio)
+    /** The big tiles on the Home tab. Neon Tokyo has Stremio's place; Stremio stays under All apps. */
+    val favourites = listOf(YouTube, YtMusic, Spotify, NeonTokyo)
 
     val consoles = listOf(
         Console("pc", "PC", Glyph.Pc, Color(0xFFFFD36B), 1),
