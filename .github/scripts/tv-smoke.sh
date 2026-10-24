@@ -249,6 +249,36 @@ video_from_phone() {
   return 0
 }
 
+# hold_ok <seconds>: holds OK down like a thumb on the remote (input keyevent can only tap or
+# long press). Each way of pressing a key from outside is tried until Android's input reader
+# says a key is down: the emulator console's keyboard first, then raw events as root
+key_edge() {  # key_edge <way> <1 down|0 up>
+  case "$1" in
+    emu:*) adb emu event send "EV_KEY:${1#emu:}:$2" EV_SYN:0:0 2>&1 | tr -d '\r' | head -1 ;;
+    root)
+      local dev
+      dev=$(adb shell getevent -pl 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /KEY_ENTER/{print d; exit}')
+      [ -n "$dev" ] && adb shell "sendevent $dev 1 28 $2 && sendevent $dev 0 0 0" 2>&1 | head -1 ;;
+  esac
+}
+hold_ok() {
+  local way reply
+  for way in emu:KEY_ENTER emu:KEY_CENTER root; do
+    [ "$way" = root ] && { adb root >/dev/null 2>&1; adb wait-for-device; }
+    reply=$(key_edge "$way" 1)
+    sleep 0.4
+    if adb shell dumpsys input 2>/dev/null | grep -q 'KeyDowns: [1-9]'; then
+      sleep "$(awk -v s="$1" 'BEGIN { print (s > 0.6 ? s - 0.4 : 0.2) }')"
+      key_edge "$way" 0 >/dev/null
+      echo "held OK for $1 s with $way"
+      return 0
+    fi
+    key_edge "$way" 0 >/dev/null
+    echo "holding OK with $way did not reach Android (${reply:-no reply})"
+  done
+  return 1
+}
+
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
 menu_go() {
   key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
@@ -589,6 +619,45 @@ screen_has "Which input is PC on" || fail "a long press on PC did not ask which 
 key BACK
 sleep 2
 if screen_has "Which input is PC on"; then fail "Back did not close the input picker"; fi
+# Holding OK for three seconds lifts a tile: the arrows move it, OK puts it down, and it stays
+key DPAD_UP
+sleep 1
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Up from PC did not return to YouTube ($label has the focus)"
+if ! hold_ok 3.6; then
+  fail "could not hold OK down on the emulator"
+else
+  sleep 1
+  shot neon-home-lifted
+  screen_has "OK puts it down" || fail "holding OK on YouTube for three seconds did not lift it"
+  key DPAD_RIGHT
+  sleep 1
+  shot neon-home-moved
+  key DPAD_CENTER
+  sleep 1
+  if screen_has "OK puts it down"; then fail "OK did not put the lifted tile down"; fi
+  key DPAD_LEFT
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "YT Music" ] || fail "YouTube moved one step right, but $label is first instead of YT Music"
+  adb shell am start -S -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" >/dev/null 2>&1
+  sleep 8
+  label=$(focused_label)
+  [ "$label" = "YT Music" ] || fail "the new order was gone when Neon Home opened again ($label is first)"
+  # And back to where it was, for the checks below
+  key DPAD_RIGHT
+  sleep 1
+  hold_ok 3.6
+  sleep 1
+  key DPAD_LEFT
+  sleep 1
+  key DPAD_CENTER
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "YouTube did not move back to the front ($label has the focus)"
+fi
+key DPAD_DOWN
+sleep 1
 # Up from the tiles lands on the open tab, and pointing at All apps opens it
 key DPAD_UP DPAD_UP
 sleep 1

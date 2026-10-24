@@ -6,14 +6,22 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.view.KeyEvent
+import android.view.ViewConfiguration
 import android.provider.Settings
 import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.AnimationVector2D
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,6 +59,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -60,17 +69,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.CacheDrawScope
 import androidx.compose.ui.draw.DrawResult
 import androidx.compose.ui.draw.clip
@@ -89,6 +101,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
@@ -108,6 +122,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -118,6 +134,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -137,6 +154,7 @@ import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.neonPanel
 import com.lumera.app.ui.theme.KanitFamily
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -165,12 +183,25 @@ private val Side = 55.dp
 /** The keys a TV Surface clicks on. */
 private val SelectKeys = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 
+/** Columns of the All apps grid; Up and Down move a lifted app by a whole row. */
+private const val AppColumns = 6
+
+// Holding OK lifts a tile to move it: the light starts round its edge after [HoldShowsMs] and
+// has gone all the way round at [HoldMs]
+private const val HoldShowsMs = 400L
+private const val HoldMs = 3_000L
+
+/** The tile that is lifted to be moved, by its row and key (an app's package, a console's id). */
+private data class Lifted(val row: HomeOrder.Row, val key: String)
+
 /**
  * The Neon Tokyo home screen: the clock, Search, Inputs and Settings at the top, and two tabs.
  * Home has the big tiles for YouTube, YT Music, Spotify and Neon Tokyo and a row of consoles, each
  * with the HDMI number Adrian gave it; All apps has every app on the TV with its neon icon.
  * A console that is switched on gets a glowing outline that breathes and a small white star
  * that twinkles in its corner. The skyline behind takes the colour of the tile in focus.
+ * Holding OK on a tile for three seconds lifts it: the arrows move it along its row, or round
+ * the All apps grid, and OK or Back puts it down there, where it stays.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -260,6 +291,48 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
     }
     var linking by remember { mutableStateOf<Console?>(null) }
     var showInputs by remember { mutableStateOf(false) }
+
+    val order = remember { HomeOrder(appContext) }
+    var favouriteOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
+    var consoleOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Consoles)) }
+    var appOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Apps)) }
+    val favourites = remember(favouriteOrder) { HomeOrder.arrange(HomeCatalog.favourites, favouriteOrder) { it.packages.first() } }
+    val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
+    val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
+    var lifted by remember { mutableStateOf<Lifted?>(null) }
+    // OK or Back puts a lifted tile down when let go, once it was pressed after the lift: the
+    // OK that lifted it is still held when the lift starts
+    val dropArmed = remember { booleanArrayOf(false) }
+
+    fun keysOf(row: HomeOrder.Row): List<String> = when (row) {
+        HomeOrder.Row.Favourites -> favourites.map { it.packages.first() }
+        HomeOrder.Row.Consoles -> consoles.map { it.id }
+        HomeOrder.Row.Apps -> orderedApps.map { it.packageName }
+    }
+
+    fun lift(row: HomeOrder.Row, key: String) {
+        dropArmed[0] = false
+        lifted = Lifted(row, key)
+    }
+
+    fun moveLifted(step: Int) {
+        val current = lifted ?: return
+        val keys = keysOf(current.row)
+        val from = keys.indexOf(current.key)
+        val moved = HomeOrder.move(keys, from, from + step)
+        if (moved === keys) return
+        when (current.row) {
+            HomeOrder.Row.Favourites -> favouriteOrder = moved
+            HomeOrder.Row.Consoles -> consoleOrder = moved
+            HomeOrder.Row.Apps -> appOrder = moved
+        }
+    }
+
+    fun drop() {
+        val current = lifted ?: return
+        order.save(current.row, keysOf(current.row))
+        lifted = null
+    }
     val firstFavourite = remember { FocusRequester() }
     val firstApp = remember { FocusRequester() }
     val homeTab = remember { FocusRequester() }
@@ -277,6 +350,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
     // Home pressed while the home screen shows: back to the start, as on other TV home screens
     LaunchedEffect(homePresses) {
         if (homePresses == 0) return@LaunchedEffect
+        drop()
         linking = null
         showInputs = false
         tab = HomeTab.Home
@@ -305,7 +379,29 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            // While a tile is lifted every key goes to moving it, so the focus stays on it
+            .onPreviewKeyEvent { event ->
+                val current = lifted ?: return@onPreviewKeyEvent false
+                val native = event.nativeKeyEvent
+                val code = native.keyCode
+                val putsDown = code in SelectKeys || code == KeyEvent.KEYCODE_BACK
+                when (event.type) {
+                    KeyEventType.KeyDown -> when {
+                        code == KeyEvent.KEYCODE_DPAD_LEFT -> moveLifted(-1)
+                        code == KeyEvent.KEYCODE_DPAD_RIGHT -> moveLifted(1)
+                        code == KeyEvent.KEYCODE_DPAD_UP && current.row == HomeOrder.Row.Apps -> moveLifted(-AppColumns)
+                        code == KeyEvent.KEYCODE_DPAD_DOWN && current.row == HomeOrder.Row.Apps -> moveLifted(AppColumns)
+                        putsDown && native.repeatCount == 0 -> { dropArmed[0] = true }
+                    }
+                    KeyEventType.KeyUp -> if (putsDown && dropArmed[0]) drop()
+                    else -> Unit
+                }
+                true
+            }
+    ) {
         val tabsTop = maxHeight * 0.415f
         val rowsTop = maxHeight * 0.485f
         SkylineBackdrop(wallpaper)
@@ -375,6 +471,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
         ) { shown ->
             when (shown) {
                 HomeTab.Home -> HomeRows(
+                    favourites = favourites,
+                    consoles = consoles,
+                    lifted = lifted,
+                    onLift = { row, key -> lift(row, key) },
                     installed = installed,
                     live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
                     firstFavourite = firstFavourite,
@@ -388,7 +488,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                     onLinkConsole = { linking = it }
                 )
                 HomeTab.Apps -> AllApps(
-                    apps = apps,
+                    apps = orderedApps,
+                    lifted = lifted?.takeIf { it.row == HomeOrder.Row.Apps }?.key,
+                    onLift = { lift(HomeOrder.Row.Apps, it) },
                     firstApp = firstApp,
                     onFocusColor = { pkg, title, color ->
                         wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb())
@@ -397,6 +499,15 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                     onOpen = { HomeApps.open(context, it.packageName) }
                 )
             }
+        }
+
+        AnimatedVisibility(
+            visible = lifted != null,
+            enter = fadeIn(tween(220)) + slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 },
+            exit = fadeOut(tween(160)),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp)
+        ) {
+            MoveHint(grid = lifted?.row == HomeOrder.Row.Apps)
         }
     }
 
@@ -433,6 +544,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
 
 @Composable
 private fun HomeRows(
+    favourites: List<KnownApp>,
+    consoles: List<Console>,
+    lifted: Lifted?,
+    onLift: (HomeOrder.Row, String) -> Unit,
     installed: Set<KnownApp>,
     live: (Console) -> Boolean,
     firstFavourite: FocusRequester,
@@ -445,27 +560,34 @@ private fun HomeRows(
     Column(modifier = Modifier.padding(start = Side), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         RowTitle("Watch & listen")
         Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
-            HomeCatalog.favourites.forEachIndexed { index, app ->
-                NeonTile(
-                    width = BigTile.first,
-                    height = BigTile.second,
-                    shape = TileShape,
-                    color = app.color,
-                    onClick = { onOpenApp(app) },
-                    onFocus = { onFocusColor(app.packages.first(), app.name, app.color) },
-                    focusRequester = if (index == 0) firstFavourite else null,
-                    // Not on the TV yet: dimmed, and opening it goes to its Play Store page
-                    dimmed = app !in installed,
-                    onFocusRect = { onSpot(Spot(it, app.color)) }
-                ) { focused ->
-                    TileScene(app, focused, TileShape)
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        NeonGlyph(app.glyph, app.color, Modifier.size(42.dp))
-                        Spacer(Modifier.width(11.dp))
-                        TileName(app.name, 15.sp)
+            favourites.forEachIndexed { index, app ->
+                val appKey = app.packages.first()
+                // Keyed, so a tile that moves keeps its focus and slides over to its new place
+                key(appKey) {
+                    NeonTile(
+                        width = BigTile.first,
+                        height = BigTile.second,
+                        shape = TileShape,
+                        color = app.color,
+                        onClick = { onOpenApp(app) },
+                        onFocus = { onFocusColor(app.packages.first(), app.name, app.color) },
+                        modifier = Modifier.animatePlacement(),
+                        focusRequester = if (index == 0) firstFavourite else null,
+                        onHold = { onLift(HomeOrder.Row.Favourites, appKey) },
+                        lift = liftOf(lifted, HomeOrder.Row.Favourites, appKey),
+                        // Not on the TV yet: dimmed, and opening it goes to its Play Store page
+                        dimmed = app !in installed,
+                        onFocusRect = { onSpot(Spot(it, app.color)) }
+                    ) { focused ->
+                        TileScene(app, focused, TileShape)
+                        Row(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            NeonGlyph(app.glyph, app.color, Modifier.size(42.dp))
+                            Spacer(Modifier.width(11.dp))
+                            TileName(app.name, 15.sp)
+                        }
                     }
                 }
             }
@@ -473,34 +595,40 @@ private fun HomeRows(
         Spacer(Modifier.height(6.dp))
         RowTitle("Consoles")
         Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
-            HomeCatalog.consoles.forEach { console ->
-                val light = rememberLiveLight(live(console))
-                NeonTile(
-                    width = SmallTile.first,
-                    height = SmallTile.second,
-                    shape = SmallTileShape,
-                    color = console.color,
-                    onClick = { onOpenConsole(console) },
-                    onLongClick = { onLinkConsole(console) },
-                    onFocus = { onFocusColor(null, console.name, console.color) },
-                    onFocusRect = { onSpot(Spot(it, console.color)) },
-                    behind = { LiveHalo(light, console.color, 8.dp) },
-                    front = { LiveEdge(light, live(console), console.color, 8.dp) }
-                ) {
-                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
-                        NeonGlyph(console.glyph, console.color, Modifier.size(26.dp))
-                        Spacer(Modifier.weight(1f))
-                        TileName(console.name, 11.5.sp)
-                        BasicText(
-                            text = "HDMI ${console.port}",
-                            style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 7.5.sp,
-                                letterSpacing = 0.4.sp,
-                                color = console.color
-                            ),
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+            consoles.forEach { console ->
+                key(console.id) {
+                    val light = rememberLiveLight(live(console))
+                    NeonTile(
+                        width = SmallTile.first,
+                        height = SmallTile.second,
+                        shape = SmallTileShape,
+                        color = console.color,
+                        onClick = { onOpenConsole(console) },
+                        // A short hold asks which input it is on; the full three seconds lifts it
+                        onLongClick = { onLinkConsole(console) },
+                        modifier = Modifier.animatePlacement(),
+                        onHold = { onLift(HomeOrder.Row.Consoles, console.id) },
+                        lift = liftOf(lifted, HomeOrder.Row.Consoles, console.id),
+                        onFocus = { onFocusColor(null, console.name, console.color) },
+                        onFocusRect = { onSpot(Spot(it, console.color)) },
+                        behind = { LiveHalo(light, console.color, 8.dp) },
+                        front = { LiveEdge(light, live(console), console.color, 8.dp) }
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
+                            NeonGlyph(console.glyph, console.color, Modifier.size(26.dp))
+                            Spacer(Modifier.weight(1f))
+                            TileName(console.name, 11.5.sp)
+                            BasicText(
+                                text = "HDMI ${console.port}",
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 7.5.sp,
+                                    letterSpacing = 0.4.sp,
+                                    color = console.color
+                                ),
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -508,9 +636,20 @@ private fun HomeRows(
     }
 }
 
+/** How a tile shows a lift: none going on, it is the one lifted, or another one is. */
+private enum class Lift { None, Lifted, Other }
+
+private fun liftOf(lifted: Lifted?, row: HomeOrder.Row, key: String): Lift = when {
+    lifted == null -> Lift.None
+    lifted.row == row && lifted.key == key -> Lift.Lifted
+    else -> Lift.Other
+}
+
 @Composable
 private fun AllApps(
     apps: List<InstalledApp>,
+    lifted: String?,
+    onLift: (String) -> Unit,
     firstApp: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
     onOpen: (InstalledApp) -> Unit
@@ -518,8 +657,19 @@ private fun AllApps(
     // The grid leaves room around the tiles for a focused tile's glow; the offset keeps the
     // tiles themselves in line with the rest of the screen
     val room = 12.dp
+    val grid = rememberLazyGridState()
+    // A lifted app moved past the top or bottom of the screen brings its row into view
+    val liftedIndex = lifted?.let { key -> apps.indexOfFirst { it.packageName == key } } ?: -1
+    LaunchedEffect(liftedIndex) {
+        if (liftedIndex < 0) return@LaunchedEffect
+        val info = grid.layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.index == liftedIndex }
+        val fits = item != null && item.offset.y >= 0 && item.offset.y + item.size.height <= info.viewportEndOffset - info.afterContentPadding
+        if (!fits) grid.animateScrollToItem((liftedIndex / AppColumns - 1).coerceAtLeast(0) * AppColumns)
+    }
     LazyVerticalGrid(
-        columns = GridCells.Fixed(6),
+        columns = GridCells.Fixed(AppColumns),
+        state = grid,
         horizontalArrangement = Arrangement.spacedBy(Gap),
         verticalArrangement = Arrangement.spacedBy(Gap),
         contentPadding = PaddingValues(start = room, end = room, top = 7.dp + room, bottom = 48.dp),
@@ -541,7 +691,14 @@ private fun AllApps(
                 color = color,
                 onClick = { onOpen(app) },
                 onFocus = { onFocusColor(app.packageName, app.name, color) },
-                focusRequester = if (index == 0) firstApp else null
+                modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
+                focusRequester = if (index == 0) firstApp else null,
+                onHold = { onLift(app.packageName) },
+                lift = when (lifted) {
+                    null -> Lift.None
+                    app.packageName -> Lift.Lifted
+                    else -> Lift.Other
+                }
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
                     if (known != null) {
@@ -561,6 +718,11 @@ private fun AllApps(
  * A tile on the home screen. It pops forward on focus and its edge lights up like a neon tube;
  * [behind] and [front] can draw past its edges, and [onFocusRect] hears where it is on the
  * screen when the focus lands on it.
+ *
+ * With [onHold], holding OK draws a white hot light round its edge, and once it has gone all the
+ * way round, three seconds in, [onHold] lifts the tile. Let go sooner and it is a click, or,
+ * after a long press, [onLongClick]; let go once the light has started without one and nothing
+ * happens. A lifted tile stands out with arrows at its sides while the others dim.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -574,6 +736,8 @@ private fun NeonTile(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     focusRequester: FocusRequester? = null,
+    onHold: (() -> Unit)? = null,
+    lift: Lift = Lift.None,
     dimmed: Boolean = false,
     onFocusRect: ((Rect) -> Unit)? = null,
     behind: @Composable BoxScope.() -> Unit = {},
@@ -582,18 +746,74 @@ private fun NeonTile(
 ) {
     var focused by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val surfacePressed by interaction.collectIsPressedAsState()
+    var keyHeld by remember { mutableStateOf(false) }
+    val pressed = surfacePressed || keyHeld
+    val isLifted = lift == Lift.Lifted
     // A spring that overshoots a touch, so the tile pops when the focus lands on it
     val scale by animateFloatAsState(
         targetValue = when {
+            isLifted -> 1.13f
             pressed -> 1.03f
             focused -> 1.07f
             else -> 1f
         },
-        animationSpec = if (focused && !pressed) spring(dampingRatio = 0.55f, stiffness = 650f) else spring(stiffness = 900f),
+        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = 0.55f, stiffness = 650f) else spring(stiffness = 900f),
         label = "TileScale"
     )
-    val tube by animateFloatAsState(if (focused) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
+    val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
+    val faded by animateFloatAsState(if (lift == Lift.Other) 0.45f else 1f, tween(220), label = "TileFade")
+
+    val holdLight = remember { Animatable(0f) }
+    val holdScope = rememberCoroutineScope()
+    val hold = remember { Hold() }
+    val holdKeys = if (onHold == null) Modifier else Modifier.onPreviewKeyEvent { event ->
+        val native = event.nativeKeyEvent
+        if (native.keyCode !in SelectKeys) return@onPreviewKeyEvent false
+        when (event.type) {
+            KeyEventType.KeyDown -> {
+                if (native.repeatCount == 0) {
+                    hold.downAt = native.eventTime
+                    hold.longPress = false
+                    hold.lifted = false
+                    keyHeld = true
+                    hold.job?.cancel()
+                    hold.job = holdScope.launch {
+                        delay(HoldShowsMs)
+                        holdLight.snapTo(0f)
+                        holdLight.animateTo(1f, tween((HoldMs - HoldShowsMs).toInt(), easing = LinearEasing))
+                        hold.lifted = true
+                        keyHeld = false
+                        onHold()
+                        holdLight.animateTo(0f, tween(260))
+                    }
+                } else if (native.isLongPress) {
+                    hold.longPress = true
+                }
+                true
+            }
+            KeyEventType.KeyUp -> {
+                val downAt = hold.downAt
+                hold.downAt = -1L
+                keyHeld = false
+                if (!hold.lifted) {
+                    hold.job?.cancel()
+                    holdScope.launch { holdLight.animateTo(0f, tween(160)) }
+                }
+                if (downAt >= 0L && !hold.lifted) {
+                    // Judged by the keys' own times, as the remote and a test sent them
+                    val heldFor = native.eventTime - downAt
+                    val longPress = hold.longPress || heldFor >= ViewConfiguration.getLongPressTimeout()
+                    when {
+                        longPress && onLongClick != null -> onLongClick()
+                        heldFor < HoldShowsMs && !longPress -> onClick()
+                    }
+                }
+                true
+            }
+            else -> false
+        }
+    }
     // Where the tile was laid out and last said it was, kept out of state so that moving it
     // never recomposes anything. A focused tile that moves, as its row slides in, says so again.
     val placed = remember { arrayOfNulls<LayoutCoordinates>(1) }
@@ -624,15 +844,18 @@ private fun NeonTile(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                alpha = faded
             }
     ) {
         behind()
         Surface(
             onClick = onClick,
-            onLongClick = onLongClick,
+            // With a hold the keys are read above, so the Surface never sees a long press
+            onLongClick = if (onHold == null) onLongClick else null,
             modifier = Modifier
                 .matchParentSize()
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .then(holdKeys)
                 .onFocusChanged {
                     focused = it.isFocused
                     if (it.isFocused) {
@@ -669,7 +892,117 @@ private fun NeonTile(
         }
         front()
         TubeCore(shape, color, lit = { tube })
+        if (onHold != null) HoldLight(shape, color, progress = { holdLight.value })
+        if (isLifted) LiftArrows(color)
     }
+}
+
+/** Where a hold on a tile has got to; kept out of state, as only the keys read it. */
+private class Hold {
+    var downAt = -1L
+    var longPress = false
+    var lifted = false
+    var job: Job? = null
+}
+
+/**
+ * The light that runs round a tile's edge while OK is held on it, white hot with a glow in the
+ * tile's colour, all the way round when the tile lifts.
+ */
+@Composable
+private fun BoxScope.HoldLight(shape: RoundedCornerShape, color: Color, progress: () -> Float) {
+    Spacer(
+        Modifier
+            .matchParentSize()
+            .drawWithCache {
+                val edge = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+                val measure = PathMeasure().apply { setPath(edge, false) }
+                val run = Path()
+                val glow = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                val core = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+                onDrawBehind {
+                    val p = progress()
+                    if (p <= 0f) return@onDrawBehind
+                    run.reset()
+                    measure.getSegment(0f, measure.length * p, run, true)
+                    drawPath(run, color, alpha = 0.4f * p.coerceAtMost(0.15f) / 0.15f, style = glow)
+                    drawPath(run, Color.White, style = core)
+                }
+            }
+    )
+}
+
+/** Small arrows that breathe at the sides of a lifted tile, pointing where it can go. */
+@Composable
+private fun BoxScope.LiftArrows(color: Color) {
+    val breath = rememberInfiniteTransition(label = "LiftArrows")
+    val pulse by breath.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "LiftPulse"
+    )
+    Spacer(
+        Modifier
+            .matchParentSize()
+            .drawWithCache {
+                val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                val glow = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                val arm = 5.dp.toPx()
+                val gap = 9.dp.toPx()
+                onDrawBehind {
+                    val nudge = 3.dp.toPx() * pulse
+                    val y = size.height / 2f
+                    for (side in listOf(-1f, 1f)) {
+                        val tipX = if (side < 0) -gap - nudge else size.width + gap + nudge
+                        val chevron = Path().apply {
+                            moveTo(tipX - side * arm, y - arm)
+                            lineTo(tipX, y)
+                            lineTo(tipX - side * arm, y + arm)
+                        }
+                        drawPath(chevron, color, alpha = 0.3f, style = glow)
+                        drawPath(chevron, Color.White, alpha = 0.7f + 0.3f * pulse, style = stroke)
+                    }
+                }
+            }
+    )
+}
+
+/** The note at the foot of the screen while a tile is lifted. */
+@Composable
+private fun MoveHint(grid: Boolean) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Pane)
+            .padding(horizontal = 18.dp, vertical = 8.dp)
+    ) {
+        BasicText(
+            text = if (grid) "Move it with the arrows  ·  OK puts it down" else "Move it with ◀ ▶  ·  OK puts it down",
+            style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = NeonPalette.Text)
+        )
+    }
+}
+
+/**
+ * Slides a tile in a row to its new place when the row's order changes, instead of jumping
+ * there; the grid of All apps does the same with animateItem.
+ */
+private fun Modifier.animatePlacement(): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    var target by remember { mutableStateOf<IntOffset?>(null) }
+    var slide by remember { mutableStateOf<Animatable<IntOffset, AnimationVector2D>?>(null) }
+    this
+        .onPlaced { target = it.positionInParent().round() }
+        .offset {
+            val to = target ?: return@offset IntOffset.Zero
+            val anim = slide ?: Animatable(to, IntOffset.VectorConverter).also { slide = it }
+            if (anim.targetValue != to) {
+                scope.launch { anim.animateTo(to, spring(dampingRatio = 0.8f, stiffness = 500f)) }
+            }
+            anim.value - to
+        }
 }
 
 /**

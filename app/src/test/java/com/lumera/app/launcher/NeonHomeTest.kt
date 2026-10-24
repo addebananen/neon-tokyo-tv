@@ -59,8 +59,9 @@ class NeonHomeTest {
 
     @Test
     fun appsWithoutAnIconKeepTheirColour() {
-        assertEquals(HomeCatalog.monogramColor("Kodi"), HomeCatalog.monogramColor("kodi"))
-        assertNull(HomeCatalog.known("org.xbmc.kodi", "Kodi"))
+        // Kodi has its own icon now, so an app the catalog has never heard of stands in
+        assertEquals(HomeCatalog.monogramColor("Zebra TV"), HomeCatalog.monogramColor("zebra tv"))
+        assertNull(HomeCatalog.known("com.example.zebra", "Zebra TV"))
     }
 
     @Test
@@ -71,5 +72,33 @@ class NeonHomeTest {
         val numbers = Regex("-?\\d+\\.\\d+").findAll(outline).map { it.value.toFloat() }.toList()
         assertEquals(64, numbers.size)
         assertTrue(numbers.all { it in 11f..89f })
+    }
+
+    @Test
+    fun everyAppOnAdriansTvsHasANeonIconOfItsOwn() {
+        // Read off the new TV on 2026-10-24, plus the apps on the first one
+        val packages = listOf(
+            "allente.b2c.tvclient", "com.amazon.amazonvideo.livingroom", "com.angel.tv", "com.disney.disneyplus",
+            "com.google.android.videos", "com.google.android.youtube.tv", "com.google.android.youtube.tvmusic",
+            "com.iqiyi.i18n.tv", "com.netflix.ninja", "com.spotify.tv.android", "com.stremio.one",
+            "com.teamsmart.videomanager.tv", "com.viaplay.android", "com.wbd.stream", "net.comeandsee.ott.thechosen",
+            "se.svt.android.svtplay", "se.tv4.tv4playtab", "tv.twitch.android.app", "tv.wuaki.apptv",
+            "com.android.vending", "com.google.android.play.games", "com.FDGEntertainment.redball4.gp",
+            "com.esaba.downloader", "com.android.tv.settings", "com.neontokyo.tv", "com.tcl.tv", "com.tcl.browser",
+            "com.tcl.dashboard", "com.tcl.exhibit", "com.tcl.gallery", "com.tcl.guard", "com.tcl.magiconnectfree",
+            "com.tcl.ocean.instructions", "com.tcl.partnercustomizer", "com.tcl.suspension", "com.tcl.t_solo",
+            "com.tcl.ui_mediaCenter", "com.tcl.waterfall.overseas",
+            "org.xbmc.kodi", "com.apple.atve.androidtv.appletv", "com.nordvpn.android"
+        )
+        val missing = packages.filter { HomeCatalog.known(it, "") == null }
+        assertTrue("no icon for $missing", missing.isEmpty())
+    }
+
+    @Test
+    fun theTvsOwnAppsKeepTheTvsNameForThem() {
+        val settings = InstalledApp("com.android.tv.settings", "Inställningar", HomeCatalog.known("com.android.tv.settings", "Inställningar"))
+        assertEquals("Inställningar", settings.name)
+        val svt = InstalledApp("se.svt.android.svtplay", "SVT Play TV", HomeCatalog.known("se.svt.android.svtplay", "SVT Play TV"))
+        assertEquals("SVT Play", svt.name)
     }
 }
