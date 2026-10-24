@@ -249,13 +249,20 @@ video_from_phone() {
   return 0
 }
 
-# hold_ok <seconds>: holds OK down like a thumb on the remote, through the emulator's keyboard
-# (input keyevent can only tap or long press)
+# hold_ok <seconds>: holds OK down like a thumb on the remote (input keyevent can only tap or
+# long press). The emulator console presses the key on its own keyboard; the shell user may
+# not write to /dev/input, so sendevent is only the way when adb runs as root
 hold_ok() {
+  if adb emu event send EV_KEY:KEY_ENTER:1 EV_SYN:0:0 2>&1 | grep -q '^OK'; then
+    sleep "$1"
+    adb emu event send EV_KEY:KEY_ENTER:0 EV_SYN:0:0 >/dev/null 2>&1
+    return 0
+  fi
   local dev
+  adb root >/dev/null 2>&1 && adb wait-for-device
   dev=$(adb shell getevent -pl 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /KEY_ENTER/{print d; exit}')
-  if [ -z "$dev" ]; then fail "no keyboard device to hold OK with"; return 1; fi
-  adb shell "sendevent $dev 1 28 1; sendevent $dev 0 0 0; sleep $1; sendevent $dev 1 28 0; sendevent $dev 0 0 0"
+  [ -n "$dev" ] || return 1
+  adb shell "sendevent $dev 1 28 1 && sendevent $dev 0 0 0 && sleep $1 && sendevent $dev 1 28 0 && sendevent $dev 0 0 0"
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
@@ -603,7 +610,9 @@ key DPAD_UP
 sleep 1
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Up from PC did not return to YouTube ($label has the focus)"
-if hold_ok 3.6; then
+if ! hold_ok 3.6; then
+  fail "could not hold OK down on the emulator"
+else
   sleep 1
   shot neon-home-lifted
   screen_has "OK puts it down" || fail "holding OK on YouTube for three seconds did not lift it"
