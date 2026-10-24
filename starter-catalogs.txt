@@ -1,0 +1,58 @@
+10-24 22:14:51.446 I/NeonTokyoStarter( 2491): Profiles split: 1 profiles, 0 addons shared, 0 history rows, 0 watchlist rows
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top  'Popular movies' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top  'Popular series' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/imdbRating  'Highly rated movies' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/imdbRating  'Highly rated series' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/netflix-top10-SE  'Top 10 films on Netflix in Sweden' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/netflix-top10-SE  'Top 10 series on Netflix in Sweden' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/nfx  'Netflix films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/nfx  'Netflix series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/hbm  'HBO Max films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/hbm  'HBO Max series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/dnp  'Disney+ films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/dnp  'Disney+ series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/amp  'Prime Video films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/amp  'Prime Video series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/atp  'Apple TV+ films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/atp  'Apple TV+ series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/sst  'SkyShowtime films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/sst  'SkyShowtime series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/pmp  'Paramount+ films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/pmp  'Paramount+ series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs movie/cru  'Crunchyroll films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Streaming Catalogs series/cru  'Crunchyroll series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Action 'Action films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Action 'Action series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Comedy 'Comedy films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Comedy 'Comedy series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Sci-Fi 'Sci-Fi films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Sci-Fi 'Sci-Fi series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Horror 'Horror films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Horror 'Horror series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Thriller 'Thriller films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Thriller 'Thriller series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Drama 'Drama films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Drama 'Drama series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Animation 'Animation films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Animation 'Animation series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Crime 'Crime films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Crime 'Crime series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Adventure 'Adventure films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Adventure 'Adventure series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Fantasy 'Fantasy films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Fantasy 'Fantasy series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Romance 'Romance films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Romance 'Romance series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Mystery 'Mystery films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Mystery 'Mystery series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Family 'Family films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Family 'Family series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta movie/top genre=Documentary 'Documentary films' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Cinemeta series/top genre=Documentary 'Documentary series' home=false
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Anime Catalogs anime/myanimelist_top-all-time  'Best anime of all time' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Anime Catalogs anime/myanimelist_top-airing  'Airing now: top anime' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Anime Catalogs anime/anilist_trending-now  'Trending anime' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Anime Catalogs anime/anilist_top-anime  'Top rated anime' home=true
+10-24 22:14:52.450 I/NeonTokyoStarter( 2491): Starter catalog Anime Catalogs anime/kitsu_most-popular  'Most popular anime' home=true
+10-24 22:14:53.818 I/MetahubFallback( 2491): images.metahub.space reachable: true
+10-24 22:30:11.913 I/MetahubFallback(10845): images.metahub.space reachable: true

@@ -1,0 +1,28 @@
+Broadcasting: Intent { flg=0x400020 cmp=com.neontokyo.tv/com.lumera.app.launcher.NeonHomeSwitch (has extras) }
+Broadcast completed: result=-1, data="neon"
+Package com.google.android.tvlauncher new state: disabled-user
+Success
+--- Neon Home on
+resolves to: com.neontokyo.tv/.NeonHome
+Unknown command: get-role-holders
+2 activities found:
+  Activity #0:
+    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.neontokyo.tv/.NeonHome
+  Activity #1:
+    priority=-1000 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.android.tv.settings/.system.FallbackHome
+Package com.google.android.tvlauncher new state: enabled
+Success
+Broadcasting: Intent { flg=0x400020 cmp=com.neontokyo.tv/com.lumera.app.launcher.NeonHomeSwitch (has extras) }
+Broadcast completed: result=-1, data="off"
+--- Neon Home off
+resolves to: com.google.android.tvlauncher/.MainActivity
+Unknown command: get-role-holders
+2 activities found:
+  Activity #0:
+    priority=2 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.google.android.tvlauncher/.MainActivity
+  Activity #1:
+    priority=-1000 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
+    com.android.tv.settings/.system.FallbackHome

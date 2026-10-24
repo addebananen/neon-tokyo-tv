@@ -1,0 +1,14 @@
+FAIL: holding OK on YouTube for three seconds did not lift it
+FAIL: YouTube moved one step right, but Sign in is first instead of YT Music
+FAIL: the new order was gone when Neon Home opened again (YouTube is first)
+FAIL: YouTube did not move back to the front ( has the focus)
+FAIL: Up from YouTube did not land on the Home tab ( has the focus)
+FAIL: app left the foreground after step 52-neon-home-apps
+FAIL: All apps does not start with Neon Tokyo ( has the focus)
+FAIL: All apps tiles are 1920 px wide instead of the small tile size, so six do not fit
+FAIL: app left the foreground after step 53-neon-home-apps-focus
+FAIL: Back on All apps did not return to YouTube ( has the focus)
+FAIL: menu entry Home not found
+FAIL: menu entry Watchlist not found
+FAIL: Adrian's watchlist does not count his one series in its header
+FAIL: menu entry Profile Avatar not found

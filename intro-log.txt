@@ -1,0 +1,1 @@
+10-24 22:13:34.550 I/NeonIntro( 2491): played 137 frames in 15157 ms, 83 ms of them waiting for the window
