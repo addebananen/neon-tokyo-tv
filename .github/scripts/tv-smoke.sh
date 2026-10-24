@@ -277,14 +277,14 @@ REC_PID=$!
 sleep 1
 adb shell am start -n "$PKG/$ACTIVITY" --ez nt_ci true --ef nt_intro_hold 0.4
 sleep 6
-# Photographed first, since screencap takes its picture as it starts and the emulator is slow to
-# hand it over. The intro holds still for 14 s, which covers both.
-shot intro
-# The sun has risen to its place, where the skyline under it has dark buildings
+# The sun has risen to its place, where the skyline under it has dark buildings. Read before the
+# photo, whose UI dump can take long enough for the intro to be over; the intro holds still for
+# 14 s, which covers both.
 read -r r g b < <(pixel 1250 560)
 if [ "${r:-0}" -lt 200 ] || [ "${b:-255}" -gt 180 ]; then
   fail "the intro's sun is not on the screen (pixel $r $g $b)"
 fi
+shot intro
 sleep 12
 adb shell settings put global animator_duration_scale 0
 read -r r g b < <(pixel 1250 560)
@@ -688,7 +688,8 @@ wait "$REC_PID" 2>/dev/null
 adb shell settings put global animator_duration_scale 0
 adb pull /sdcard/power-off.mp4 "$OUT/power-off.mp4" > /dev/null 2>&1 || true
 shot after-power-off noalive
-if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then
+# Neon Home, still open from its own steps, may come back up behind: it is the same package
+if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY"; then
   fail "two quick presses of Back did not close the app"
 fi
 
