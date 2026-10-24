@@ -250,19 +250,33 @@ video_from_phone() {
 }
 
 # hold_ok <seconds>: holds OK down like a thumb on the remote (input keyevent can only tap or
-# long press). The emulator console presses the key on its own keyboard; the shell user may
-# not write to /dev/input, so sendevent is only the way when adb runs as root
+# long press). Each way of pressing a key from outside is tried until Android's input reader
+# says a key is down: the emulator console's keyboard first, then raw events as root
+key_edge() {  # key_edge <way> <1 down|0 up>
+  case "$1" in
+    emu:*) adb emu event send "EV_KEY:${1#emu:}:$2" EV_SYN:0:0 2>&1 | tr -d '\r' | head -1 ;;
+    root)
+      local dev
+      dev=$(adb shell getevent -pl 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /KEY_ENTER/{print d; exit}')
+      [ -n "$dev" ] && adb shell "sendevent $dev 1 28 $2 && sendevent $dev 0 0 0" 2>&1 | head -1 ;;
+  esac
+}
 hold_ok() {
-  if adb emu event send EV_KEY:KEY_ENTER:1 EV_SYN:0:0 2>&1 | grep -q '^OK'; then
-    sleep "$1"
-    adb emu event send EV_KEY:KEY_ENTER:0 EV_SYN:0:0 >/dev/null 2>&1
-    return 0
-  fi
-  local dev
-  adb root >/dev/null 2>&1 && adb wait-for-device
-  dev=$(adb shell getevent -pl 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /KEY_ENTER/{print d; exit}')
-  [ -n "$dev" ] || return 1
-  adb shell "sendevent $dev 1 28 1 && sendevent $dev 0 0 0 && sleep $1 && sendevent $dev 1 28 0 && sendevent $dev 0 0 0"
+  local way reply
+  for way in emu:KEY_ENTER emu:KEY_CENTER root; do
+    [ "$way" = root ] && { adb root >/dev/null 2>&1; adb wait-for-device; }
+    reply=$(key_edge "$way" 1)
+    sleep 0.4
+    if adb shell dumpsys input 2>/dev/null | grep -q 'KeyDowns: [1-9]'; then
+      sleep "$(awk -v s="$1" 'BEGIN { print (s > 0.6 ? s - 0.4 : 0.2) }')"
+      key_edge "$way" 0 >/dev/null
+      echo "held OK for $1 s with $way"
+      return 0
+    fi
+    key_edge "$way" 0 >/dev/null
+    echo "holding OK with $way did not reach Android (${reply:-no reply})"
+  done
+  return 1
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
