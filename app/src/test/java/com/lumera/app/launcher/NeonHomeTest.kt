@@ -59,8 +59,9 @@ class NeonHomeTest {
 
     @Test
     fun appsWithoutAnIconKeepTheirColour() {
-        assertEquals(HomeCatalog.monogramColor("Kodi"), HomeCatalog.monogramColor("kodi"))
-        assertNull(HomeCatalog.known("org.xbmc.kodi", "Kodi"))
+        // Kodi has its own icon now, so an app the catalog has never heard of stands in
+        assertEquals(HomeCatalog.monogramColor("Zebra TV"), HomeCatalog.monogramColor("zebra tv"))
+        assertNull(HomeCatalog.known("com.example.zebra", "Zebra TV"))
     }
 
     @Test
