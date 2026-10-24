@@ -1036,7 +1036,9 @@ class MainActivity : ComponentActivity() {
                                         .onPreviewKeyEvent { event ->
                                             if (settingsContentFocused) return@onPreviewKeyEvent false
                                             if (event.key == Key.Back && event.type == KeyEventType.KeyDown) {
-                                                val now = SystemClock.uptimeMillis()
+                                                // When the key was pressed rather than when it got here, so a slow
+                                                // frame between two quick presses can't split them
+                                                val now = event.nativeKeyEvent.eventTime
                                                 if (now - lastBackPressMs < DOUBLE_BACK_EXIT_WINDOW_MS) {
                                                     powerOff()
                                                     true
