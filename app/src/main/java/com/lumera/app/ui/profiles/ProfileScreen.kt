@@ -867,10 +867,8 @@ fun ProfileCard(
 
     val focusModifier = if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.scale(scale)
-    ) {
+    // Only the circle grows with focus, so every name and pencil stays on one line
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         val bloomColor = ringColor
         val preparingPulse = if (isPreparing) {
             val transition = rememberInfiniteTransition(label = "profile_preparing")
@@ -886,6 +884,10 @@ fun ProfileCard(
         Box(
             modifier = Modifier
                 .size(120.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
                 // Neon halo that fades in with the focus ring (drawn before the clip so it can spill out)
                 .drawBehind {
                     val lit = preparingPulse?.value ?: borderAlpha
@@ -977,13 +979,14 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
 
     val focusModifier = if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.scale(scale)
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
                 .size(120.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
                 .clip(CircleShape)
                 .background(NeonPalette.Violet.copy(alpha = 0.6f))
                 .border(2.dp, if (isFocused) MaterialTheme.colorScheme.primary else NeonPalette.Lilac.copy(alpha = 0.35f), CircleShape)

@@ -100,7 +100,9 @@ class CityDriveView(context: Context) : FrameLayout(context) {
         private fun paint() {
             Thread({
                 try {
+                    val start = System.nanoTime()
                     painted = DriveArt.build(fonts)
+                    Log.i(TAG, "art painted in ${(System.nanoTime() - start) / 1_000_000} ms")
                 } catch (e: Throwable) {
                     paintFailure = e
                 }

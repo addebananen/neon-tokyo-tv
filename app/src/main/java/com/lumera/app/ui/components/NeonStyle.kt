@@ -62,7 +62,7 @@ import com.lumera.app.ui.theme.KanitFamily
 object NeonPalette {
     val Night = Color(0xFF0D0721)
     val Violet = Color(0xFF2A0F4F)
-    val Panel = Color(0xF2160A2E)
+    val Panel = Color(0xFF160A2E)
     val Text = Color(0xFFF6EAFF)
     val Lilac = Color(0xFFB9A6D6)
     val Magenta = Color(0xFFFF3D9A)

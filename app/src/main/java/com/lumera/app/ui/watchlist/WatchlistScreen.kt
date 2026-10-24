@@ -117,7 +117,13 @@ fun WatchlistScreen(
                     .padding(top = topPadding),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 20.dp))
+                // Takes the place of the old top gap, so both rows still fit on the screen
+                NeonText(
+                    text = watchlistCount(movies.size, series.size),
+                    style = NeonType.eyebrow(13.sp),
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = startPadding)
+                )
 
                 if (movies.isNotEmpty()) {
                     InfiniteLoopRow(
@@ -173,3 +179,10 @@ fun WatchlistScreen(
     }
     } // CompositionLocalProvider
 }
+
+/** "WATCHLIST · 2 MOVIES · 1 SERIES", leaving out a kind with nothing saved. */
+internal fun watchlistCount(movies: Int, series: Int): String = buildList {
+    add("WATCHLIST")
+    if (movies > 0) add(if (movies == 1) "1 MOVIE" else "$movies MOVIES")
+    if (series > 0) add("$series SERIES")
+}.joinToString("  ·  ")

@@ -611,6 +611,7 @@ menu_go Watchlist
 sleep 5
 shot watchlist-adrian
 if screen_has "Nothing saved yet"; then fail "Adrian's watchlist lost the title he added"; fi
+screen_has "WATCHLIST  ·  1 SERIES" || fail "Adrian's watchlist does not count his one series in its header"
 menu_go "Profile Avatar"
 if ! wait_for "watching" 20; then fail "Change Profile did not open the profile screen"; fi
 sleep 2

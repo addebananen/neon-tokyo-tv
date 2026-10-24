@@ -134,6 +134,7 @@ import androidx.tv.material3.Surface
 import com.lumera.app.projectivy.NeonWallpaper
 import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonText
+import com.lumera.app.ui.components.neonPanel
 import com.lumera.app.ui.theme.KanitFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -1541,7 +1542,7 @@ private fun InputPicker(
             Column(
                 modifier = Modifier
                     .width(400.dp)
-                    .background(Color(0xF2160A2E), RoundedCornerShape(14.dp))
+                    .neonPanel(RoundedCornerShape(14.dp))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
