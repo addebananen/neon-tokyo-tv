@@ -27,11 +27,13 @@ class NeonDreamPreviewActivity : Activity() {
     override fun onPause() {
         super.onPause()
         (scene as? CityDriveView)?.onPause()
+        (scene as? VideoDreamView)?.onPause()
     }
 
     override fun onResume() {
         super.onResume()
         (scene as? CityDriveView)?.onResume()
+        (scene as? VideoDreamView)?.onResume()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {

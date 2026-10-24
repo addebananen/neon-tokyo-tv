@@ -277,7 +277,7 @@ private fun PhotoWaiting(
 }
 
 @Composable
-private fun PhotoStepRow(number: Int, text: String, done: Boolean) {
+internal fun PhotoStepRow(number: Int, text: String, done: Boolean) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 6.dp)
@@ -303,7 +303,7 @@ private fun PhotoStepRow(number: Int, text: String, done: Boolean) {
 }
 
 @Composable
-private fun StatusLine(text: String, color: Color, pulsing: Boolean) {
+internal fun StatusLine(text: String, color: Color, pulsing: Boolean) {
     val transition = rememberInfiniteTransition(label = "photo_status")
     val pulse by transition.animateFloat(
         initialValue = 0.35f,
@@ -433,7 +433,7 @@ private fun PhotoPreview(
 }
 
 /** Dark modules on white, with a narrow margin: the dialog's white frame is the rest of the quiet zone. */
-private fun qrCode(url: String, size: Int = 480): Bitmap? = try {
+internal fun qrCode(url: String, size: Int = 480): Bitmap? = try {
     val matrix = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 1))
     val width = matrix.width
     val height = matrix.height

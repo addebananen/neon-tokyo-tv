@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lumera.app.dream.DreamVideo
 import com.lumera.app.dream.NeonDreamPreviewActivity
 import com.lumera.app.dream.NeonDreamService
 import com.lumera.app.dream.NeonDreamStyle
@@ -38,6 +39,7 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
     var dreamActive by remember { mutableStateOf(false) }
     var homeActive by remember { mutableStateOf(false) }
     var dreamStyle by remember { mutableStateOf(NeonDreamStyle.get(context)) }
+    var choosingVideo by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         dreamActive = isNeonDreamActive(context)
         homeActive = isNeonHomeActive(context)
@@ -71,10 +73,10 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
 
     SettingRow("Screensaver") {
         Column {
-            val scene = if (dreamStyle == NeonDreamStyle.SKYLINE) {
-                "Skyline: the Neon Tokyo night, a neon clock and shooting stars."
-            } else {
-                "City drive: a car cruising an endless neon Tokyo, district after district, rain and all, under a clock that says you'll be back soon."
+            val scene = when (dreamStyle) {
+                NeonDreamStyle.SKYLINE -> "Skyline: the Neon Tokyo night, a neon clock and shooting stars."
+                NeonDreamStyle.VIDEO -> "Your video: it plays on a loop, without sound, whenever the TV rests."
+                else -> "City drive: a car cruising an endless neon Tokyo, district after district, rain and all, under a clock that says you'll be back soon."
             }
             Text(
                 if (dreamActive) "$scene It is your screensaver." else "$scene The TV setup script makes it your screensaver.",
@@ -83,24 +85,40 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
                 modifier = Modifier.padding(bottom = 12.dp)
             )
             VoidSegmentedControl(
-                options = listOf("City drive" to NeonDreamStyle.DRIVE, "Skyline" to NeonDreamStyle.SKYLINE),
+                options = listOf(
+                    "City drive" to NeonDreamStyle.DRIVE,
+                    "Skyline" to NeonDreamStyle.SKYLINE,
+                    "Your video" to NeonDreamStyle.VIDEO
+                ),
                 selectedOption = dreamStyle,
                 onOptionSelected = {
-                    dreamStyle = it
-                    NeonDreamStyle.set(context, it)
+                    if (it == NeonDreamStyle.VIDEO && !DreamVideo.exists(context)) {
+                        // Nothing to play yet: the dialog picks it, and the style follows once it is on
+                        choosingVideo = true
+                    } else {
+                        dreamStyle = it
+                        NeonDreamStyle.set(context, it)
+                    }
                 },
                 onBack = onGoBack
             )
             Spacer(Modifier.height(12.dp))
             VoidSegmentedControl(
-                options = listOf("Preview" to 0),
+                options = if (dreamStyle == NeonDreamStyle.VIDEO) listOf("Preview" to 0, "Change video" to 1) else listOf("Preview" to 0),
                 selectedOption = -1,
                 onOptionSelected = {
-                    context.startActivity(Intent(context, NeonDreamPreviewActivity::class.java))
+                    if (it == 1) choosingVideo = true
+                    else context.startActivity(Intent(context, NeonDreamPreviewActivity::class.java))
                 },
                 onBack = onGoBack
             )
         }
+    }
+    if (choosingVideo) {
+        DreamVideoDialog(
+            onDismissRequest = { choosingVideo = false },
+            onVideoSet = { dreamStyle = NeonDreamStyle.VIDEO }
+        )
     }
     Spacer(Modifier.height(15.dp))
     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
