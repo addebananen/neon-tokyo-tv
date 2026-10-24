@@ -56,7 +56,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.foundation.BorderStroke
+import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Glow
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import androidx.tv.material3.MaterialTheme as TvMaterialTheme
@@ -920,18 +923,25 @@ fun KeyButton(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    val dynamicContentColor = if (isFocused) Color.Black else Color.White
+    val dynamicContentColor = Color.White
+    // Lit like the cards: the accent's edge and glow on a tinted key, rather than a white block
+    val accent = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(6.dp)
 
     Surface(
         onClick = onClick,
         interactionSource = interactionSource,
         modifier = modifier.height(35.dp).fillMaxWidth(),
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(4.dp)),
+        shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(0.1f),
-            focusedContainerColor = Color.White,
+            containerColor = Color.White.copy(0.08f),
+            focusedContainerColor = accent.copy(alpha = 0.3f),
+        ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(border = BorderStroke(1.5.dp, accent), shape = shape)
+        ),
+        glow = ClickableSurfaceDefaults.glow(
+            focusedGlow = Glow(elevationColor = accent.copy(alpha = 0.5f), elevation = 8.dp)
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)
     ) {

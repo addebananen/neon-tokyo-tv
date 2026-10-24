@@ -662,11 +662,11 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             Text("Select a color scheme for your experience.", color = NeonPalette.Lilac)
 
-            Spacer(Modifier.height(40.dp))
-
             CenterCarouselRow(
                 itemWidth = 120.dp,
                 itemSpacing = 24.dp,
+                // Takes the place of the gaps above and below, so the glow has room
+                verticalPadding = 40.dp,
                 state = listState,
                 modifier = Modifier.onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown &&
@@ -688,8 +688,6 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
                     )
                 }
             }
-            
-            Spacer(Modifier.height(32.dp))
             
             Text(
                 "Or",
@@ -741,35 +739,13 @@ private fun CreateThemeButton(
     onClick: () -> Unit,
     focusRequester: FocusRequester
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
-    
-    Box(
-        modifier = Modifier
-            .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isFocused) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.1f)
-            )
-            .border(
-                width = 2.dp,
-                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .focusRequester(focusRequester)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-            .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            "Create Your Own",
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.8f)
-        )
-    }
+    // The same neon button as the rest of the profile screens
+    VoidButton(
+        text = "Create Your Own",
+        onClick = onClick,
+        modifier = Modifier.width(280.dp),
+        focusRequester = focusRequester
+    )
 }
 
 @Composable
@@ -782,6 +758,8 @@ fun ThemePickItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.1f else 1f)
+    val lit by animateFloatAsState(if (isFocused) 1f else 0f)
+    val accent = Color(theme.primaryColor.toInt())
 
     LaunchedEffect(isFocused) {
         if (isFocused) onFocused?.invoke()
@@ -808,13 +786,22 @@ fun ThemePickItem(
                         scaleX = scale
                         scaleY = scale
                     }
+                    // The focused theme glows in its own colour, the way a profile's ring does
+                    .drawBehind {
+                        if (lit > 0f) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    0.55f to accent.copy(alpha = 0.5f * lit),
+                                    1f to Color.Transparent,
+                                    radius = size.minDimension * 0.75f
+                                ),
+                                radius = size.minDimension * 0.75f
+                            )
+                        }
+                    }
                     .clip(CircleShape)
                     .background(Color(theme.backgroundColor.toInt()))
-                    .border(
-                        3.dp,
-                        if (isFocused) Color.White else Color.Transparent,
-                        CircleShape
-                    )
+                    .border(3.dp, accent.copy(alpha = lit), CircleShape)
                     .padding(12.dp)
             ) {
                 Row(

@@ -48,6 +48,8 @@ fun CenterCarouselRow(
     itemWidth: Dp,
     itemSpacing: Dp,
     modifier: Modifier = Modifier,
+    // Room above and below for a focused item's glow, which the row would otherwise cut off
+    verticalPadding: Dp = 0.dp,
     state: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit
 ) {
@@ -69,7 +71,7 @@ fun CenterCarouselRow(
     CompositionLocalProvider(LocalBringIntoViewSpec provides centerPivotSpec) {
         LazyRow(
             state = state,
-            contentPadding = PaddingValues(horizontal = edgePadding),
+            contentPadding = PaddingValues(horizontal = edgePadding, vertical = verticalPadding),
             horizontalArrangement = Arrangement.spacedBy(itemSpacing),
             verticalAlignment = Alignment.CenterVertically,
             modifier = modifier,
