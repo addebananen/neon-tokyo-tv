@@ -3,8 +3,9 @@ package com.lumera.app.dream
 import android.service.dreams.DreamService
 
 /**
- * Screensaver with the Neon Tokyo night scene and clock. Google TV hides third-party
- * screensavers from its settings, so the TV setup script switches to it over ADB.
+ * The screensaver: the night drive through the city or the Neon Tokyo skyline, with a clock.
+ * Google TV hides third-party screensavers from its settings, so the TV setup script switches
+ * to it over ADB.
  */
 class NeonDreamService : DreamService() {
 
@@ -12,7 +13,7 @@ class NeonDreamService : DreamService() {
         super.onAttachedToWindow()
         isInteractive = false
         isFullscreen = true
-        setContentView(NeonNightView(this))
+        setContentView(NeonDreamStyle.view(this))
     }
 
     companion object {

@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lumera.app.dream.NeonDreamPreviewActivity
 import com.lumera.app.dream.NeonDreamService
+import com.lumera.app.dream.NeonDreamStyle
 import com.lumera.app.launcher.NeonHomeActivity
 import com.lumera.app.projectivy.NeonWallpaperSettingsActivity
 
@@ -36,6 +37,7 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
     val context = LocalContext.current
     var dreamActive by remember { mutableStateOf(false) }
     var homeActive by remember { mutableStateOf(false) }
+    var dreamStyle by remember { mutableStateOf(NeonDreamStyle.get(context)) }
     LaunchedEffect(Unit) {
         dreamActive = isNeonDreamActive(context)
         homeActive = isNeonHomeActive(context)
@@ -69,16 +71,27 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
 
     SettingRow("Screensaver") {
         Column {
+            val scene = if (dreamStyle == NeonDreamStyle.SKYLINE) {
+                "Skyline: the Neon Tokyo night, a neon clock and shooting stars."
+            } else {
+                "City drive: a car cruising an endless neon Tokyo, district after district, rain and all, under a clock that says you'll be back soon."
+            }
             Text(
-                if (dreamActive) {
-                    "Neon Tokyo night is your screensaver: the skyline, a neon clock and shooting stars."
-                } else {
-                    "Neon Tokyo night: the skyline, a neon clock and shooting stars. The TV setup script makes it your screensaver."
-                },
+                if (dreamActive) "$scene It is your screensaver." else "$scene The TV setup script makes it your screensaver.",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                 color = Color.White.copy(0.6f),
                 modifier = Modifier.padding(bottom = 12.dp)
             )
+            VoidSegmentedControl(
+                options = listOf("City drive" to NeonDreamStyle.DRIVE, "Skyline" to NeonDreamStyle.SKYLINE),
+                selectedOption = dreamStyle,
+                onOptionSelected = {
+                    dreamStyle = it
+                    NeonDreamStyle.set(context, it)
+                },
+                onBack = onGoBack
+            )
+            Spacer(Modifier.height(12.dp))
             VoidSegmentedControl(
                 options = listOf("Preview" to 0),
                 selectedOption = -1,

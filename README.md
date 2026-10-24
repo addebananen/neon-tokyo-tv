@@ -9,6 +9,7 @@ A personal fork of [Lumera](https://github.com/LumeraD3v/Lumera) with an 80s Tok
 - Renamed to Neon Tokyo with its own package ID (`com.neontokyo.tv`), icon and TV banner, so it installs next to Lumera
 - GitHub Actions build that publishes an APK as a release; the in-app updater checks this repository
 - **Neon Home**, a TV home screen with the favourite apps, the consoles on HDMI 1 to 6 (a glowing outline and a small white star while one is switched on) and an All apps tab with neon icons. Settings, Personalization opens it; it only answers the Home button once the TV setup script turns it on
+- **City drive** screensaver: a car cruising an endless neon Tokyo in OpenGL, through Shinjuku, Akihabara, Kabukicho, Ginza, Shibuya and the bay at Odaiba, with rain, LED screens, flying cars and a clock that says you'll be back soon. The skyline screensaver is still there to pick in Settings, Personalization. The Japanese lettering is M PLUS Rounded 1c (SIL Open Font License, see `third_party/fonts`)
 
 Licensed under GPL-3.0, like Lumera.
 
