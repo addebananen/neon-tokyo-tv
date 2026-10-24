@@ -1,6 +1,7 @@
 package com.lumera.app.ui.home
 
 import android.content.Context
+import com.lumera.app.data.profile.NeonTokyoStarterPack
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -154,7 +155,11 @@ class HomeViewModel @Inject constructor(
 
                 // Skip = total fetched count for this row
                 val nextSkip = fetchedIds.size
-                val newItems = repository.fetchNextCatalogPage(row.catalogUrl, nextSkip)
+                val newItems = if (NeonTokyoStarterPack.parseCombo(configId) != null) {
+                    repository.fetchNextComboPage(configId)
+                } else {
+                    repository.fetchNextCatalogPage(row.catalogUrl, nextSkip)
+                }
 
                 // Deduplicate against all previously fetched items
                 val newUniqueItems = newItems.filter { item ->
@@ -729,8 +734,9 @@ class HomeViewModel @Inject constructor(
         // 3. If not found, fetch from repository
         viewModelScope.launch {
             try {
-                val fetchedRow = repository.getCategoryRowPreview(
-                    configId = hubItem.categoryId,
+                val fetchedRow = repository.getHubCategory(
+                    categoryId = hubItem.categoryId,
+                    title = hubItem.title,
                     maxItems = hubInitialLoadCount
                 )
                 if (fetchedRow != null) {

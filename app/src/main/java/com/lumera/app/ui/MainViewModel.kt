@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -30,7 +31,8 @@ class MainViewModel @Inject constructor(
 
     private var profileJob: Job? = null
     private var traktSyncJob: Job? = null
-    private var activeProfileId: Int? = null
+    private var traktConnectionJob: Job? = null
+    private var loginJob: Job? = null
 
     companion object {
         private const val TRAKT_POLL_INTERVAL_MS = 30_000L // 30 seconds
@@ -38,19 +40,16 @@ class MainViewModel @Inject constructor(
 
     // Call this when user clicks a profile
     fun login(id: Int) {
-        viewModelScope.launch {
-            profileConfigurationManager.captureStartupRuntimeIfNeeded()
+        val previousLogin = loginJob
+        loginJob = viewModelScope.launch {
+            previousLogin?.cancelAndJoin()
+            // The last profile's Trakt sync must be done before anything is saved as the new one's
+            stopTraktSync()
 
-            val previousProfileId = activeProfileId
-            if (previousProfileId != null && previousProfileId != id) {
-                profileConfigurationManager.saveRuntimeState(previousProfileId)
-            }
-
-            profileConfigurationManager.loadRuntimeState(id)
-            activeProfileId = id
+            profileConfigurationManager.activateProfile(id)
 
             profileJob?.cancel()
-            profileJob = launch {
+            profileJob = viewModelScope.launch {
                 dao.getProfileFlow(id).collect { profile ->
                     _activeProfile.value = profile
                 }
@@ -62,7 +61,7 @@ class MainViewModel @Inject constructor(
             startTraktPeriodicSync()
 
             // Watch for Trakt connection changes (e.g. user connects after login)
-            launch {
+            traktConnectionJob = viewModelScope.launch {
                 traktAuthManager.isConnected.collect { connected ->
                     if (connected && traktSyncJob?.isActive != true) {
                         startTraktPeriodicSync()
@@ -72,6 +71,11 @@ class MainViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun stopTraktSync() {
+        traktConnectionJob?.cancelAndJoin()
+        traktSyncJob?.cancelAndJoin()
     }
 
     private fun startTraktPeriodicSync() {
@@ -94,17 +98,13 @@ class MainViewModel @Inject constructor(
     }
 
     fun logout() {
-        viewModelScope.launch {
-            activeProfileId?.let { profileConfigurationManager.saveRuntimeState(it) }
-            profileConfigurationManager.clearLastActiveProfileId()
-            activeProfileId = null
+        val previousLogin = loginJob
+        loginJob = viewModelScope.launch {
+            previousLogin?.cancelAndJoin()
+            stopTraktSync()
             profileJob?.cancel()
-            traktSyncJob?.cancel()
+            profileConfigurationManager.deactivateProfile()
             _activeProfile.value = null
         }
-    }
-
-    suspend fun persistActiveProfileState() {
-        activeProfileId?.let { profileConfigurationManager.saveRuntimeState(it) }
     }
 }

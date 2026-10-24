@@ -5,7 +5,8 @@ data class StreamResponse(
 )
 
 data class SubtitleResponse(
-    val subtitles: List<StreamSubtitle> = emptyList()
+    // An addon can answer with null in place of the list or of an entry
+    val subtitles: List<StreamSubtitle?>? = null
 )
 
 data class Stream(

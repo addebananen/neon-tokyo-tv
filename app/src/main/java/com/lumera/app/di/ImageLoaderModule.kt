@@ -25,6 +25,8 @@ object ImageLoaderModule {
         return ImageLoader.Builder(context)
             // Use shared OkHttpClient with connection pooling
             .okHttpClient(okHttpClient)
+            // Cinemeta artwork falls back to an image cache when images.metahub.space is blocked
+            .components { add(MetahubFallbackInterceptor(okHttpClient)) }
             // Large memory cache for TV (25% of available memory for smooth scrolling)
             .memoryCache {
                 MemoryCache.Builder(context)

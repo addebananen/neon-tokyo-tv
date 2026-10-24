@@ -106,7 +106,8 @@ class SearchViewModel @Inject constructor(
         try {
             val results = repository.searchMovies(query)
             val movies = results.filter { it.type == "movie" }
-            val series = results.filter { it.type == "series" }
+            // Anime catalogs use their own "anime" type; they are shows, so list them with series
+            val series = results.filter { it.type == "series" || it.type == "anime" }
             _state.value = _state.value.copy(
                 results = results, movies = movies,
                 series = series, isLoading = false

@@ -1,6 +1,7 @@
 package com.lumera.app.ui.studio
 
 import androidx.compose.animation.core.Spring
+import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -317,7 +318,7 @@ private fun DiscoverRailSection(
     Column {
         Text(
             text = "$mediaLabel · $typeLabel",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = NeonType.rowTitle(),
             color = textColor.copy(alpha = 0.9f),
             modifier = Modifier.padding(start = 48.dp)
         )

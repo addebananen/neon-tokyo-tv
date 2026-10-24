@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,7 +43,13 @@ import kotlinx.coroutines.launch
 sealed class SidebarState {
     data object Closed : SidebarState()
     data class Episodes(val videos: List<MetaVideo>) : SidebarState()
-    data class Sources(val streamTitle: String, val streams: List<Stream>?, val selectedStreamId: String? = null) : SidebarState()
+    data class Sources(
+        val streamTitle: String,
+        val streams: List<Stream>?,
+        val selectedStreamId: String? = null,
+        // Sources the addons found that the profile's source filters keep out
+        val hiddenByFilters: Int = 0
+    ) : SidebarState()
 }
 
 // Handles Back key for sidebar dismissal. Left trapping is handled per-item via focusProperties.
@@ -187,6 +194,7 @@ fun GlassSidebar(
                     title = current.streamTitle,
                     streams = current.streams,
                     selectedStreamId = current.selectedStreamId,
+                    hiddenByFilters = current.hiddenByFilters,
                     focusRequester = focusRequester,
                     onSourceClick = onSourceSelected,
                     onBack = onBack
@@ -305,6 +313,7 @@ fun SourcesContent(
     title: String,
     streams: List<Stream>?,
     selectedStreamId: String? = null,
+    hiddenByFilters: Int = 0,
     focusRequester: FocusRequester,
     onSourceClick: (Stream) -> Unit,
     onBack: () -> Unit
@@ -374,8 +383,21 @@ fun SourcesContent(
                 modifier = Modifier.dpadNavigation(onBack, repeatGate = repeatGate)
             ) {
                 if (filtered.isEmpty()) item {
-                    Box(Modifier.fillMaxWidth().padding(top = 32.dp), contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(top = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         Text("No streams found.", color = Color.Gray, style = MaterialTheme.typography.bodyLarge)
+                        if (hiddenByFilters > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                if (hiddenByFilters == 1) "1 source is hidden by your source filters in Settings."
+                                else "$hiddenByFilters sources are hidden by your source filters in Settings.",
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 } else {
                     itemsIndexed(filtered, key = { index, s -> "${index}_${s.addonTransportUrl ?: s.url ?: index}" }) { index, s ->

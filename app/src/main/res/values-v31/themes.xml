@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The system's launch screen is the intro's night without an icon, so the intro starts
+         on the very colour the TV already shows -->
+    <style name="Theme.Lumera" parent="Base.Theme.Lumera">
+        <item name="android:windowSplashScreenBackground">@color/nt_night</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+</resources>

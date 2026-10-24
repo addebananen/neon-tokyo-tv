@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -19,13 +22,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.home.InfiniteLoopRow
 import com.lumera.app.ui.home.UpKeyDebouncer
+import com.lumera.app.ui.components.NeonPalette
+import com.lumera.app.ui.components.NeonText
+import com.lumera.app.ui.components.NeonType
 
 @Composable
 fun WatchlistScreen(
@@ -88,11 +96,19 @@ fun WatchlistScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         if (movies.isEmpty() && series.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "Your watchlist is empty",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White.copy(alpha = 0.5f)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    NeonText("WATCHLIST", style = NeonType.eyebrow(13.sp))
+                    Spacer(Modifier.height(8.dp))
+                    NeonText("Nothing saved yet", style = NeonType.headline(30.sp))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Press the bookmark on a film or series and it waits for you here.",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, lineHeight = 24.sp),
+                        color = NeonPalette.Lilac,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(max = 420.dp)
+                    )
+                }
             }
         } else {
             Column(
@@ -101,7 +117,13 @@ fun WatchlistScreen(
                     .padding(top = topPadding),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 20.dp))
+                // Takes the place of the old top gap, so both rows still fit on the screen
+                NeonText(
+                    text = watchlistCount(movies.size, series.size),
+                    style = NeonType.eyebrow(13.sp),
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = startPadding)
+                )
 
                 if (movies.isNotEmpty()) {
                     InfiniteLoopRow(
@@ -157,3 +179,10 @@ fun WatchlistScreen(
     }
     } // CompositionLocalProvider
 }
+
+/** "WATCHLIST · 2 MOVIES · 1 SERIES", leaving out a kind with nothing saved. */
+internal fun watchlistCount(movies: Int, series: Int): String = buildList {
+    add("WATCHLIST")
+    if (movies > 0) add(if (movies == 1) "1 MOVIE" else "$movies MOVIES")
+    if (series > 0) add("$series SERIES")
+}.joinToString("  ·  ")

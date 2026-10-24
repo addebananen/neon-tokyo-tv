@@ -91,7 +91,9 @@ class PlayerViewModel @Inject constructor(
     suspend fun getResumePosition(id: String): Long {
         return withContext(Dispatchers.IO) {
             val item = dao.getHistoryItem(id)
-            item?.position?.takeIf { it > 0 } ?: 0L
+            // Watched to the end: it starts over, as the details page's Play promises,
+            // instead of dropping in at the credits
+            if (item == null || item.watched) 0L else item.position.coerceAtLeast(0L)
         }
     }
 }

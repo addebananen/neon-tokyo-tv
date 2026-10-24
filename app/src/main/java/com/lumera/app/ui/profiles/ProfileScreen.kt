@@ -2,7 +2,11 @@ package com.lumera.app.ui.profiles
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,10 +31,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
@@ -48,6 +55,11 @@ import com.lumera.app.data.model.ThemeEntity
 import com.lumera.app.ui.addons.VoidButton
 import com.lumera.app.ui.addons.VoidInput
 import com.lumera.app.ui.components.CenterCarouselRow
+import com.lumera.app.ui.components.NeonPalette
+import com.lumera.app.ui.components.NeonSkylineBackdrop
+import com.lumera.app.ui.components.NeonText
+import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.neonPanel
 import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.theme.DefaultThemes
 import com.lumera.app.ui.theme.LumeraTheme
@@ -69,14 +81,20 @@ fun ProfileScreen(
     val wizardStep by viewModel.wizardStep.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    val isWelcome = wizardStep == 0 && profiles.isEmpty()
+    Box(modifier = Modifier.fillMaxSize()) {
+        // The skyline stays put while the steps fade over it; it dims on screens with more to read
+        NeonSkylineBackdrop(
+            dim = when {
+                isLoading -> 0.75f
+                isWelcome -> 0.05f
+                wizardStep == 0 -> 0.45f
+                else -> 0.62f
+            },
+            leftScrim = !isLoading && isWelcome
+        )
 
-        // FIX: If loading, just show black background (or nothing)
-        // This prevents the "WelcomeView" from flashing briefly.
+        // While loading only the backdrop shows, so the WelcomeView never flashes
         if (!isLoading) {
             AnimatedContent(
                 targetState = wizardStep,
@@ -105,6 +123,8 @@ fun ProfileScreen(
                         onCancel = { viewModel.cancelWizard() }
                     )
                     2 -> WizardAvatarStep(
+                        profileName = viewModel.tempName,
+                        selectedAvatarRef = viewModel.chosenAvatarRef,
                         onNext = { viewModel.setWizardAvatar(it) },
                         onBack = { viewModel.goBackStep() }
                     )
@@ -126,31 +146,32 @@ fun WelcomeView(onStart: () -> Unit) {
     val requester = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(100); requester.requestFocus() }
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            "WELCOME TO LUMERA",
-            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 4.sp),
-            color = Color.White
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Your cinematic universe awaits.",
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.Gray
-        )
-        Spacer(Modifier.height(48.dp))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 96.dp)
+                .widthIn(max = 520.dp)
+        ) {
+            NeonText("WELCOME TO", style = NeonType.eyebrow(15.sp))
+            Spacer(Modifier.height(6.dp))
+            NeonText("NEON TOKYO", style = NeonType.display(64.sp))
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Films, series and anime, after dark.",
+                style = MaterialTheme.typography.titleMedium,
+                color = NeonPalette.Lilac
+            )
+            Spacer(Modifier.height(40.dp))
 
-        VoidButton(
-            text = "Create First Profile",
-            onClick = onStart,
-            isPrimary = true,
-            modifier = Modifier.width(250.dp),
-            focusRequester = requester
-        )
+            VoidButton(
+                text = "Create First Profile",
+                onClick = onStart,
+                isPrimary = true,
+                modifier = Modifier.width(260.dp),
+                focusRequester = requester
+            )
+        }
     }
 }
 
@@ -165,38 +186,34 @@ fun ProfileSelectorView(
     viewModel: ProfileViewModel
 ) {
     var activeProfileForOptions by remember { mutableStateOf<ProfileEntity?>(null) }
-    var setupTargetProfile by remember { mutableStateOf<ProfileEntity?>(null) }
-    var showSetupChoiceDialog by remember { mutableStateOf(false) }
-    var showCopyFromDialog by remember { mutableStateOf(false) }
-    var showScratchConfirmDialog by remember { mutableStateOf(false) }
-    val isInitializingProfile by viewModel.isInitializingProfile.collectAsState()
+    var photoTargetProfile by remember { mutableStateOf<ProfileEntity?>(null) }
+    val preparingProfileId by viewModel.preparingProfileId.collectAsState()
+    val themeColors by viewModel.themeColors.collectAsState()
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "WHO IS WATCHING?",
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = Color.White
-        )
+        NeonText("NEON TOKYO", style = NeonType.eyebrow())
+        Spacer(Modifier.height(8.dp))
+        NeonText("Who's watching?", style = NeonType.headline(36.sp))
 
         Spacer(Modifier.height(50.dp))
 
         // Static centered row (no scrolling)
-        val focusRequesters = remember(profiles.size) { 
-            List(profiles.size) { FocusRequester() } 
+        val focusRequesters = remember(profiles.size) {
+            List(profiles.size) { FocusRequester() }
         }
-        
+
         // Request focus on first profile
-        LaunchedEffect(profiles.size, activeProfileForOptions) {
-            if (profiles.isNotEmpty() && activeProfileForOptions == null) {
+        LaunchedEffect(profiles.size, activeProfileForOptions, photoTargetProfile) {
+            if (profiles.isNotEmpty() && activeProfileForOptions == null && photoTargetProfile == null) {
                 delay(100)
                 focusRequesters[0].requestFocus()
             }
         }
-        
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(32.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -204,18 +221,13 @@ fun ProfileSelectorView(
             profiles.forEachIndexed { index, profile ->
                 ProfileCard(
                     profile = profile,
+                    ringColor = themeColors[profile.themeId]?.let { Color(it.toInt()) } ?: NeonPalette.Magenta,
+                    isPreparing = preparingProfileId == profile.id,
                     onClick = {
-                        if (isInitializingProfile) return@ProfileCard
+                        if (preparingProfileId != null) return@ProfileCard
                         if (viewModel.needsInitialSetup(profile.id)) {
-                            val hasCopySource = profiles.any { it.id != profile.id }
-                            if (!hasCopySource) {
-                                viewModel.initializeProfileFromScratch(profile.id) {
-                                    onSelect(profile)
-                                }
-                            } else {
-                                setupTargetProfile = profile
-                                showSetupChoiceDialog = true
-                            }
+                            // Addons are shared, so a new profile only needs its own empty history
+                            viewModel.prepareProfile(profile.id) { onSelect(profile) }
                         } else {
                             onSelect(profile)
                         }
@@ -230,6 +242,21 @@ fun ProfileSelectorView(
                 AddProfileCard(onClick = onAdd)
             }
         }
+
+        // The first profile on a new TV brings in the starter catalog, which takes a moment
+        Box(modifier = Modifier.height(48.dp), contentAlignment = Alignment.BottomCenter) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = preparingProfileId != null,
+                enter = fadeIn(tween(300)),
+                exit = fadeOut(tween(300))
+            ) {
+                Text(
+                    "Tuning in the city lights…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = NeonPalette.Lilac
+                )
+            }
+        }
     }
 
     if (activeProfileForOptions != null) {
@@ -240,6 +267,10 @@ fun ProfileSelectorView(
                 onEdit(activeProfileForOptions!!)
                 activeProfileForOptions = null
             },
+            onChangePhoto = {
+                photoTargetProfile = activeProfileForOptions
+                activeProfileForOptions = null
+            },
             onDelete = {
                 onDelete(activeProfileForOptions!!)
                 activeProfileForOptions = null
@@ -247,240 +278,15 @@ fun ProfileSelectorView(
         )
     }
 
-    val setupTarget = setupTargetProfile
-    if (showSetupChoiceDialog && setupTarget != null) {
-        val sourceProfiles = profiles.filter { it.id != setupTarget.id }
-        ProfileInitialSetupDialog(
-            profileName = setupTarget.name,
-            canCopy = sourceProfiles.isNotEmpty(),
-            isLoading = isInitializingProfile,
-            onCopy = {
-                showSetupChoiceDialog = false
-                showCopyFromDialog = true
-            },
-            onStartScratch = {
-                showSetupChoiceDialog = false
-                showScratchConfirmDialog = true
-            },
-            onDismiss = {
-                showSetupChoiceDialog = false
-                setupTargetProfile = null
+    photoTargetProfile?.let { target ->
+        ProfilePhotoDialog(
+            profileName = target.name,
+            onDismissRequest = { photoTargetProfile = null },
+            onPhotoChosen = { avatarRef ->
+                viewModel.setProfilePhoto(target, avatarRef)
+                photoTargetProfile = null
             }
         )
-    }
-
-    if (showCopyFromDialog && setupTarget != null) {
-        val sourceProfiles = profiles.filter { it.id != setupTarget.id }
-        CopyProfileSelectionDialog(
-            targetProfileName = setupTarget.name,
-            sourceProfiles = sourceProfiles,
-            isLoading = isInitializingProfile,
-            onSelectProfile = { sourceProfile ->
-                viewModel.initializeProfileByCopy(setupTarget.id, sourceProfile.id) {
-                    showCopyFromDialog = false
-                    setupTargetProfile = null
-                    onSelect(setupTarget)
-                }
-            },
-            onBack = {
-                showCopyFromDialog = false
-                showSetupChoiceDialog = true
-            },
-            onDismiss = {
-                showCopyFromDialog = false
-                setupTargetProfile = null
-            }
-        )
-    }
-
-    if (showScratchConfirmDialog && setupTarget != null) {
-        ScratchConfirmDialog(
-            profileName = setupTarget.name,
-            isLoading = isInitializingProfile,
-            onConfirm = {
-                viewModel.initializeProfileFromScratch(setupTarget.id) {
-                    showScratchConfirmDialog = false
-                    setupTargetProfile = null
-                    onSelect(setupTarget)
-                }
-            },
-            onBack = {
-                showScratchConfirmDialog = false
-                showSetupChoiceDialog = true
-            },
-            onDismiss = {
-                showScratchConfirmDialog = false
-                setupTargetProfile = null
-            }
-        )
-    }
-}
-
-@Composable
-private fun ProfileInitialSetupDialog(
-    profileName: String,
-    canCopy: Boolean,
-    isLoading: Boolean,
-    onCopy: () -> Unit,
-    onStartScratch: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .width(520.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
-                .padding(32.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Set Up \"$profileName\"",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "Choose how this profile should start.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-                Spacer(Modifier.height(24.dp))
-
-                VoidButton(
-                    text = if (canCopy) "Copy From Another Profile" else "No Profile Available To Copy",
-                    onClick = onCopy,
-                    enabled = canCopy && !isLoading,
-                    isPrimary = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                VoidButton(
-                    text = "Start From Scratch",
-                    onClick = onStartScratch,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                VoidButton(
-                    text = "Cancel",
-                    onClick = onDismiss,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CopyProfileSelectionDialog(
-    targetProfileName: String,
-    sourceProfiles: List<ProfileEntity>,
-    isLoading: Boolean,
-    onSelectProfile: (ProfileEntity) -> Unit,
-    onBack: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .width(560.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
-                .padding(32.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Copy Configuration",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "Select the profile to copy into \"$targetProfileName\".",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-                Spacer(Modifier.height(20.dp))
-
-                if (sourceProfiles.isEmpty()) {
-                    Text(
-                        text = "No available profiles to copy.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray
-                    )
-                } else {
-                    sourceProfiles.forEach { sourceProfile ->
-                        VoidButton(
-                            text = sourceProfile.name,
-                            onClick = { onSelectProfile(sourceProfile) },
-                            enabled = !isLoading,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
-                }
-
-                VoidButton(
-                    text = "Back",
-                    onClick = onBack,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScratchConfirmDialog(
-    profileName: String,
-    isLoading: Boolean,
-    onConfirm: () -> Unit,
-    onBack: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .width(520.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
-                .padding(32.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Start From Scratch?",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "\"$profileName\" will start with no addons, no integrations, and a fresh home setup.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-                Spacer(Modifier.height(24.dp))
-                VoidButton(
-                    text = "Yes, Start Fresh",
-                    onClick = onConfirm,
-                    enabled = !isLoading,
-                    isPrimary = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-                VoidButton(
-                    text = "Back",
-                    onClick = onBack,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
     }
 }
 
@@ -489,6 +295,7 @@ fun ProfileOptionsDialog(
     profile: ProfileEntity,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
+    onChangePhoto: () -> Unit,
     onDelete: () -> Unit
 ) {
     val editRequester = remember { FocusRequester() }
@@ -510,8 +317,7 @@ fun ProfileOptionsDialog(
                 modifier = Modifier
                     .width(400.dp)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black)
-                    .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                    .neonPanel()
                     .padding(32.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -536,10 +342,9 @@ fun ProfileOptionsDialog(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Text(
+                    NeonText(
                         text = profile.name.uppercase(),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = Color.White
+                        style = NeonType.headline(24.sp)
                     )
                     Spacer(Modifier.height(32.dp))
 
@@ -552,6 +357,15 @@ fun ProfileOptionsDialog(
                         isPrimary = false,
                         modifier = Modifier.fillMaxWidth(),
                         focusRequester = editRequester
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    VoidButton(
+                        text = if (ProfileAssets.isCustomAvatar(profile.avatarRef)) "Change Photo" else "Add Your Photo",
+                        onClick = {
+                            if (areButtonsReady) onChangePhoto()
+                        },
+                        isPrimary = false,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(16.dp))
                     VoidButton(
@@ -601,23 +415,21 @@ fun DeleteConfirmationDialog(
             modifier = Modifier
                 .width(400.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black)
-                .border(2.dp, Color(0xFF333333), RoundedCornerShape(24.dp))
+                .neonPanel()
                 .padding(32.dp)
                 .alpha(if (isReady) 1f else 0f),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
+                NeonText(
                     text = "Delete Profile?",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                    style = NeonType.headline(24.sp)
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = "Are you sure you want to delete \"${profileName}\"?",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
+                    color = NeonPalette.Lilac
                 )
                 Spacer(Modifier.height(32.dp))
 
@@ -662,10 +474,9 @@ fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
+        NeonText(
             if(initialName.isEmpty()) "What should we call you?" else "Update your name",
-            style = MaterialTheme.typography.headlineMedium,
-            color = Color.White
+            style = NeonType.headline(32.sp)
         )
         Spacer(Modifier.height(32.dp))
 
@@ -682,17 +493,26 @@ fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -
 }
 
 @Composable
-fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
-    val avatars = ProfileAssets.AVATAR_MAP.toList()
-    val initialIndex = avatars.size / 2
+fun WizardAvatarStep(
+    profileName: String,
+    selectedAvatarRef: String?,
+    onNext: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    // A photo already chosen comes first, so OK keeps it
+    val avatars = remember(selectedAvatarRef) {
+        val photo = selectedAvatarRef?.takeIf { ProfileAssets.isCustomAvatar(it) }
+        listOfNotNull(photo) + ProfileAssets.AVATAR_MAP.keys
+    }
+    val initialIndex = avatars.indexOf(selectedAvatarRef).takeIf { it >= 0 } ?: (avatars.size / 2)
     val listState = rememberLazyListState()
     val horizontalRepeatGate = remember {
         DpadRepeatGate(horizontalRepeatIntervalMs = PROFILE_HORIZONTAL_REPEAT_INTERVAL_MS)
     }
     val focusRequesters = remember(avatars.size) { List(avatars.size) { FocusRequester() } }
     val uploadButtonRequester = remember { FocusRequester() }
-    
-    var showUploadDialog by remember { mutableStateOf(false) }
+
+    var showPhotoDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         listState.scrollToItem(initialIndex)
@@ -706,9 +526,9 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Choose an Avatar", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+        NeonText("Choose your picture", style = NeonType.headline(32.sp))
         Spacer(Modifier.height(16.dp))
-        Text("Select an avatar that represents you.", color = Color.Gray)
+        Text("A photo of you makes it feel like yours. Or pick an avatar.", color = NeonPalette.Lilac)
 
         Spacer(Modifier.height(40.dp))
 
@@ -727,38 +547,39 @@ fun WizardAvatarStep(onNext: (String) -> Unit, onBack: () -> Unit) {
             }
         ) {
             items(avatars.size) { index ->
-                val (key, resId) = avatars[index]
+                val key = avatars[index]
                 AvatarGridItem(
-                    resId = resId,
+                    source = ProfileAssets.getAvatarSource(key),
                     onClick = { onNext(key) },
                     focusRequester = focusRequesters[index],
                     modifier = Modifier.size(120.dp)
                 )
             }
         }
-        
+
         Spacer(Modifier.height(32.dp))
-        
+
         Text(
             "Or",
             style = MaterialTheme.typography.bodyLarge,
-            color = Color.Gray
+            color = NeonPalette.Lilac
         )
-        
+
         Spacer(Modifier.height(16.dp))
-        
+
         UploadAvatarButton(
-            onClick = { showUploadDialog = true },
+            onClick = { showPhotoDialog = true },
             focusRequester = uploadButtonRequester
         )
     }
-    
-    if (showUploadDialog) {
-        AvatarUploadDialog(
-            onDismissRequest = { showUploadDialog = false },
-            onAvatarReceived = { avatarPath ->
-                showUploadDialog = false
-                onNext(avatarPath)
+
+    if (showPhotoDialog) {
+        ProfilePhotoDialog(
+            profileName = profileName,
+            onDismissRequest = { showPhotoDialog = false },
+            onPhotoChosen = { avatarRef ->
+                showPhotoDialog = false
+                onNext(avatarRef)
             }
         )
     }
@@ -772,30 +593,33 @@ private fun UploadAvatarButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
-    
-    Box(
+
+    Row(
         modifier = Modifier
             .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(
-                if (isFocused) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.1f)
+                if (isFocused) Brush.horizontalGradient(listOf(NeonPalette.Magenta, NeonPalette.Sun))
+                else Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.08f)))
             )
             .border(
-                width = 2.dp,
-                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp)
+                width = 1.5.dp,
+                color = if (isFocused) Color.Transparent else NeonPalette.Cyan.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(28.dp)
             )
             .focusRequester(focusRequester)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 26.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        val tint = if (isFocused) NeonPalette.Night else NeonPalette.Text
+        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
         Text(
-            "Upload Your Own",
+            "Use a Photo From Your Phone",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.8f)
+            color = tint
         )
     }
 }
@@ -804,7 +628,8 @@ private fun UploadAvatarButton(
 fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
     val themeManager: ThemeManager = hiltViewModel()
     val themes = DefaultThemes.ALL
-    val initialIndex = themes.size / 2
+    // Start on Neon Tokyo so a single press of OK picks the house theme
+    val initialIndex = themes.indexOfFirst { it.id == DefaultThemes.NEON_TOKYO.id }.coerceAtLeast(0)
     var previewTheme by remember { mutableStateOf(themes[initialIndex]) }
     val listState = rememberLazyListState()
     val horizontalRepeatGate = remember {
@@ -826,22 +651,22 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.78f)),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Offset for theme name labels below circles (not present in avatar selector)
             Spacer(Modifier.height(32.dp))
             
-            Text("Choose a Theme", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            NeonText("Choose a theme", style = NeonType.headline(32.sp))
             Spacer(Modifier.height(16.dp))
-            Text("Select a color scheme for your experience.", color = Color.Gray)
-
-            Spacer(Modifier.height(40.dp))
+            Text("Select a color scheme for your experience.", color = NeonPalette.Lilac)
 
             CenterCarouselRow(
                 itemWidth = 120.dp,
                 itemSpacing = 24.dp,
+                // Takes the place of the gaps above and below, so the glow has room
+                verticalPadding = 40.dp,
                 state = listState,
                 modifier = Modifier.onPreviewKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown &&
@@ -864,12 +689,10 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
                 }
             }
             
-            Spacer(Modifier.height(32.dp))
-            
             Text(
                 "Or",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.Gray
+                color = NeonPalette.Lilac
             )
             
             Spacer(Modifier.height(16.dp))
@@ -890,7 +713,7 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(NeonPalette.Night)
                     .padding(32.dp)
             ) {
                 ThemeEditorScreen(
@@ -916,35 +739,13 @@ private fun CreateThemeButton(
     onClick: () -> Unit,
     focusRequester: FocusRequester
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
-    
-    Box(
-        modifier = Modifier
-            .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isFocused) MaterialTheme.colorScheme.primary
-                else Color.White.copy(alpha = 0.1f)
-            )
-            .border(
-                width = 2.dp,
-                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .focusRequester(focusRequester)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-            .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            "Create Your Own",
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.Black else Color.White.copy(alpha = 0.8f)
-        )
-    }
+    // The same neon button as the rest of the profile screens
+    VoidButton(
+        text = "Create Your Own",
+        onClick = onClick,
+        modifier = Modifier.width(280.dp),
+        focusRequester = focusRequester
+    )
 }
 
 @Composable
@@ -957,6 +758,8 @@ fun ThemePickItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val scale by animateFloatAsState(if (isFocused) 1.1f else 1f)
+    val lit by animateFloatAsState(if (isFocused) 1f else 0f)
+    val accent = Color(theme.primaryColor.toInt())
 
     LaunchedEffect(isFocused) {
         if (isFocused) onFocused?.invoke()
@@ -983,13 +786,22 @@ fun ThemePickItem(
                         scaleX = scale
                         scaleY = scale
                     }
+                    // The focused theme glows in its own colour, the way a profile's ring does
+                    .drawBehind {
+                        if (lit > 0f) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    0.55f to accent.copy(alpha = 0.5f * lit),
+                                    1f to Color.Transparent,
+                                    radius = size.minDimension * 0.75f
+                                ),
+                                radius = size.minDimension * 0.75f
+                            )
+                        }
+                    }
                     .clip(CircleShape)
                     .background(Color(theme.backgroundColor.toInt()))
-                    .border(
-                        3.dp,
-                        if (isFocused) Color.White else Color.Transparent,
-                        CircleShape
-                    )
+                    .border(3.dp, accent.copy(alpha = lit), CircleShape)
                     .padding(12.dp)
             ) {
                 Row(
@@ -1009,7 +821,7 @@ fun ThemePickItem(
         Text(
             text = theme.name,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.White else Color.Gray
+            color = if (isFocused) Color.White else NeonPalette.Lilac
         )
     }
 }
@@ -1019,7 +831,9 @@ fun ProfileCard(
     profile: ProfileEntity,
     onClick: () -> Unit,
     onEdit: () -> Unit,
-    focusRequester: FocusRequester? = null
+    focusRequester: FocusRequester? = null,
+    ringColor: Color = MaterialTheme.colorScheme.primary,
+    isPreparing: Boolean = false
 ) {
     val cardInteractionSource = remember { MutableInteractionSource() }
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
@@ -1040,16 +854,44 @@ fun ProfileCard(
 
     val focusModifier = if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.scale(scale)
-    ) {
+    // Only the circle grows with focus, so every name and pencil stays on one line
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        val bloomColor = ringColor
+        val preparingPulse = if (isPreparing) {
+            val transition = rememberInfiniteTransition(label = "profile_preparing")
+            transition.animateFloat(
+                initialValue = 0.45f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+                label = "profile_preparing_pulse"
+            )
+        } else {
+            null
+        }
         Box(
             modifier = Modifier
                 .size(120.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                // Neon halo that fades in with the focus ring (drawn before the clip so it can spill out)
+                .drawBehind {
+                    val lit = preparingPulse?.value ?: borderAlpha
+                    if (lit > 0f) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                0.55f to bloomColor.copy(alpha = 0.5f * lit),
+                                1f to Color.Transparent,
+                                radius = size.minDimension * 0.85f
+                            ),
+                            radius = size.minDimension * 0.85f
+                        )
+                    }
+                }
                 .clip(CircleShape)
-                .background(Color(0xFF1A1A1A))
-                .border(3.dp, MaterialTheme.colorScheme.primary.copy(alpha = borderAlpha), CircleShape)
+                .background(NeonPalette.Violet)
+                .border(3.dp, ringColor.copy(alpha = borderAlpha), CircleShape)
                 .then(focusModifier)
                 .onPreviewKeyEvent { event ->
                     val isConfirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -1082,7 +924,7 @@ fun ProfileCard(
         Text(
             text = profile.name.uppercase(),
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = if(isCardFocused || isEditFocused) Color.White else Color.Gray
+            color = if(isCardFocused || isEditFocused) Color.White else NeonPalette.Lilac
         )
         
         Spacer(Modifier.height(8.dp))
@@ -1124,16 +966,17 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
 
     val focusModifier = if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.scale(scale)
-    ) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
                 .size(120.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
                 .clip(CircleShape)
-                .background(Color.White.copy(0.1f))
-                .border(2.dp, if(isFocused) Color.White else Color.Transparent, CircleShape)
+                .background(NeonPalette.Violet.copy(alpha = 0.6f))
+                .border(2.dp, if (isFocused) MaterialTheme.colorScheme.primary else NeonPalette.Lilac.copy(alpha = 0.35f), CircleShape)
                 .then(focusModifier)
                 .clickable(interactionSource = interactionSource, indication = null) { onClick() }
                 .focusable(interactionSource = interactionSource),
@@ -1145,7 +988,7 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
         Text(
             "ADD PROFILE",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = if(isFocused) Color.White else Color.Gray
+            color = if(isFocused) Color.White else NeonPalette.Lilac
         )
         Spacer(Modifier.height(8.dp))
         Spacer(Modifier.height(32.dp))
@@ -1154,7 +997,7 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
 
 @Composable
 fun AvatarGridItem(
-    resId: Int, 
+    source: Any,
     onClick: () -> Unit, 
     focusRequester: FocusRequester?,
     modifier: Modifier = Modifier,
@@ -1190,7 +1033,7 @@ fun AvatarGridItem(
         ) {
             AsyncImage(
             model = ImageRequest.Builder(context)
-                .data(resId)
+                .data(source)
                 .size(300, 300)
                 .crossfade(true)
                 .build(),

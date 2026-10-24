@@ -72,6 +72,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -79,6 +80,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -215,6 +219,8 @@ fun BasePlayerScaffold(
     var autoplayCancelled by remember(playbackController) { mutableStateOf(false) }
     var countdownSeconds by remember(playbackController) { mutableIntStateOf(10) }
     var countdownActive by remember(playbackController) { mutableStateOf(false) }
+    // The countdown and the end of the video both start the next episode; only the first one counts
+    var autoplayFired by remember(playbackController) { mutableStateOf(false) }
 
     val isNearCompletion = remember(uiState.positionMs, uiState.durationMs, skipSegmentInfo, autoplayThresholdMode, autoplayThresholdPercent, autoplayThresholdSeconds, hasError) {
         if (hasError) return@remember false
@@ -283,14 +289,16 @@ fun BasePlayerScaffold(
             countdownSeconds--
         }
         // Countdown finished
-        if (countdownActive && !autoplayCancelled) {
+        if (countdownActive && !autoplayCancelled && !autoplayFired) {
+            autoplayFired = true
             onAutoplayNextEpisode?.invoke(currentSourceUrl)
         }
     }
 
     // Auto-trigger on STATE_ENDED if overlay is showing
     LaunchedEffect(uiState.isEnded) {
-        if (uiState.isEnded && countdownActive && !autoplayCancelled) {
+        if (uiState.isEnded && countdownActive && !autoplayCancelled && !autoplayFired) {
+            autoplayFired = true
             onAutoplayNextEpisode?.invoke(currentSourceUrl)
         }
     }
@@ -1396,6 +1404,11 @@ private fun FocusableSeekBar(
     }
 }
 
+/**
+ * The video's progress as a neon line: the part played glows in the theme colour and ends in a
+ * white hot playhead, which grows a halo while the bar has the focus. It is all drawn, and the
+ * position is read while drawing, so playing and seeking never lay anything out again.
+ */
 @Composable
 private fun ProgressBar(
     currentPosition: Long,
@@ -1408,51 +1421,41 @@ private fun ProgressBar(
         0f
     }
 
-    val animatedProgress by animateFloatAsState(
+    val animatedProgress = animateFloatAsState(
         targetValue = progress,
         animationSpec = tween(100),
         label = "progress"
     )
+    val focus = animateFloatAsState(if (isFocused) 1f else 0f, tween(160), label = "SeekFocus")
+    val primaryColor = MaterialTheme.colorScheme.primary
 
-    BoxWithConstraints(
+    Spacer(
         modifier = Modifier
             .fillMaxWidth()
             .height(18.dp)
-    ) {
-        val trackHeight = if (isFocused) 5.dp else 4.dp
-        val thumbSize = if (isFocused) 12.dp else 9.dp
-        val clampedProgress = animatedProgress.coerceIn(0f, 1f)
-        val thumbOffset = (maxWidth - thumbSize) * clampedProgress
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxWidth()
-                .height(trackHeight)
-                .clip(RoundedCornerShape(999.dp))
-                .background(Color.White.copy(alpha = 0.34f))
-        )
-
-        val primaryColor = MaterialTheme.colorScheme.primary
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxWidth(clampedProgress)
-                .height(trackHeight)
-                .clip(RoundedCornerShape(999.dp))
-                .background(primaryColor)
-        )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = thumbOffset)
-                .size(thumbSize)
-                .clip(CircleShape)
-                .background(primaryColor)
-        )
-    }
+            .drawWithCache {
+                val hot = lerp(primaryColor, Color.White, 0.55f)
+                onDrawBehind {
+                    val f = focus.value
+                    val played = animatedProgress.value.coerceIn(0f, 1f)
+                    val track = (4.dp + 1.dp * f).toPx()
+                    val thumb = (4.5.dp + 1.5.dp * f).toPx()
+                    val y = size.height / 2f
+                    val start = Offset(track / 2f, y)
+                    val end = Offset(size.width - track / 2f, y)
+                    // The playhead stays inside the bar at both ends
+                    val head = Offset(thumb + (size.width - 2 * thumb) * played, y)
+                    drawLine(Color.White.copy(alpha = 0.3f), start, end, track, StrokeCap.Round)
+                    if (head.x > start.x) {
+                        drawLine(primaryColor.copy(alpha = 0.28f), start, head, track * 3f, StrokeCap.Round)
+                        drawLine(primaryColor, start, head, track, StrokeCap.Round)
+                    }
+                    if (f > 0f) drawCircle(primaryColor.copy(alpha = 0.3f * f), radius = thumb * 2.3f, center = head)
+                    drawCircle(primaryColor, radius = thumb, center = head)
+                    drawCircle(hot, radius = thumb * 0.55f, center = head)
+                }
+            }
+    )
 }
 
 @Composable

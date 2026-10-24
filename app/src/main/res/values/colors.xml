@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Neon Tokyo night violet, shown before the first frame and behind the intro -->
+    <color name="nt_night">#FF0D0721</color>
+</resources>

@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.Border
+import androidx.tv.material3.Glow
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -42,8 +43,11 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Scale
+import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.domain.HubItem
 import com.lumera.app.domain.HubShape
+import com.lumera.app.ui.components.NeonCardArt
+import com.lumera.app.ui.components.ServiceCardArt
 import com.lumera.app.ui.theme.LocalHubRoundCorners
 
 /**
@@ -119,6 +123,10 @@ fun HubCard(
                     border = BorderStroke(3.dp, glowColor),
                     shape = focusedCardShape
                 )
+            ),
+            // Neon bloom around the focused card only, one shadow on screen at a time
+            glow = ClickableSurfaceDefaults.glow(
+                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = 12.dp)
             )
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -147,31 +155,25 @@ fun HubCard(
                     )
 
                 } else {
-                    // Simple Card Style (ViewMoreCard look)
-                    // No image, just background color + centered text/icon
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(cardShape)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = hubItem.title,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp
-                                ),
-                                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    val serviceCode = remember(hubItem.categoryId, hubItem.title) {
+                        NeonTokyoStarterPack.serviceCode(hubItem.categoryId, hubItem.title)
+                    }
+                    if (serviceCode != null) {
+                        // The service's own scene, its subject lifting off it on focus
+                        ServiceCardArt(
+                            code = serviceCode,
+                            title = hubItem.title,
+                            shape = shape,
+                            focused = isFocused,
+                            modifier = Modifier.clip(cardShape)
+                        )
+                    } else {
+                        // Neon sign art, tinted per genre
+                        NeonCardArt(
+                            title = hubItem.title,
+                            focused = isFocused,
+                            modifier = Modifier.clip(cardShape)
+                        )
                     }
                 }
             }

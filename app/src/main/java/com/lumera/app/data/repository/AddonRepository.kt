@@ -7,6 +7,7 @@ import com.lumera.app.data.model.CatalogConfigEntity
 import com.lumera.app.data.model.stremio.CatalogManifest
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.data.model.stremio.Stream
+import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.data.remote.StremioApiService
 import com.lumera.app.domain.HomeRow
 import com.lumera.app.domain.HubGroupRow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.firstOrNull
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +30,12 @@ class AddonRepository @Inject constructor(
 ) {
     private val gson = Gson()
     private val MAX_CATALOG_PAGES = 30
+    private val SEARCHABLE_TYPES = setOf("movie", "series", "anime")
+
+    private data class SearchTarget(val transportUrl: String, val type: String, val catalogId: String)
+
+    // How far each catalog behind a combined hub card has been read, per card
+    private val comboOffsets = ConcurrentHashMap<String, ConcurrentHashMap<String, Int>>()
 
     /** Filter out MetaItems where Gson injected null into non-null Kotlin fields */
     private fun List<MetaItem>.sanitize(): List<MetaItem> = filter { item ->
@@ -47,36 +55,57 @@ class AddonRepository @Inject constructor(
      */
     suspend fun fetchNextCatalogPage(baseUrl: String, skip: Int): List<MetaItem> = withContext(Dispatchers.IO) {
         try {
-            val url = if (skip == 0) baseUrl else {
-                baseUrl.replace(".json", "/skip=$skip.json")
-            }
+            val url = CatalogUrls.withSkip(baseUrl, skip)
             withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty().sanitize()
         } catch (e: Exception) { emptyList() }
     }
 
 
+    /**
+     * Searches Cinemeta plus every enabled addon catalog that supports search
+     * (AIOMetadata, anime catalogs, ...). Cinemeta answers first in the list so its
+     * IMDb ids win when two addons return the same title.
+     */
     suspend fun searchMovies(query: String): List<MetaItem> = withContext(Dispatchers.IO) {
-        if (query.length < 3) return@withContext emptyList()
-
-        val movieJob = async {
-            try {
-                withTimeout(CATALOG_TIMEOUT_MS) {
-                    api.getCatalog("https://v3-cinemeta.strem.io/catalog/movie/top/search=$query.json")
-                }.metas.orEmpty().sanitize()
-            } catch (e: Exception) { emptyList() }
-        }
-
-        val seriesJob = async {
-            try {
-                withTimeout(CATALOG_TIMEOUT_MS) {
-                    api.getCatalog("https://v3-cinemeta.strem.io/catalog/series/top/search=$query.json")
-                }.metas.orEmpty().sanitize()
-            } catch (e: Exception) { emptyList() }
-        }
+        if (query.trim().length < 3) return@withContext emptyList()
+        val searchExtra = "search=" + java.net.URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
 
         val cinemeta = "https://v3-cinemeta.strem.io"
-        return@withContext (movieJob.await() + seriesJob.await())
-            .map { it.copy(addonBaseUrl = cinemeta) }
+        val targets = linkedSetOf(
+            SearchTarget(cinemeta, "movie", "top"),
+            SearchTarget(cinemeta, "series", "top")
+        )
+        val addons = dao.getAllAddons().firstOrNull()?.filter { it.isEnabled } ?: emptyList()
+        for (addon in addons) {
+            if (addon.transportUrl.trimEnd('/') == cinemeta) continue
+            val catalogs: List<CatalogManifest> = runCatching {
+                gson.fromJson(addon.catalogsJson, Array<CatalogManifest>::class.java)?.toList()?.filterNotNull()
+            }.getOrNull() ?: continue
+            catalogs
+                .filter { it.type in SEARCHABLE_TYPES && it.supportsSearch() }
+                .distinctBy { it.type }
+                .forEach { targets.add(SearchTarget(addon.transportUrl, it.type, it.id)) }
+        }
+
+        val jobs = targets.map { target ->
+            async {
+                try {
+                    val url = CatalogUrls.catalog(target.transportUrl, target.type, target.catalogId, searchExtra)
+                    withTimeout(CATALOG_TIMEOUT_MS) { api.getCatalog(url) }.metas.orEmpty().sanitize()
+                        .map { it.copy(addonBaseUrl = target.transportUrl) }
+                } catch (_: Exception) { emptyList() }
+            }
+        }
+
+        val seenIds = HashSet<String>()
+        val seenTitles = HashSet<String>()
+        jobs.awaitAll().flatten().filter { item ->
+            // Two addons with the same title: same type, name and year. Without a year the
+            // name alone says too little, so then only the id counts.
+            val year = item.releaseInfo?.take(4)?.takeIf { it.length == 4 && it.all(Char::isDigit) }
+            seenIds.add(item.id) &&
+                (year == null || seenTitles.add("${item.type}|${item.name.trim().lowercase()}|$year"))
+        }
     }
 
     /**
@@ -197,7 +226,7 @@ class AddonRepository @Inject constructor(
             val addon = addonMap[config.transportUrl] ?: return@mapNotNull null
             async {
                 try {
-                    val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
+                    val url = CatalogUrls.catalog(config.transportUrl, config.catalogType, config.catalogId, config.extraArgs)
                     // Fetch only the first page for fast initial load
                     val rawMetas = try { withTimeout(catalogTimeoutMs) { api.getCatalog(url) }.metas.orEmpty().sanitize() } catch (e: Exception) { emptyList() }
                     if (rawMetas.isNotEmpty()) {
@@ -242,7 +271,7 @@ class AddonRepository @Inject constructor(
         if (!addon.isEnabled) return@withContext null
 
         try {
-            val url = "${config.transportUrl}/catalog/${config.catalogType}/${config.catalogId}.json"
+            val url = CatalogUrls.catalog(config.transportUrl, config.catalogType, config.catalogId, config.extraArgs)
             val metas = try {
                 withTimeout(timeoutMs) { api.getCatalog(url) }.metas.orEmpty().sanitize()
             } catch (_: Exception) {
@@ -266,6 +295,59 @@ class AddonRepository @Inject constructor(
                 )
             } else null
         } catch (_: Exception) { null }
+    }
+
+    /**
+     * Items behind a hub card. A card can combine catalogs (films + series of one service),
+     * which are fetched together and interleaved.
+     */
+    suspend fun getHubCategory(categoryId: String, title: String, maxItems: Int): HomeRow? = withContext(Dispatchers.IO) {
+        val parts = NeonTokyoStarterPack.parseCombo(categoryId)
+            ?: return@withContext getCategoryRowPreview(categoryId, maxItems)
+        val rows = parts.map { part -> async { part to getCategoryRowPreview(part, maxItems) } }.awaitAll()
+        comboOffsets[categoryId] = ConcurrentHashMap(rows.associate { (part, row) -> part to (row?.items?.size ?: 0) })
+        val loaded = rows.mapNotNull { it.second }
+        if (loaded.isEmpty()) return@withContext null
+        HomeRow(
+            configId = categoryId,
+            title = title,
+            items = interleave(loaded.map { it.items }),
+            // The grid pages a combined card through fetchNextComboPage
+            catalogUrl = categoryId,
+            order = 999,
+            supportsSkip = loaded.any { it.supportsSkip }
+        )
+    }
+
+    /** Next page of every catalog behind a combined hub card, interleaved like the first one. */
+    suspend fun fetchNextComboPage(categoryId: String): List<MetaItem> = withContext(Dispatchers.IO) {
+        val parts = NeonTokyoStarterPack.parseCombo(categoryId) ?: return@withContext emptyList()
+        val offsets = comboOffsets.getOrPut(categoryId) { ConcurrentHashMap() }
+        val pages = parts.map { part ->
+            async {
+                val config = dao.getCatalogConfig(part) ?: return@async emptyList<MetaItem>()
+                val addon = dao.getAddon(config.transportUrl) ?: return@async emptyList<MetaItem>()
+                if (!addon.isEnabled || !catalogSupportsSkip(addon, config.catalogType, config.catalogId)) {
+                    return@async emptyList<MetaItem>()
+                }
+                val skip = offsets[part] ?: 0
+                val url = CatalogUrls.catalog(config.transportUrl, config.catalogType, config.catalogId, config.extraArgs)
+                fetchNextCatalogPage(url, skip).also { offsets[part] = skip + it.size }
+            }
+        }.awaitAll()
+        interleave(pages)
+    }
+
+    private fun interleave(lists: List<List<MetaItem>>): List<MetaItem> {
+        val seen = HashSet<String>()
+        val merged = ArrayList<MetaItem>()
+        for (i in 0 until (lists.maxOfOrNull { it.size } ?: 0)) {
+            for (list in lists) {
+                val item = list.getOrNull(i) ?: continue
+                if (seen.add("${item.type}:${item.id}")) merged += item
+            }
+        }
+        return merged
     }
 
     suspend fun getHubRows(screen: String = "home"): List<HubGroupRow> = withContext(Dispatchers.IO) {
@@ -380,11 +462,15 @@ class AddonRepository @Inject constructor(
             val uniqueId = "${transportUrl}/${catalog.type}/${catalog.id}"
             val isMovieCat = catalog.type == "movie"
             val isSeriesCat = catalog.type == "series"
+            // Search-only catalogs would just be empty rows on the dashboard
+            val browsable = !catalog.needsExtraToBrowse()
             CatalogConfigEntity(
                 uniqueId = uniqueId, transportUrl = transportUrl, addonName = manifest.name,
                 catalogType = catalog.type, catalogId = catalog.id,
                 catalogName = catalog.name, customTitle = null,
-                showInHome = home, showInMovies = movies && isMovieCat, showInSeries = series && isSeriesCat,
+                showInHome = home && browsable,
+                showInMovies = movies && isMovieCat && browsable,
+                showInSeries = series && isSeriesCat && browsable,
                 homeOrder = 999, moviesOrder = 999, seriesOrder = 999
             )
         }
@@ -484,11 +570,23 @@ class AddonRepository @Inject constructor(
             } catch (_: Exception) { /* try next */ }
         }
 
-        // Last resort: Cinemeta for standard types
-        try {
-            val url = "https://v3-cinemeta.strem.io/meta/$type/$id.json"
-            return@withContext withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta.sanitize()
-        } catch (_: Exception) { null }
+        // Last resort: Cinemeta for standard types. Catalogs sometimes file a series as a movie
+        // or the other way round, so an IMDb id also gets a try under the other type.
+        val cinemetaTypes = buildList {
+            add(type)
+            if (id.startsWith("tt")) when (type) {
+                "movie" -> add("series")
+                "series" -> add("movie")
+            }
+        }
+        for (cinemetaType in cinemetaTypes) {
+            try {
+                val url = "https://v3-cinemeta.strem.io/meta/$cinemetaType/$id.json"
+                val meta = withTimeout(CATALOG_TIMEOUT_MS) { api.getMeta(url) }.meta.sanitize()
+                if (meta != null) return@withContext meta
+            } catch (_: Exception) { /* try the other type */ }
+        }
+        null
     }
 
     private fun AddonEntity.supportsMetaType(type: String): Boolean {

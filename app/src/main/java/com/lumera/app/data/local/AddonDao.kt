@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.lumera.app.data.model.ActiveProfileEntity
 import com.lumera.app.data.model.AddonEntity
 import com.lumera.app.data.model.CatalogConfigEntity
 import com.lumera.app.data.model.HubRowEntity
@@ -18,6 +19,12 @@ import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import kotlinx.coroutines.flow.Flow
 import androidx.room.Delete
+
+/** Rows that belong to the profile that is watching, see [ActiveProfileEntity]. */
+private const val WATCHING = "profileId = (SELECT profileId FROM active_profile WHERE slot = 0)"
+
+/** History and lists made before profiles kept their own, until they are handed out at the next login. */
+const val UNASSIGNED_PROFILE = -1
 
 @Dao
 interface AddonDao {
@@ -76,41 +83,63 @@ interface AddonDao {
     @Query("DELETE FROM profiles WHERE id = :id")
     suspend fun deleteProfile(id: Int)
 
-    @Query("SELECT * FROM watch_history ORDER BY lastWatched DESC")
+    // ── Who is watching ──
+
+    @Query("SELECT profileId FROM active_profile WHERE slot = 0")
+    suspend fun getActiveProfileId(): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun setActiveProfile(row: ActiveProfileEntity)
+
+    @Query("DELETE FROM active_profile")
+    suspend fun clearActiveProfile()
+
+    // ── Watch history of the watching profile ──
+
+    @Query("SELECT * FROM watch_history WHERE $WATCHING ORDER BY lastWatched DESC")
     fun getWatchHistory(): Flow<List<WatchHistoryEntity>>
 
-    @Query("SELECT * FROM watch_history")
+    @Query("SELECT * FROM watch_history WHERE $WATCHING")
     suspend fun getAllWatchHistoryOnce(): List<WatchHistoryEntity>
 
+    /** Saves as they are, profileId included. Use [upsertHistory] to save for the watching profile. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertHistory(item: WatchHistoryEntity)
+    suspend fun insertHistoryRows(items: List<WatchHistoryEntity>)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertHistoryItems(items: List<WatchHistoryEntity>)
+    @Transaction
+    suspend fun upsertHistory(item: WatchHistoryEntity) {
+        upsertHistoryItems(listOf(item))
+    }
 
-    @Query("DELETE FROM watch_history")
+    @Transaction
+    suspend fun upsertHistoryItems(items: List<WatchHistoryEntity>) {
+        val watching = getActiveProfileId() ?: return
+        insertHistoryRows(items.map { it.copy(profileId = watching) })
+    }
+
+    @Query("DELETE FROM watch_history WHERE $WATCHING")
     suspend fun clearWatchHistory()
 
-    @Query("SELECT * FROM watch_history WHERE id = :id")
+    @Query("SELECT * FROM watch_history WHERE $WATCHING AND id = :id")
     suspend fun getHistoryItem(id: String): WatchHistoryEntity?
 
-    @Query("SELECT * FROM watch_history WHERE id LIKE :prefix || '%'")
+    @Query("SELECT * FROM watch_history WHERE $WATCHING AND id LIKE :prefix || '%'")
     suspend fun getHistoryItemsByPrefix(prefix: String): List<WatchHistoryEntity>
 
     @Query(
         "SELECT * FROM watch_history " +
-            "WHERE type = 'series' AND id LIKE :episodePrefix " +
+            "WHERE $WATCHING AND type = 'series' AND id LIKE :episodePrefix " +
             "ORDER BY lastWatched DESC LIMIT 1"
     )
     suspend fun getLatestSeriesEpisodeHistory(episodePrefix: String): WatchHistoryEntity?
 
-    @Query("DELETE FROM watch_history WHERE id = :id")
+    @Query("DELETE FROM watch_history WHERE $WATCHING AND id = :id")
     suspend fun deleteHistoryItem(id: String)
 
-    @Query("SELECT * FROM watch_history WHERE type = 'series' AND id LIKE :episodePrefix")
+    @Query("SELECT * FROM watch_history WHERE $WATCHING AND type = 'series' AND id LIKE :episodePrefix")
     suspend fun getSeriesEpisodeHistory(episodePrefix: String): List<WatchHistoryEntity>
 
-    @Query("DELETE FROM watch_history WHERE type = 'series' AND id LIKE :episodePrefix")
+    @Query("DELETE FROM watch_history WHERE $WATCHING AND type = 'series' AND id LIKE :episodePrefix")
     suspend fun deleteSeriesHistory(episodePrefix: String)
 
     @Query("SELECT * FROM themes")
@@ -205,94 +234,97 @@ interface AddonDao {
     @Update
     suspend fun updateHubRowItems(items: List<HubRowItemEntity>)
 
-    // ── Watchlist ──
+    // ── Watchlist of the watching profile ──
 
-    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    @Query("SELECT * FROM watchlist WHERE $WATCHING ORDER BY addedAt DESC")
     fun getWatchlist(): Flow<List<WatchlistEntity>>
 
-    @Query("SELECT * FROM watchlist WHERE type = :type ORDER BY addedAt DESC")
+    @Query("SELECT * FROM watchlist WHERE $WATCHING AND type = :type ORDER BY addedAt DESC")
     fun getWatchlistByType(type: String): Flow<List<WatchlistEntity>>
 
-    @Query("SELECT * FROM watchlist ORDER BY addedAt DESC")
+    @Query("SELECT * FROM watchlist WHERE $WATCHING ORDER BY addedAt DESC")
     suspend fun getWatchlistOnce(): List<WatchlistEntity>
 
-    @Query("SELECT * FROM watchlist WHERE id = :id")
+    @Query("SELECT * FROM watchlist WHERE $WATCHING AND id = :id")
     suspend fun getWatchlistItem(id: String): WatchlistEntity?
 
-    @Query("SELECT * FROM watch_history WHERE scrobbled = 1 AND watched = 0")
+    @Query("SELECT * FROM watch_history WHERE $WATCHING AND scrobbled = 1 AND watched = 0")
     suspend fun getScrobbledInProgressItems(): List<WatchHistoryEntity>
 
-    @Query("SELECT * FROM watch_history WHERE scrobbled = 1 AND watched = 1")
+    @Query("SELECT * FROM watch_history WHERE $WATCHING AND scrobbled = 1 AND watched = 1")
     suspend fun getScrobbledWatchedItems(): List<WatchHistoryEntity>
 
-    @Query("SELECT id FROM watch_history WHERE watched = 1")
+    @Query("SELECT id FROM watch_history WHERE $WATCHING AND watched = 1")
     fun getWatchedIds(): Flow<List<String>>
 
+    // Artwork is the same whoever watched it, so every profile's entry gets the new images
     @Query("UPDATE watch_history SET poster = :poster, background = :background, logo = :logo WHERE id = :id")
     suspend fun updateHistoryImages(id: String, poster: String?, background: String?, logo: String?)
 
-    // ── Series Next Up ──
+    // ── Series next up of the watching profile ──
 
+    /** Saves as they are, profileId included. Use [upsertSeriesNextUp] to save for the watching profile. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertSeriesNextUp(entry: SeriesNextUpEntity)
-
-    @Query("SELECT * FROM series_next_up WHERE isComplete = 0 ORDER BY updatedAt DESC")
-    fun getActiveSeriesNextUp(): Flow<List<SeriesNextUpEntity>>
-
-    @Query("SELECT * FROM series_next_up WHERE seriesId = :seriesId")
-    suspend fun getSeriesNextUp(seriesId: String): SeriesNextUpEntity?
-
-    @Query("DELETE FROM series_next_up WHERE seriesId = :seriesId")
-    suspend fun deleteSeriesNextUp(seriesId: String)
-
-    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE id = :id)")
-    suspend fun isInWatchlist(id: String): Boolean
-
-    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE id = :id)")
-    fun isInWatchlistFlow(id: String): Flow<Boolean>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun addToWatchlist(item: WatchlistEntity)
-
-    @Query("DELETE FROM watchlist WHERE id = :id")
-    suspend fun removeFromWatchlist(id: String)
+    suspend fun insertSeriesNextUpRows(entries: List<SeriesNextUpEntity>)
 
     @Transaction
-    suspend fun replaceRuntimeState(
-        addons: List<AddonEntity>,
-        catalogConfigs: List<CatalogConfigEntity>,
-        hubRows: List<HubRowEntity>,
-        hubRowItems: List<HubRowItemEntity>,
-        watchHistory: List<WatchHistoryEntity>
-    ) {
-        // Replace addon/catalog/hub state from snapshot
-        clearHubRowItems()
-        clearHubRows()
-        clearCatalogConfigs()
-        clearAddons()
+    suspend fun upsertSeriesNextUp(entry: SeriesNextUpEntity) {
+        val watching = getActiveProfileId() ?: return
+        insertSeriesNextUpRows(listOf(entry.copy(profileId = watching)))
+    }
 
-        if (addons.isNotEmpty()) insertAddons(addons)
-        if (catalogConfigs.isNotEmpty()) saveCatalogConfigs(catalogConfigs)
-        if (hubRows.isNotEmpty()) insertHubRows(hubRows)
-        if (hubRowItems.isNotEmpty()) insertHubRowItems(hubRowItems)
+    @Query("SELECT * FROM series_next_up WHERE $WATCHING AND isComplete = 0 ORDER BY updatedAt DESC")
+    fun getActiveSeriesNextUp(): Flow<List<SeriesNextUpEntity>>
 
-        // Merge watch history: keep whichever entry is newer (DB or snapshot).
-        // Prevents a stale snapshot from overwriting progress saved during playback
-        // (e.g., power failure before onStop snapshot could be written).
-        val existing = getAllWatchHistoryOnce().associateBy { it.id }
-        val snapshotMap = watchHistory.associateBy { it.id }
-        val allIds = existing.keys + snapshotMap.keys
-        val merged = allIds.mapNotNull { id ->
-            val db = existing[id]
-            val snap = snapshotMap[id]
-            when {
-                db == null -> snap
-                snap == null -> db
-                snap.lastWatched >= db.lastWatched -> snap
-                else -> db
-            }
-        }
-        clearWatchHistory()
-        if (merged.isNotEmpty()) upsertHistoryItems(merged)
+    @Query("SELECT * FROM series_next_up WHERE $WATCHING AND seriesId = :seriesId")
+    suspend fun getSeriesNextUp(seriesId: String): SeriesNextUpEntity?
+
+    @Query("DELETE FROM series_next_up WHERE $WATCHING AND seriesId = :seriesId")
+    suspend fun deleteSeriesNextUp(seriesId: String)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE $WATCHING AND id = :id)")
+    suspend fun isInWatchlist(id: String): Boolean
+
+    @Query("SELECT EXISTS(SELECT 1 FROM watchlist WHERE $WATCHING AND id = :id)")
+    fun isInWatchlistFlow(id: String): Flow<Boolean>
+
+    /** Saves as they are, profileId included. Use [addToWatchlist] to save for the watching profile. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWatchlistRows(items: List<WatchlistEntity>)
+
+    @Transaction
+    suspend fun addToWatchlist(item: WatchlistEntity) {
+        val watching = getActiveProfileId() ?: return
+        insertWatchlistRows(listOf(item.copy(profileId = watching)))
+    }
+
+    @Query("DELETE FROM watchlist WHERE $WATCHING AND id = :id")
+    suspend fun removeFromWatchlist(id: String)
+
+    // ── One profile's rows, for moving old data and deleting a profile ──
+
+    @Query("SELECT * FROM watch_history WHERE profileId = :profileId")
+    suspend fun getHistoryOf(profileId: Int): List<WatchHistoryEntity>
+
+    @Query("SELECT * FROM watchlist WHERE profileId = :profileId")
+    suspend fun getWatchlistOf(profileId: Int): List<WatchlistEntity>
+
+    @Query("SELECT * FROM series_next_up WHERE profileId = :profileId")
+    suspend fun getSeriesNextUpOf(profileId: Int): List<SeriesNextUpEntity>
+
+    @Query("DELETE FROM watch_history WHERE profileId = :profileId")
+    suspend fun deleteHistoryOf(profileId: Int)
+
+    @Query("DELETE FROM watchlist WHERE profileId = :profileId")
+    suspend fun deleteWatchlistOf(profileId: Int)
+
+    @Query("DELETE FROM series_next_up WHERE profileId = :profileId")
+    suspend fun deleteSeriesNextUpOf(profileId: Int)
+
+    @Transaction
+    suspend fun deletePersonalData(profileId: Int) {
+        deleteHistoryOf(profileId)
+        deleteWatchlistOf(profileId)
+        deleteSeriesNextUpOf(profileId)
     }
 }

@@ -1,6 +1,8 @@
 package com.lumera.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.ui.components.NeonText
+import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -53,11 +55,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.ui.components.LumeraCard
 import com.lumera.app.ui.utils.ImagePrefetcher
@@ -438,12 +440,9 @@ fun GridViewScreen(
                 Spacer(modifier = Modifier.width(10.dp))
                 
                 // Category title
-                Text(
+                NeonText(
                     text = title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
+                    style = NeonType.headline(28.sp, glow = MaterialTheme.colorScheme.primary)
                 )
             }
         }

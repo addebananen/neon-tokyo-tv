@@ -12,6 +12,9 @@
 # obfuscates third-party libraries.
 -keep class com.lumera.app.** { *; }
 
+# ─── Projectivy wallpaper provider (AIDL interface and its Parcelables) ───
+-keep class tv.projectivy.plugin.wallpaperprovider.api.** { *; }
+
 # ─── Gson ───
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken

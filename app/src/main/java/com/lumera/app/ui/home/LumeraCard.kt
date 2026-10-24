@@ -31,12 +31,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.Border
+import androidx.tv.material3.Glow
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.compose.material3.Text
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Scale
@@ -107,6 +110,10 @@ fun LumeraCard(
                     border = BorderStroke(2.dp, glowColor),
                     shape = focusedCardShape
                 )
+            ),
+            // Neon bloom around the focused card only, one shadow on screen at a time
+            glow = ClickableSurfaceDefaults.glow(
+                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = 12.dp)
             )
         ) {
             val context = LocalContext.current
@@ -125,15 +132,30 @@ fun LumeraCard(
             }
             
             Box(modifier = Modifier.fillMaxSize()) {
+                // Neon title card until the poster arrives, and for titles that have no poster.
+                // A poster already in memory shows at once, so its card skips the art.
+                var posterLoaded by remember(posterUrl) {
+                    mutableStateOf(posterUrl != null && context.imageLoader.memoryCache?.get(MemoryCache.Key(posterUrl)) != null)
+                }
+                if (!posterLoaded) {
+                    NeonCardArt(
+                        title = title,
+                        focused = isFocused,
+                        glow = false,
+                        fontSize = 15,
+                        maxLines = 4,
+                        modifier = Modifier.clip(cardShape)
+                    )
+                }
                 // AsyncImage is lighter than SubcomposeAsyncImage - no subcomposition overhead
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
+                    onSuccess = { posterLoaded = true },
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(cardShape)
-                        .background(MaterialTheme.colorScheme.surface)
                 )
 
                 // Watched badge — corner triangle with checkmark

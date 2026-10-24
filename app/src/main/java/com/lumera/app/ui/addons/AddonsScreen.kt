@@ -3,6 +3,7 @@ package com.lumera.app.ui.addons
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,9 +36,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import com.lumera.app.ui.components.neonFocusRing
+import com.lumera.app.ui.theme.KanitFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -461,8 +465,8 @@ fun VoidAddonItem(
                     } else false
                 } else Modifier
             )
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
             .padding(16.dp)
     ) {
@@ -546,13 +550,20 @@ fun VoidButton(
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     val scale by animateFloatAsState(if (isFocused && enabled) 1.05f else 1f)
+    // In focus the button lights up like a neon tube
+    val lit by animateFloatAsState(if (isFocused && enabled) 1f else 0f, tween(if (isFocused) 140 else 240), label = "ButtonFocus")
 
-    val activeColor = if (isDestructive) Color.Red else MaterialTheme.colorScheme.primary
+    // A neon red for the buttons that delete, which sits better on the violet than a pure red
+    val activeColor = if (isDestructive) Color(0xFFFF4F64) else MaterialTheme.colorScheme.primary
 
-    val bgColor = if (!enabled) Color.White.copy(0.05f) else Color.White.copy(0.08f)
+    val bgColor = when {
+        !enabled -> Color.White.copy(0.05f)
+        isFocused -> activeColor.copy(alpha = 0.18f)
+        else -> Color.White.copy(0.08f)
+    }
     val textColor = when {
         !enabled -> Color.White.copy(0.3f)
-        isFocused -> activeColor
+        isFocused -> Color.White
         isDestructive || isPrimary -> activeColor.copy(alpha = 0.95f)
         else -> Color.White
     }
@@ -567,18 +578,24 @@ fun VoidButton(
         modifier = modifier
             .height(50.dp)
             .scale(scale)
+            .neonFocusRing(activeColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(if (enabled) Modifier.focusable(interactionSource = interactionSource) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text.uppercase(),
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-            color = textColor
+            // The house typeface, as on the titles; Kanit has no bold, so medium rather than a
+            // bold the system would have to fake
+            style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 1.sp),
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 10.dp)
         )
     }
 }
@@ -604,8 +621,8 @@ fun VoidToggleRow(
             .height(50.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
-            .clickable(interactionSource = interactionSource, indication = null) { onToggle() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onToggle() }
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 16.dp)
     ) {

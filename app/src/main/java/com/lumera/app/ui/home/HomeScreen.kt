@@ -1,6 +1,11 @@
 package com.lumera.app.ui.home
 
 import androidx.activity.compose.BackHandler
+import com.lumera.app.data.profile.NeonTokyoStarterPack
+import com.lumera.app.ui.components.NeonText
+import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.NeonMetaDot
+import com.lumera.app.ui.components.Synopsis
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
@@ -46,8 +51,10 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
+import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.NeonGlowRoom
+import com.lumera.app.ui.components.backdropRequest
+import androidx.compose.ui.geometry.Offset
 import com.lumera.app.R
 import com.lumera.app.data.model.ProfileEntity
 import com.lumera.app.data.model.WatchHistoryEntity
@@ -251,6 +258,8 @@ fun CinematicLayout(
 ) {
     var instantFocusItem by remember { mutableStateOf<MetaItem?>(null) }
     var displayedItem by remember { mutableStateOf<MetaItem?>(null) }
+    // Folder card in focus: the hero shows the folder instead of a title
+    var focusedHub by remember { mutableStateOf<FocusedHub?>(null) }
     var hasRequestedFocus by remember { mutableStateOf(false) }
     val previewUpdateGate = remember { PreviewUpdateGate() }
 
@@ -293,7 +302,7 @@ fun CinematicLayout(
     }
 
     LaunchedEffect(state.rows, state.history, restoredPreviewItem, effectiveLastFocusedKey) {
-        if (instantFocusItem == null) {
+        if (instantFocusItem == null && focusedHub == null) {
             val first = when {
                 restoredPreviewItem != null -> restoredPreviewItem
                 // Returning from details with a saved focus key: avoid showing the wrong
@@ -359,6 +368,7 @@ fun CinematicLayout(
     }
 
     fun updatePreviewItem(item: MetaItem?) {
+        focusedHub = null
         if (item == null) return
         onPreviewItemVisible(item)
         val now = System.currentTimeMillis()
@@ -379,6 +389,15 @@ fun CinematicLayout(
             renderedPreviewItem
         } else null
         CinematicBackground(bgItem)
+        Crossfade(targetState = focusedHub?.let { it.title to it.serviceCode }, animationSpec = tween(400), label = "HubGlow") { hub ->
+            val serviceCode = hub?.second
+            when {
+                hub == null -> Unit
+                // A streaming service shows its own scene, other folders a glow in their colour
+                serviceCode != null -> ServiceHeroArt(serviceCode)
+                else -> HubHeroGlow(hub.first)
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize().zIndex(2f)) {
             // INFO SECTION
@@ -389,15 +408,17 @@ fun CinematicLayout(
                     .padding(start = startPadding, top = infoTopPadding),
                 contentAlignment = Alignment.TopStart
             ) {
+                // The fades get room around the text, so a glowing title isn't clipped while they run
                 AnimatedContent(
                     targetState = renderedPreviewItem,
                     transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
-                    label = "Info"
+                    label = "Info",
+                    modifier = Modifier.offset(x = -NeonGlowRoom)
                 ) { item ->
                     if (item != null) {
                         // Hide info content while waiting for TMDB enrichment
                         val itemReady = !state.tmdbEnabled || state.tmdbEnrichedIds.contains("${item.type}:${item.id}")
-                        Column(modifier = Modifier.alpha(if (itemReady) 1f else 0f)) {
+                        Column(modifier = Modifier.padding(horizontal = NeonGlowRoom).alpha(if (itemReady) 1f else 0f)) {
                             Box(
                                 modifier = Modifier
                                     .width(700.dp)
@@ -405,22 +426,16 @@ fun CinematicLayout(
                                 contentAlignment = Alignment.BottomStart
                             ) {
                                 if (!item.logo.isNullOrEmpty()) {
-                                    SubcomposeAsyncImage(
-                                        model = item.logo,
-                                        contentDescription = item.name,
-                                        contentScale = ContentScale.Fit,
-                                        alignment = Alignment.BottomStart,
+                                    TitleLogo(
+                                        url = item.logo.orEmpty(),
+                                        name = item.name,
                                         modifier = Modifier
                                             .widthIn(max = 500.dp)
                                             .heightIn(max = 90.dp),
-                                        error = {
-                                            Text(
+                                        fallback = {
+                                            NeonText(
                                                 text = item.name,
-                                                style = MaterialTheme.typography.displaySmall.copy(
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    fontSize = 32.sp,
-                                                    lineHeight = 1.05.em
-                                                ),
+                                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                                 color = Color.White,
                                                 maxLines = 2,
                                                 softWrap = true,
@@ -430,13 +445,9 @@ fun CinematicLayout(
                                         }
                                     )
                                 } else {
-                                    Text(
+                                    NeonText(
                                         text = item.name,
-                                        style = MaterialTheme.typography.displaySmall.copy(
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 32.sp,
-                                            lineHeight = 1.05.em
-                                        ),
+                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                         color = Color.White,
                                         maxLines = 2,
                                         softWrap = true,
@@ -448,16 +459,29 @@ fun CinematicLayout(
                             Spacer(modifier = Modifier.height(10.dp))
                             HomeMetaStrip(item = item)
                             Spacer(modifier = Modifier.height(10.dp))
-                            Text(
+                            Synopsis(
                                 text = item.description ?: "",
                                 maxLines = if (isTopNav) 3 else 4,
-                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, letterSpacing = 0.sp, lineHeight = 1.2.em),
                                 color = Color.White.copy(0.85f),
-                                textAlign = TextAlign.Start,
                                 modifier = Modifier.width(450.dp)
                             )
                         }
+                    }
+                }
+                AnimatedContent(
+                    targetState = focusedHub,
+                    transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
+                    label = "HubInfo",
+                    modifier = Modifier.offset(x = -NeonGlowRoom)
+                ) { hub ->
+                    if (hub != null) {
+                        HubHero(
+                            title = hub.title,
+                            rowTitle = hub.rowTitle,
+                            rowId = hub.rowId,
+                            modifier = Modifier.padding(horizontal = NeonGlowRoom)
+                        )
                     }
                 }
             }
@@ -595,8 +619,15 @@ fun CinematicLayout(
                                         hubGroup = item,
                                         startPadding = startPadding,
                                         onHubClick = onHubClick,
-                                        onFocused = { _, focusKey ->
+                                        onFocused = { hubItem, focusKey ->
                                             instantFocusItem = null
+                                            displayedItem = null
+                                            focusedHub = FocusedHub(
+                                                title = hubItem.title,
+                                                rowTitle = item.title,
+                                                rowId = item.id,
+                                                serviceCode = NeonTokyoStarterPack.serviceCode(hubItem.categoryId, hubItem.title)
+                                            )
                                             wrappedOnFocusChange("hub_$focusKey")
                                         },
                                         entryRequester = entryRequester,
@@ -685,6 +716,9 @@ fun CinematicLayout(
         }
     }
 }
+
+/** A folder card in focus, for the hero: its title, its row's title and id, and its service if it is one. */
+private data class FocusedHub(val title: String, val rowTitle: String, val rowId: String, val serviceCode: String?)
 
 /**
  * Redirect the saved continue-watching focus key when the row has changed since navigation:
@@ -1253,25 +1287,59 @@ private fun PersistLazyListPosition(
 fun CinematicBackground(item: MetaItem?) {
     // Use the theme's actual background color
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-    
-    // Only fade LEFT and BOTTOM edges - top/right are at screen edge
+
+    Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
+        Box(modifier = Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.65f)) {
+            Crossfade(
+                targetState = item, 
+                animationSpec = tween(700), 
+                label = "HeroBg"
+            ) { currentItem ->
+                if (currentItem != null) {
+                    val context = LocalContext.current
+                    val backdrop = remember(currentItem.background, currentItem.poster) {
+                        backdropRequest(context, currentItem.background, currentItem.poster)
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = backdrop?.request,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .alpha(if (backdrop?.wash == true) 0.7f else 1f)
+                        )
+                        Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
+                        com.lumera.app.ui.components.NoiseOverlay()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The fades over a hero backdrop, which sits at the top right of the screen. Only the left
+ * and bottom edges fade, into the page and the rows; the left fade reaches past the end of
+ * the description, and a soft shade sits where the title and text are, so lettering in a
+ * backdrop stays behind the title.
+ */
+internal fun Modifier.backdropFades(backgroundColor: Color): Modifier = drawWithCache {
     val leftFade = Brush.horizontalGradient(
         colorStops = arrayOf(
             0.0f to backgroundColor,
-            0.1f to backgroundColor.copy(0.95f),
-            0.2f to backgroundColor.copy(0.85f),
-            0.3f to backgroundColor.copy(0.72f),
-            0.4f to backgroundColor.copy(0.55f),
-            0.55f to backgroundColor.copy(0.35f),
-            0.7f to backgroundColor.copy(0.18f),
-            0.85f to backgroundColor.copy(0.07f),
+            0.1f to backgroundColor.copy(0.96f),
+            0.25f to backgroundColor.copy(0.88f),
+            0.4f to backgroundColor.copy(0.74f),
+            0.55f to backgroundColor.copy(0.54f),
+            0.7f to backgroundColor.copy(0.32f),
+            0.85f to backgroundColor.copy(0.12f),
             1.0f to Color.Transparent
         ),
         startX = 0f,
-        endX = 500f
+        endX = size.width * 0.7f
     )
-    
-    // Bottom fade: blend into the rows area
     val bottomFade = Brush.verticalGradient(
         colorStops = arrayOf(
             0.0f to Color.Transparent,
@@ -1286,51 +1354,22 @@ fun CinematicBackground(item: MetaItem?) {
             1.0f to backgroundColor
         )
     )
-
-    Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
-        Box(modifier = Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.65f)) {
-            Crossfade(
-                targetState = item, 
-                animationSpec = tween(700), 
-                label = "HeroBg"
-            ) { currentItem ->
-                if (currentItem != null) {
-                    val image = currentItem.background ?: currentItem.poster
-                    val context = LocalContext.current
-                    val imageRequest = remember(image) {
-                        ImageRequest.Builder(context)
-                            .data(image)
-                            .crossfade(false)
-                            .size(1920, 1080)
-                            .build()
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        AsyncImage(
-                            model = imageRequest,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        // Left and bottom edge fades only
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .drawWithCache {
-                                    onDrawWithContent {
-                                        drawRect(brush = leftFade)
-                                        drawRect(brush = bottomFade)
-                                    }
-                                }
-                        )
-                        com.lumera.app.ui.components.NoiseOverlay()
-                    }
-                }
-            }
-        }
+    val textShade = Brush.radialGradient(
+        colorStops = arrayOf(
+            0.0f to backgroundColor.copy(0.7f),
+            0.55f to backgroundColor.copy(0.34f),
+            1.0f to Color.Transparent
+        ),
+        center = Offset(0f, size.height * 0.4f),
+        radius = size.width * 0.6f
+    )
+    onDrawWithContent {
+        drawContent()
+        drawRect(brush = leftFade)
+        drawRect(brush = bottomFade)
+        drawRect(brush = textShade)
     }
 }
-
 
 @Composable
 fun Badge(text: String, color: Color, textColor: Color) {
@@ -1343,8 +1382,8 @@ private fun HomeMetaStrip(item: MetaItem) {
     val genreLabel = item.genres
         ?.firstOrNull()
         ?.replaceFirstChar { it.uppercase() }
-        ?: "Unknown"
-    val yearLabel = extractHomePrimaryYear(item.releaseInfo)
+    // Catalogs that send no genre or year just leave those out instead of showing placeholders
+    val yearLabel = extractHomePrimaryYear(item.releaseInfo).takeIf { it != "----" }
     val valueColor = Color.White.copy(alpha = 0.92f)
     val textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
 
@@ -1353,10 +1392,14 @@ private fun HomeMetaStrip(item: MetaItem) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(text = typeLabel, style = textStyle, color = valueColor)
-        HomeMetaDot()
-        Text(text = genreLabel, style = textStyle, color = valueColor)
-        HomeMetaDot()
-        Text(text = yearLabel, style = textStyle, color = valueColor)
+        genreLabel?.let {
+            HomeMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
+        yearLabel?.let {
+            HomeMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
 
         item.runtime?.filter { it.isDigit() }?.toIntOrNull()?.let { mins ->
             HomeMetaDot()
@@ -1376,11 +1419,7 @@ private fun HomeMetaStrip(item: MetaItem) {
 
 @Composable
 private fun HomeMetaDot() {
-    Text(
-        text = ".",
-        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-        color = Color.White.copy(alpha = 0.55f)
-    )
+    NeonMetaDot(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
 }
 
 @Composable

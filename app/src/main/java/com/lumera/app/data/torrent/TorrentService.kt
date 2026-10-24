@@ -63,7 +63,7 @@ class TorrentService : Service() {
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Lumera Streaming")
+            .setContentTitle("Neon Tokyo")
             .setContentText("Starting torrent engine...")
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .build()
@@ -212,7 +212,7 @@ class TorrentService : Service() {
     private fun updateNotification(text: String) {
         val channelId = "torrent_channel"
         val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Lumera Streaming")
+            .setContentTitle("Neon Tokyo")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .build()

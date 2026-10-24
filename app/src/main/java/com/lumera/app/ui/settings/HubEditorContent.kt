@@ -210,8 +210,8 @@ private fun RowScope.HubShapeItem(
             .clip(RoundedCornerShape(8.dp)) // Match VoidButton radius
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 4.dp), // Minimal padding to prevent text touching edges
         contentAlignment = Alignment.Center

@@ -1,6 +1,10 @@
 package com.lumera.app.ui.home
 
 import androidx.compose.animation.AnimatedContent
+import com.lumera.app.ui.components.NeonText
+import com.lumera.app.ui.components.NeonType
+import com.lumera.app.ui.components.NeonMetaDot
+import com.lumera.app.ui.components.Synopsis
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -39,8 +43,9 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
+import com.lumera.app.ui.components.TitleLogo
+import com.lumera.app.ui.components.NeonGlowRoom
+import com.lumera.app.ui.components.backdropRequest
 import com.lumera.app.R
 import com.lumera.app.data.model.stremio.MetaItem
 import kotlinx.coroutines.delay
@@ -222,26 +227,21 @@ fun HeroCarousel(
             label = "hero_bg"
         ) { item ->
             val bgReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
-            val imageUrl = item.background ?: item.poster
-            if (imageUrl != null && bgReady) {
-                val context = LocalContext.current
+            val context = LocalContext.current
+            val backdrop = remember(item.background, item.poster) {
+                backdropRequest(context, item.background, item.poster)
+            }
+            if (backdrop != null && bgReady) {
                 val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-                val request = remember(imageUrl) {
-                    ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .crossfade(false)
-                        .size(1920, 1080)
-                        .allowHardware(true)
-                        .build()
-                }
                 Box(modifier = Modifier.fillMaxSize()) {
                     AsyncImage(
-                        model = request,
+                        model = backdrop.request,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         alignment = Alignment.TopCenter,
                         modifier = Modifier
                             .fillMaxSize()
+                            .alpha(if (backdrop.wash) 0.7f else 1f)
                             .drawWithCache {
                                 val bottomGradient = Brush.verticalGradient(
                                     colorStops = arrayOf(
@@ -274,15 +274,17 @@ fun HeroCarousel(
                 .padding(start = startPadding, bottom = 40.dp, end = 40.dp),
             verticalArrangement = Arrangement.Bottom
         ) {
+            // The fade gets room around the text, so a glowing title isn't clipped while it runs
             AnimatedContent(
                 targetState = currentItem,
                 transitionSpec = { fadeIn(tween(400)).togetherWith(fadeOut(tween(200))) },
                 contentKey = { "${it.type}:${it.id}" },
-                label = "hero_info"
+                label = "hero_info",
+                modifier = Modifier.offset(x = -NeonGlowRoom)
             ) { item ->
                 // Hide info content while waiting for TMDB enrichment to prevent addon data flash
                 val itemReady = !tmdbEnabled || tmdbEnrichedIds.contains("${item.type}:${item.id}")
-                Column(modifier = Modifier.alpha(if (itemReady) 1f else 0f)) {
+                Column(modifier = Modifier.padding(horizontal = NeonGlowRoom).alpha(if (itemReady) 1f else 0f)) {
                     Box(
                         modifier = Modifier
                             .width(600.dp)
@@ -290,21 +292,16 @@ fun HeroCarousel(
                         contentAlignment = Alignment.BottomStart
                     ) {
                         if (!item.logo.isNullOrEmpty()) {
-                            SubcomposeAsyncImage(
-                                model = item.logo,
-                                contentDescription = item.name,
-                                contentScale = ContentScale.Fit,
-                                alignment = Alignment.BottomStart,
+                            TitleLogo(
+                                url = item.logo.orEmpty(),
+                                name = item.name,
                                 modifier = Modifier
                                     .widthIn(max = 400.dp)
                                     .heightIn(max = 70.dp),
-                                error = {
-                                    Text(
+                                fallback = {
+                                    NeonText(
                                         text = item.name,
-                                        style = MaterialTheme.typography.displaySmall.copy(
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 32.sp
-                                        ),
+                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                         color = Color.White,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -313,12 +310,9 @@ fun HeroCarousel(
                                 }
                             )
                         } else {
-                            Text(
+                            NeonText(
                                 text = item.name,
-                                style = MaterialTheme.typography.displaySmall.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 32.sp
-                                ),
+                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -332,20 +326,19 @@ fun HeroCarousel(
 
                     if (item.description != null) {
                         Spacer(Modifier.height(10.dp))
-                        Text(
+                        // Three lines fill the fixed height that keeps the layout from shifting
+                        Synopsis(
                             text = item.description!!,
-                            maxLines = 5,
-                            overflow = TextOverflow.Ellipsis,
+                            maxLines = 3,
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontSize = 14.sp,
                                 letterSpacing = 0.sp,
                                 lineHeight = 1.3.em
                             ),
                             color = Color.White.copy(0.75f),
-                            textAlign = TextAlign.Start,
                             modifier = Modifier
                                 .width(500.dp)
-                                .height(60.dp) // Fixed height to prevent layout shift
+                                .height(60.dp)
                         )
                     }
                 }
@@ -386,8 +379,8 @@ private fun HeroMetaStrip(item: MetaItem) {
     val genreLabel = item.genres
         ?.firstOrNull()
         ?.replaceFirstChar { it.uppercase() }
-        ?: "Unknown"
-    val yearLabel = extractHeroPrimaryYear(item.releaseInfo)
+    // Catalogs that send no genre or year just leave those out instead of showing placeholders
+    val yearLabel = extractHeroPrimaryYear(item.releaseInfo).takeIf { it != "----" }
     val valueColor = Color.White.copy(alpha = 0.92f)
     val textStyle = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
 
@@ -396,10 +389,14 @@ private fun HeroMetaStrip(item: MetaItem) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(text = typeLabel, style = textStyle, color = valueColor)
-        HeroMetaDot()
-        Text(text = genreLabel, style = textStyle, color = valueColor)
-        HeroMetaDot()
-        Text(text = yearLabel, style = textStyle, color = valueColor)
+        genreLabel?.let {
+            HeroMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
+        yearLabel?.let {
+            HeroMetaDot()
+            Text(text = it, style = textStyle, color = valueColor)
+        }
 
         item.runtime?.filter { it.isDigit() }?.toIntOrNull()?.let { mins ->
             HeroMetaDot()
@@ -419,11 +416,7 @@ private fun HeroMetaStrip(item: MetaItem) {
 
 @Composable
 private fun HeroMetaDot() {
-    Text(
-        text = ".",
-        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-        color = Color.White.copy(alpha = 0.55f)
-    )
+    NeonMetaDot(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f))
 }
 
 @Composable

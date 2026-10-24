@@ -310,10 +310,48 @@ class ExoPlayerBackend(
             }
             _uiState.update {
                 it.copy(
-                    errorMessage = error.errorCodeName.ifBlank { error.message ?: "Playback error" },
+                    errorMessage = describePlaybackError(error),
                     isBuffering = false
                 )
             }
+        }
+    }
+
+    /** What went wrong, in words for the sofa instead of ExoPlayer's code name. */
+    private fun describePlaybackError(error: PlaybackException): String {
+        val httpCode = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+        return when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> when {
+                httpCode == 401 || httpCode == 403 -> "This source turned the player away. Its link may have expired, try another source."
+                httpCode == 404 || httpCode == 410 -> "This source's file is gone. Try another source."
+                httpCode != null && httpCode >= 500 -> "This source's server is having trouble. Try another source."
+                else -> "This source answered with an error${httpCode?.let { " ($it)" }.orEmpty()}. Try another source."
+            }
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                "This source can't be reached. Check the TV's connection or try another source."
+            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE ->
+                "This source sent something that isn't a video. Try another source."
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                "The video file wasn't found. Try another source."
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ->
+                "The TV can't play this video's format. A 1080p source without HDR or Dolby Vision usually works."
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+            PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
+                "This file is damaged or packed in a way the player can't read. Try another source."
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED ->
+                "The sound wouldn't start. Try another audio track or source."
+            in 6000..6999 -> "This video is copy protected and can't be played here."
+            else -> "Playback stopped (" +
+                error.errorCodeName.removePrefix("ERROR_CODE_").lowercase(Locale.US).replace('_', ' ') +
+                "). Try another source."
         }
     }
 
