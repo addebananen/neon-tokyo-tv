@@ -711,7 +711,7 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-for style in google_tv nature anime clean city faith car car_night lofi cottage; do
+for style in google_tv nature anime clean city faith car car_night lofi cottage naturecore; do
   adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style "$style" >/dev/null 2>&1
   sleep 7
   shot "style-$style"

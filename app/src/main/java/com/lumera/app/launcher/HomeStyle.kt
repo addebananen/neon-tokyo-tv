@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -250,6 +250,22 @@ enum class HomeStyle(
         drift = true,
         driftX = 0.5f,
         driftY = 0.35f
+    ),
+    Naturecore(
+        "naturecore", "Naturecore", "An old forest of ferns and moss, the sun coming through the trees",
+        R.drawable.home_style_naturecore, Ambience.Forest,
+        HomeLook(
+            accent = Color(0xFFF2C66D), accent2 = Color(0xFFB9D98A), text = Color(0xFFFBF6E6), dim = Color(0xFFC7C9A8),
+            pane = Color(0xB30E1A0E), pill = Color(0x990E1A0E), pillFocused = Color(0xCC24361C),
+            tileTop = Color(0xD91C2A16), tileBottom = Color(0xD90A1208),
+            font = CormorantFamily, weight = FontWeight.SemiBold, italic = false,
+            clockSize = 76.sp, clockColor = Color(0xFFFFF8E6), clockGlow = Color(0x99F2C66D), clockBlur = 20f,
+            shade = Color(0x88081006), corner = 14.dp, glow = 12.dp, toward = Color(0xFFE2D08A), pull = 0.35f,
+            letterSpacing = 1.5.sp
+        ),
+        drift = true,
+        driftX = 0.45f,
+        driftY = 0.38f
     );
 
     companion object {

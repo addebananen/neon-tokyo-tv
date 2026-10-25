@@ -61,7 +61,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow -> 24
+        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain -> 30
     }
     val time = rememberAmbientTime(fps)
@@ -88,6 +88,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.NightRain -> nightRain(t)
                     Ambience.LoFi -> loFi(t)
                     Ambience.Meadow -> meadow(t)
+                    Ambience.Forest -> forest(t)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -638,5 +639,60 @@ private fun DrawScope.meadow(t: Float) {
             quadraticTo(c.x + span * 0.4f, c.y - span * 0.32f, c.x + span, c.y - flap * span * 0.4f)
         }
         drawPath(wing, Color(0xFF4E555E), alpha = 0.8f * sin(q * PI.toFloat()).pow(0.3f), style = Stroke(width = unit * 1.6f, cap = StrokeCap.Round))
+    }
+}
+
+/**
+ * Naturecore, a photo of an old forest of ferns with the sun low between the trunks: shafts of
+ * light turn and breathe out of the sun, dust floats in them, the sun itself flares softly and a
+ * leaf comes down now and then.
+ */
+private fun DrawScope.forest(t: Float) {
+    val w = size.width
+    val unit = 1.dp.toPx()
+    val sun = at(0.451f, 0.378f)
+    val reach = w * 0.9f
+    for (i in 0 until 14) {
+        val angle = (i * 25.7f + 4f * sin(t * 0.13f + i * 1.9f)) * (PI.toFloat() / 180f)
+        // Keep the shafts off the clock in the top left corner
+        val towardClock = (cos(angle) < -0.4f && sin(angle) < -0.2f)
+        val spread = (1.2f + 2f * rnd(i, 1)) * (PI.toFloat() / 180f)
+        val strength = (0.07f + 0.06f * sin(t * (0.2f + 0.25f * rnd(i, 2)) + i * 2.3f)) * (if (towardClock) 0.3f else 1f)
+        val ray = Path().apply {
+            moveTo(sun.x, sun.y)
+            lineTo(sun.x + reach * cos(angle - spread), sun.y + reach * sin(angle - spread))
+            lineTo(sun.x + reach * cos(angle + spread), sun.y + reach * sin(angle + spread))
+            close()
+        }
+        drawPath(ray, Brush.radialGradient(0f to Color(0xFFFFE7A8).copy(alpha = strength), 1f to Color.Transparent, center = sun, radius = reach), blendMode = BlendMode.Plus)
+    }
+    val flare = 0.5f + 0.5f * sin(t * 0.8f)
+    softLight(sun, w * 0.06f, Color(0xFFFFF4D2), 0.25f + 0.15f * flare)
+    // Ghosts of the sun across the lens
+    listOf(0.6f to 0.018f, 1.25f to 0.03f, 1.7f to 0.012f).forEachIndexed { i, (k, r) ->
+        val c = Offset(sun.x + (w * 0.5f - sun.x) * k, sun.y + (size.height * 0.5f - sun.y) * k)
+        softLight(c, w * r, if (i == 1) Color(0xFFB8F0C8) else Color(0xFFFFE1A0), 0.1f * flare)
+    }
+    // Dust in the light, brighter the nearer it floats to the sun
+    for (i in 0 until 40) {
+        val x = fract(rnd(i, 3) + t * 0.004f * (rnd(i, 4) - 0.5f)) + 0.01f * sin(t * 0.5f + i)
+        val y = fract(rnd(i, 5) - t * (0.004f + 0.004f * rnd(i, 6))) * 0.7f + 0.1f
+        val c = at(x, y)
+        val near = (1f - (c - sun).getDistance() / (w * 0.45f)).coerceIn(0f, 1f)
+        if (near <= 0.02f) continue
+        val twinkle = 0.6f + 0.4f * sin(t * (1.5f + rnd(i, 7)) + i)
+        drawCircle(Color(0xFFFFF3CF), radius = unit * (0.9f + 1.4f * rnd(i, 8)), center = c, alpha = 0.7f * near * twinkle, blendMode = BlendMode.Plus)
+    }
+    // Leaves coming down, turning as they fall
+    for (i in 0 until 5) {
+        val p = fract(rnd(i, 9) + t * (0.03f + 0.02f * rnd(i, 10)))
+        val c = at(0.1f + 0.85f * rnd(i, 11) + 0.04f * sin(p * 9f + i), -0.05f + p * 1.1f)
+        val turn = sin(t * 2.4f + i * 1.7f)
+        val s = unit * (4f + 2f * rnd(i, 12))
+        rotate(degrees = 40f * turn + 30f * i, pivot = c) {
+            scale(scaleX = 0.25f + 0.75f * abs(turn), scaleY = 1f, pivot = c) {
+                drawOval(Color(0xFFC9B24E), topLeft = c - Offset(s * 0.5f, s), size = Size(s, s * 2f), alpha = 0.8f)
+            }
+        }
     }
 }
