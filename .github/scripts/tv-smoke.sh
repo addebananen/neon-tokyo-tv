@@ -732,13 +732,14 @@ for style in google_tv nature anime clean city faith car car_night lofi cottage 
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in Neon|Search|Inputs|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    case "$label" in N|Neon|Search|Inputs|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
     for _ in 1 2 3; do
-      [ "$label" = "Neon" ] && break
+      # The pill reads as its face's letter or the profile's name
+      case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
       label=$(focused_label)
     done
-    [ "$label" = "Neon" ] || fail "Left along the pills in the $style style ends on $label, not the profile pill"
+    case "$label" in N|Neon) ;; *) fail "Left along the pills in the $style style ends on $label, not the profile pill" ;; esac
     key DPAD_CENTER; sleep 2
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
