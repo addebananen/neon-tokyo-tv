@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -333,6 +333,19 @@ enum class HomeStyle(
         drift = true,
         driftX = 0.5f,
         driftY = 0.4f
+    ),
+    Vaporwave(
+        "vaporwave", "Vaporwave", "A striped sun setting over wireframe mountains and a grid that never ends",
+        R.drawable.home_style_vaporwave, Ambience.Vapor,
+        HomeLook(
+            accent = Color(0xFF5CF3FF), accent2 = Color(0xFFFF71CE), text = Color(0xFFFFFFFF), dim = Color(0xFFE0B8F0),
+            pane = Color(0xCC2A0B4A), pill = Color(0x992A0B4A), pillFocused = Color(0xE0571A8A),
+            tileTop = Color(0xD03C1468), tileBottom = Color(0xD0160530),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 66.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xCCFF71CE), clockBlur = 16f,
+            shade = null, corner = 0.dp, glow = 16.dp, toward = Color(0xFFFF9BE0), pull = 0.35f,
+            letterSpacing = 6.sp, glowingText = true
+        )
     );
 
     companion object {

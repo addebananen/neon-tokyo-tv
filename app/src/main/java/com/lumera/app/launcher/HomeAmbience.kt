@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -63,7 +66,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
         Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom -> 24
-        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos -> 30
+        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor -> 30
     }
     val time = rememberAmbientTime(fps)
     val context = LocalContext.current
@@ -94,6 +97,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Bubbles -> bubbles(t)
                     Ambience.Library -> library(t, lightImage)
                     Ambience.Sunroom -> sunroom(t, lightImage)
+                    Ambience.Vapor -> vapor(t)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -877,4 +881,71 @@ private fun DrawScope.sunroom(t: Float, light: ImageBitmap?) {
         val twinkle = 0.5f + 0.5f * sin(t * (0.8f + rnd(i, 5)) + i * 2f)
         drawCircle(Color(0xFFFFF4E0), radius = unit * (0.8f + rnd(i, 6)), center = at(x, y), alpha = 0.6f * twinkle)
     }
+}
+
+/** The vaporwave sky from top to horizon, as painted, so the sun's stripes cut it cleanly. */
+private val VaporSky = listOf(0f to Color(0xFF1B0B3A), 0.3f to Color(0xFF4B1670), 0.45f to Color(0xFFC2387F), 0.5f to Color(0xFFFF7A8A))
+
+private fun vaporSkyAt(y: Float): Color {
+    for (i in 1 until VaporSky.size) {
+        val (y1, c1) = VaporSky[i]
+        val (y0, c0) = VaporSky[i - 1]
+        if (y <= y1) return lerp(c0, c1, ((y - y0) / (y1 - y0)).coerceIn(0f, 1f))
+    }
+    return VaporSky.last().second
+}
+
+/**
+ * Vaporwave: the stripes run down through the setting sun, the grid floor rolls towards you
+ * forever, a tracking band drifts down the picture like an old tape and the stars blink.
+ */
+private fun DrawScope.vapor(t: Float) {
+    val w = size.width
+    val h = size.height
+    val unit = 1.dp.toPx()
+    val horizon = h * 0.5f
+    val sun = at(0.6615f, 0.3056f)
+    val r = h * 0.2176f
+    softLight(sun, r * 1.9f, Color(0xFFFF5FA8), 0.1f + 0.06f * sin(t * 0.8f))
+    val disc = Path().apply { addOval(androidx.compose.ui.geometry.Rect(sun, r)) }
+    clipRect(bottom = horizon) {
+        clipPath(disc) {
+            for (j in 0 until 7) {
+                val p = fract(t * 0.07f + j / 7f)
+                val y = sun.y + r * (0.02f + 0.98f * p)
+                val thick = unit * (1.5f + 13f * p)
+                drawRect(vaporSkyAt(y / h), topLeft = Offset(sun.x - r, y), size = Size(r * 2f, thick))
+            }
+        }
+    }
+    // The grid floor: lines out of the vanishing point, and rows rolling towards you
+    val vanish = Offset(w * 0.5f, horizon)
+    val fade = Brush.verticalGradient(0f to Color(0x00FF5FD0), 0.35f to Color(0x99FF5FD0), 1f to Color(0xEEFF5FD0), startY = horizon, endY = h)
+    for (i in -24..24) {
+        drawLine(fade, Offset(vanish.x + i * w * 0.022f, horizon), Offset(vanish.x + i * w * 0.15f, h), strokeWidth = unit * 1.2f)
+    }
+    val rows = 16
+    val roll = fract(t * 0.22f)
+    for (k in 0 until rows) {
+        val u = (k + roll) / rows
+        val y = horizon + (h - horizon) * u.pow(2.6f)
+        drawLine(Color(0xFFFF5FD0), Offset(0f, y), Offset(w, y), strokeWidth = unit * (0.6f + 1.6f * u), alpha = 0.12f + 0.7f * u)
+    }
+    drawLine(Color(0xFFFFB0D8), Offset(0f, horizon), Offset(w, horizon), strokeWidth = unit * 1.5f, alpha = 0.6f + 0.3f * sin(t * 1.3f))
+    // Stars blinking in the upper sky
+    for (i in 0 until 24) {
+        val blink = sin(t * (0.8f + 1.6f * rnd(i, 1)) + rnd(i, 2) * 6.28f)
+        if (blink < 0.5f) continue
+        val c = at(rnd(i, 3), rnd(i, 4) * 0.28f)
+        if (c.x < w * 0.25f && c.y < h * 0.25f) continue
+        val a = (blink - 0.5f) * 2f
+        drawLine(Color(0xFFFFE6FF), c - Offset(unit * 4f * a, 0f), c + Offset(unit * 4f * a, 0f), strokeWidth = unit, alpha = a)
+        drawLine(Color(0xFFFFE6FF), c - Offset(0f, unit * 4f * a), c + Offset(0f, unit * 4f * a), strokeWidth = unit, alpha = a)
+    }
+    // The tracking band of an old tape, drifting down
+    val band = fract(t / 14f) * (h * 1.3f) - h * 0.15f
+    drawRect(
+        Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color(0x14FFFFFF), 1f to Color.Transparent, startY = band - unit * 30f, endY = band + unit * 30f),
+        topLeft = Offset(0f, band - unit * 30f), size = Size(w, unit * 60f)
+    )
 }
