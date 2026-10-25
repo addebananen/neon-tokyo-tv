@@ -305,10 +305,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     var showProfiles by remember { mutableStateOf(false) }
 
     val order = remember { HomeOrder(appContext) }
-    var favouriteOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
+    // The Home tiles: any apps Adrian picks, by package, in his order; the four favourites until then
+    var homeKeys by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
     var consoleOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Consoles)) }
     var appOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Apps)) }
-    val favourites = remember(favouriteOrder) { HomeOrder.arrange(HomeCatalog.favourites, favouriteOrder) { it.packages.first() } }
+    val slots = remember(homeKeys, apps) { homeSlots(homeKeys, apps) }
     val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
     val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
     var lifted by remember { mutableStateOf<Lifted?>(null) }
@@ -317,7 +318,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val dropArmed = remember { booleanArrayOf(false) }
 
     fun keysOf(row: HomeOrder.Row): List<String> = when (row) {
-        HomeOrder.Row.Favourites -> favourites.map { it.packages.first() }
+        HomeOrder.Row.Favourites -> slots.map { it.key }
         HomeOrder.Row.Consoles -> consoles.map { it.id }
         HomeOrder.Row.Apps -> orderedApps.map { it.packageName }
     }
@@ -334,10 +335,29 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         val moved = HomeOrder.move(keys, from, from + step)
         if (moved === keys) return
         when (current.row) {
-            HomeOrder.Row.Favourites -> favouriteOrder = moved
+            HomeOrder.Row.Favourites -> homeKeys = moved
             HomeOrder.Row.Consoles -> consoleOrder = moved
             HomeOrder.Row.Apps -> appOrder = moved
         }
+    }
+
+    var pinning by remember { mutableStateOf<InstalledApp?>(null) }
+    var changing by remember { mutableStateOf<Int?>(null) }
+
+    // Puts the app with [key] on the Home tile at [index]; one already on Home trades places
+    fun placeOnHome(key: String, index: Int) {
+        val keys = slots.map { it.key }.toMutableList()
+        if (index !in keys.indices) return
+        val already = keys.indexOf(key)
+        if (already >= 0) keys[already] = keys[index]
+        keys[index] = key
+        homeKeys = keys
+        order.save(HomeOrder.Row.Favourites, keys)
+    }
+
+    fun resetHome() {
+        homeKeys = emptyList()
+        order.save(HomeOrder.Row.Favourites, emptyList())
     }
 
     fun drop() {
@@ -508,17 +528,25 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             ) { shown ->
                 when (shown) {
                     HomeTab.Home -> HomeRows(
-                        favourites = favourites,
+                        slots = slots,
                         lifted = lifted,
                         onLift = { row, key -> lift(row, key) },
-                        installed = installed,
+                        isInstalled = { slot ->
+                            val known = slot.known
+                            if (known != null && known in HomeCatalog.favourites) known in installed
+                            else apps.isEmpty() || apps.any { it.packageName == slot.key }
+                        },
+                        onChange = { changing = it },
                         firstFavourite = firstFavourite,
                         onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
                         onSpot = {
                             spot = it
                             spotOn = true
                         },
-                        onOpenApp = { HomeApps.open(context, it) }
+                        onOpenApp = { slot ->
+                            val known = slot.known
+                            if (known != null && known in HomeCatalog.favourites) HomeApps.open(context, known) else HomeApps.open(context, slot.key)
+                        }
                     )
                     HomeTab.Sources -> Sources(
                         consoles = consoles,
@@ -543,7 +571,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb())
                             spotOn = false
                         },
-                        onOpen = { HomeApps.open(context, it.packageName) }
+                        onOpen = { HomeApps.open(context, it.packageName) },
+                        onPin = { pinning = it }
                     )
                 }
             }
@@ -590,53 +619,82 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (showProfiles) {
             HomeProfilesDialog(homeProfiles, onDismiss = { showProfiles = false })
         }
+        pinning?.let { app ->
+            PinToHomeDialog(app, slots, onPick = { index ->
+                placeOnHome(app.packageName, index)
+                pinning = null
+            }, onDismiss = { pinning = null })
+        }
+        changing?.let { index ->
+            slots.getOrNull(index)?.let { slot ->
+                ChangeHomeTileDialog(
+                    slot = slot,
+                    apps = apps,
+                    onPick = { app ->
+                        placeOnHome(app.packageName, index)
+                        changing = null
+                        focusFirst++
+                    },
+                    onReset = {
+                        resetHome()
+                        changing = null
+                        focusFirst++
+                    },
+                    onDismiss = { changing = null }
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun HomeRows(
-    favourites: List<KnownApp>,
+    slots: List<HomeSlot>,
     lifted: Lifted?,
     onLift: (HomeOrder.Row, String) -> Unit,
-    installed: Set<KnownApp>,
+    isInstalled: (HomeSlot) -> Boolean,
+    onChange: (Int) -> Unit,
     firstFavourite: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
     onSpot: (Spot) -> Unit,
-    onOpenApp: (KnownApp) -> Unit
+    onOpenApp: (HomeSlot) -> Unit
 ) {
     val look = LocalHomeLook.current
     val tileShape = RoundedCornerShape(look.corner)
     Column(modifier = Modifier.padding(start = Side), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         RowTitle("Watch & listen")
         Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
-            favourites.forEachIndexed { index, app ->
-                val appKey = app.packages.first()
+            slots.forEachIndexed { index, slot ->
+                val appKey = slot.key
                 // Keyed, so a tile that moves keeps its focus and slides over to its new place
                 key(appKey) {
-                    val color = look.tint(app.color)
+                    val color = look.tint(slot.color)
+                    val known = slot.known
                     NeonTile(
                         width = BigTile.first,
                         height = BigTile.second,
                         shape = tileShape,
                         color = color,
-                        onClick = { onOpenApp(app) },
-                        onFocus = { onFocusColor(app.packages.first(), app.name, app.color) },
+                        onClick = { onOpenApp(slot) },
+                        onFocus = { onFocusColor(appKey, slot.name, slot.color) },
                         modifier = Modifier.animatePlacement(),
                         focusRequester = if (index == 0) firstFavourite else null,
+                        // A short hold changes the app on the tile; the full three seconds lifts it
+                        onLongClick = { onChange(index) },
                         onHold = { onLift(HomeOrder.Row.Favourites, appKey) },
                         lift = liftOf(lifted, HomeOrder.Row.Favourites, appKey),
                         // Not on the TV yet: dimmed, and opening it goes to its Play Store page
-                        dimmed = app !in installed,
-                        onFocusRect = { onSpot(Spot(it, app.color)) }
+                        dimmed = !isInstalled(slot),
+                        onFocusRect = { onSpot(Spot(it, slot.color)) }
                     ) { focused ->
-                        TileScene(app, color, focused, tileShape)
+                        if (known != null) TileScene(known, color, focused, tileShape)
                         Row(
                             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            NeonGlyph(app.glyph, color, Modifier.size(42.dp))
+                            if (known != null) NeonGlyph(known.glyph, color, Modifier.size(42.dp)) else Monogram(slot.label, color, Modifier.size(42.dp))
                             Spacer(Modifier.width(11.dp))
-                            TileName(app.name, 15.sp)
+                            TileName(slot.name, 15.sp)
                         }
                     }
                 }
@@ -756,7 +814,8 @@ private fun AllApps(
     onLift: (String) -> Unit,
     firstApp: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
-    onOpen: (InstalledApp) -> Unit
+    onOpen: (InstalledApp) -> Unit,
+    onPin: (InstalledApp) -> Unit
 ) {
     // The grid leaves room around the tiles for a focused tile's glow; the offset keeps the
     // tiles themselves in line with the rest of the screen
@@ -800,6 +859,8 @@ private fun AllApps(
                 onFocus = { onFocusColor(app.packageName, app.name, ownColor) },
                 modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
                 focusRequester = if (index == 0) firstApp else null,
+                // A short hold puts the app on Home; the full three seconds lifts it
+                onLongClick = { onPin(app) },
                 onHold = { onLift(app.packageName) },
                 lift = when (lifted) {
                     null -> Lift.None
@@ -1313,7 +1374,7 @@ private fun TileName(text: String, size: TextUnit) {
 
 /** For an app without an icon of its own: its first letter in a neon ring. */
 @Composable
-private fun Monogram(label: String, color: Color, modifier: Modifier = Modifier) {
+internal fun Monogram(label: String, color: Color, modifier: Modifier = Modifier) {
     val look = LocalHomeLook.current
     Box(modifier, contentAlignment = Alignment.Center) {
         NeonGlyph(Glyph.Ring, color, Modifier.fillMaxSize())

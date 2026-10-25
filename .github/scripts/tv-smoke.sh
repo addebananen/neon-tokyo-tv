@@ -645,6 +645,47 @@ width=$(focused_width)
 key DPAD_RIGHT
 sleep 2
 shot neon-home-apps-focus
+# A short hold on an app in All apps puts it on Home in place of one of the four tiles
+pinned=$(focused_label)
+adb shell input keyevent --longpress DPAD_CENTER
+sleep 2
+shot neon-home-pin
+if screen_has "Put $pinned on Home"; then
+  key DPAD_CENTER
+  sleep 2
+  key DPAD_UP
+  sleep 1
+  key DPAD_LEFT
+  sleep 2
+  key DPAD_DOWN
+  sleep 1
+  label=$(focused_label)
+  shot neon-home-pinned
+  [ "$label" = "$pinned" ] || fail "$pinned did not take the first Home tile ($label is there)"
+  # A short hold on a Home tile changes it, or puts the first four back
+  adb shell input keyevent --longpress DPAD_CENTER
+  sleep 2
+  shot neon-home-change
+  screen_has "Change $pinned" || fail "a short hold on a Home tile did not offer to change it"
+  key DPAD_UP
+  sleep 1
+  key DPAD_CENTER
+  sleep 2
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Back to the first four did not bring YouTube back to the front ($label is there)"
+  key DPAD_UP
+  sleep 1
+  key DPAD_RIGHT
+  sleep 2
+  key DPAD_DOWN
+  sleep 1
+  key DPAD_RIGHT
+  sleep 1
+else
+  fail "a short hold on $pinned in All apps did not offer to put it on Home"
+  key BACK
+  sleep 1
+fi
 # Källor, next to All apps, has the consoles with their HDMI numbers
 key DPAD_UP
 sleep 1
