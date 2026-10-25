@@ -627,7 +627,8 @@ else
   sleep 1
   label=$(focused_label)
   [ "$label" = "YT Music" ] || fail "YouTube moved one step right, but $label is first instead of YT Music"
-  adb shell am start -S -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" >/dev/null 2>&1
+  # A new Neon Home reads the order back; -S would kill the app and leave it on the profile picker
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" >/dev/null 2>&1
   sleep 8
   label=$(focused_label)
   [ "$label" = "YT Music" ] || fail "the new order was gone when Neon Home opened again ($label is first)"
@@ -838,7 +839,8 @@ adb shell dumpsys meminfo "$PKG" > "$OUT/meminfo.txt" 2>&1
 kill "$LOGCAT_PID" 2>/dev/null
 sleep 1
 
-APP_PID_LINES=$(grep -n "FATAL EXCEPTION\|ANR in $PKG\|Application Not Responding" "$OUT/logcat-full.txt" || true)
+# Only the app's own crashes count: the stock launcher can fall over while the test disables it
+APP_PID_LINES=$( { grep -n -A1 "FATAL EXCEPTION" "$OUT/logcat-full.txt" | grep "Process: $PKG\b"; grep -n "ANR in $PKG" "$OUT/logcat-full.txt"; } || true)
 if [ -n "$APP_PID_LINES" ]; then
   fail "crash or ANR in logcat: $APP_PID_LINES"
   grep -A40 "FATAL EXCEPTION" "$OUT/logcat-full.txt" > "$OUT/crash.txt" || true
