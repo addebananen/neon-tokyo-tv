@@ -627,6 +627,7 @@ private fun HomeRows(
  * Källor, the consoles and the PC by their HDMI numbers, as big tiles three to a row. One that
  * is switched on glows and has its star; a short hold asks which input it is on.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun Sources(
     consoles: List<Console>,
