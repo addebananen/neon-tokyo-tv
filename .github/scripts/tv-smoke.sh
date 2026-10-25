@@ -264,7 +264,7 @@ key_edge() {  # key_edge <way> <1 down|0 up>
 hold_ok() {
   local way reply
   for way in emu:KEY_ENTER emu:KEY_CENTER root; do
-    [ "$way" = root ] && { adb root >/dev/null 2>&1; adb wait-for-device; }
+    [ "$way" = root ] && { adb root >/dev/null 2>&1; timeout 30 adb wait-for-device; }
     reply=$(key_edge "$way" 1)
     sleep 0.4
     if adb shell dumpsys input 2>/dev/null | grep -q 'KeyDowns: [1-9]'; then
