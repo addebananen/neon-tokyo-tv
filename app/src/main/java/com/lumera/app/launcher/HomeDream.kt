@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -191,12 +193,16 @@ private fun DreamClock(look: HomeLook) {
         animationSpec = infiniteRepeatable(tween(4_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "DreamClockBreath"
     )
+    // A few dp further each minute, eased over seconds, so nothing stands still on the panel for hours
+    val minute = (now / 60_000L).toInt()
+    val driftX by animateDpAsState((minute % 5 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockX")
+    val driftY by animateDpAsState((minute / 5 % 4 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockY")
     val locale = Locale.getDefault()
     val time = remember(now) { SimpleDateFormat(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(Date(now)) }
     val date = remember(now) {
         SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale).format(Date(now)).uppercase(locale)
     }
-    Column(Modifier.padding(start = 58.dp, top = 34.dp).graphicsLayer { alpha = breath }) {
+    Column(Modifier.padding(start = 58.dp, top = 34.dp).offset(driftX, driftY).graphicsLayer { alpha = breath }) {
         BasicText(
             time,
             style = TextStyle(
