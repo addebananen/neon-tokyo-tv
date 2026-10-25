@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor, Atomic, Glitch, Canopy }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Teahouse, Vapor, Atomic, Glitch, Canopy }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -318,8 +318,8 @@ enum class HomeStyle(
         driftY = 0.35f
     ),
     Japandi(
-        "japandi", "Japandi", "A quiet room, a leather sofa, the sun on the wall",
-        R.drawable.home_style_japandi, Ambience.Sunroom,
+        "japandi", "Japandi", "A tatami room open onto a garden pond, maple leaves on the water",
+        R.drawable.home_style_japandi, Ambience.Teahouse,
         HomeLook(
             accent = Color(0xFFB8653A), accent2 = Color(0xFF7D8A6A), text = Color(0xFF2E2620), dim = Color(0xFF7A6D60),
             pane = Color(0xD9F4EEE6), pill = Color(0xC0F4EEE6), pillFocused = Color(0xFFFFFBF6),
@@ -331,8 +331,8 @@ enum class HomeStyle(
         ),
         light = R.drawable.home_style_japandi_glow,
         drift = true,
-        driftX = 0.5f,
-        driftY = 0.4f
+        driftX = 0.56f,
+        driftY = 0.36f
     ),
     Vaporwave(
         "vaporwave", "Vaporwave", "A striped sun setting over wireframe mountains and a grid that never ends",

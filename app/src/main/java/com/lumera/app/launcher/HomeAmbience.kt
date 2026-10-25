@@ -66,7 +66,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom, Ambience.Atomic -> 24
+        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Teahouse, Ambience.Atomic -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch, Ambience.Canopy -> 30
     }
     val time = rememberAmbientTime(fps)
@@ -97,7 +97,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Cosmos -> cosmos(t, lightImage)
                     Ambience.Bubbles -> bubbles(t)
                     Ambience.Library -> library(t, lightImage)
-                    Ambience.Sunroom -> sunroom(t, lightImage)
+                    Ambience.Teahouse -> teahouse(t, lightImage)
                     Ambience.Vapor -> vapor(t)
                     Ambience.Atomic -> atomic(t)
                     Ambience.Glitch -> glitch(t, lightImage)
@@ -887,25 +887,92 @@ private fun DrawScope.library(t: Float, light: ImageBitmap?) {
     }
 }
 
+/** Japandi: the paper panels of the shoji screens in the photo, left, top, right, bottom. */
+private val ShojiPanels = listOf(
+    floatArrayOf(0f, 0f, 0.13f, 0.83f),
+    floatArrayOf(0.19f, 0f, 0.448f, 0.585f),
+    floatArrayOf(0.72f, 0f, 0.805f, 0.58f)
+)
+
 /**
- * Japandi, a photo of a quiet room with the sun falling through the window onto the wall: clouds
- * pass now and then and the light on the wall dims and comes back, and a few motes float in it.
+ * Japandi, a photo of a tatami room with its shoji open onto a garden pond: shadows of leaves drift
+ * across the paper screens, maple leaves fall into the pond and send out rings, the water glints
+ * and shimmers, the sun on the sliding door breathes and dust turns slowly in the light.
  */
-private fun DrawScope.sunroom(t: Float, light: ImageBitmap?) {
+private fun DrawScope.teahouse(t: Float, light: ImageBitmap?) {
     val w = size.width
+    val h = size.height
     val unit = 1.dp.toPx()
     if (light != null) {
-        val dst = IntSize(w.roundToInt(), size.height.roundToInt())
-        // Two slow waves make the clouds come irregularly: mostly sun, sometimes shade
-        val cloud = ((sin(t * 0.11f) + sin(t * 0.047f + 1.3f)) * 0.5f).coerceAtLeast(0f)
-        drawImage(light, dstSize = dst, alpha = 0.18f * (1f - cloud), blendMode = BlendMode.Plus)
-        drawImage(light, dstSize = dst, alpha = 0.45f * cloud, colorFilter = ColorFilter.tint(Color(0xFF8E8070)), blendMode = BlendMode.Multiply)
+        drawImage(light, dstSize = IntSize(w.roundToInt(), h.roundToInt()), alpha = 0.07f + 0.05f * sin(t * 0.35f), blendMode = BlendMode.Plus)
     }
+    // Shadows of leaves outside, swaying across the paper screens
+    for (panel in ShojiPanels) {
+        clipRect(panel[0] * w, panel[1] * h, panel[2] * w, panel[3] * h) {
+            for (i in 0 until 9) {
+                val drift = fract(rnd(i, 1) + t * 0.006f)
+                val sway = 0.012f * sin(t * (0.5f + 0.3f * rnd(i, 2)) + i)
+                val c = at(panel[0] + (panel[2] - panel[0] + 0.2f) * drift - 0.1f + sway, panel[1] + (panel[3] - panel[1]) * rnd(i, 3))
+                val r = w * (0.025f + 0.03f * rnd(i, 4))
+                drawCircle(
+                    Brush.radialGradient(0f to Color(0x24301A0C), 1f to Color.Transparent, center = c, radius = r),
+                    radius = r, center = c
+                )
+            }
+        }
+    }
+    // The garden: maple leaves tumbling down, landing on the pond and floating off with a ring
+    val left = 0.452f
+    val right = 0.682f
+    val water = 0.37f
+    clipRect(left * w, 0.075f * h, right * w, 0.585f * h) {
+        // Glints and slow ripples on the water
+        for (i in 0 until 30) {
+            val depth = rnd(i, 5)
+            val y = water + 0.01f + depth * 0.2f
+            val x = left + fract(rnd(i, 6) + t * 0.004f * (0.5f + depth)) * (right - left)
+            val flash = sin(t * (0.7f + 0.9f * rnd(i, 7)) + rnd(i, 8) * 6.28f).coerceAtLeast(0f).pow(4)
+            if (flash < 0.03f) continue
+            val len = w * (0.004f + 0.012f * rnd(i, 9)) * (0.6f + depth)
+            drawLine(Color(0xFFF2FFF4), at(x, y) - Offset(len / 2, 0f), at(x, y) + Offset(len / 2, 0f), strokeWidth = unit * (0.8f + depth), cap = StrokeCap.Round, alpha = 0.4f * flash)
+        }
+        for (i in 0 until 2) {
+            val y = water + fract(t / 12f + i / 2f) * 0.22f
+            drawRect(
+                Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color(0x14E8FFF0), 1f to Color.Transparent, startY = y * h - h * 0.01f, endY = y * h + h * 0.01f),
+                topLeft = Offset(left * w, y * h - h * 0.01f), size = Size((right - left) * w, h * 0.02f)
+            )
+        }
+        for (i in 0 until 5) {
+            val period = 9f + 5f * rnd(i, 10)
+            val cycle = floor(t / period + rnd(i, 11))
+            val p = fract(t / period + rnd(i, 11))
+            val seed = i * 31 + cycle.toInt()
+            val x0 = left + 0.02f + (right - left - 0.04f) * rnd(seed, 12)
+            val land = water + 0.03f + 0.15f * rnd(seed, 13)
+            val colour = if (rnd(seed, 14) < 0.6f) Color(0xFFE0502A) else Color(0xFFF0A040)
+            val fall = 0.55f
+            if (p < fall) {
+                val q = p / fall
+                val c = at(x0 + 0.02f * sin(q * 9f + i), 0.06f + (land - 0.06f) * q)
+                rotate(degrees = q * 540f + i * 40f, pivot = c) {
+                    drawOval(colour, topLeft = c - Offset(unit * 4f, unit * 2.2f), size = Size(unit * 8f, unit * 4.4f), alpha = 0.9f)
+                }
+            } else {
+                val q = (p - fall) / (1f - fall)
+                val c = at(x0 + q * 0.02f, land)
+                val ring = q * unit * 40f
+                drawOval(Color(0xFFE8FFF2), topLeft = c - Offset(ring, ring * 0.3f), size = Size(ring * 2f, ring * 0.6f), alpha = 0.35f * (1f - q), style = Stroke(unit * 1.2f))
+                drawOval(colour, topLeft = c - Offset(unit * 4f, unit * 1.6f), size = Size(unit * 8f, unit * 3.2f), alpha = 0.85f * (1f - q * q))
+            }
+        }
+    }
+    // The sun on the sliding door, breathing as clouds pass, and dust turning in the light
+    softLight(at(0.86f, 0.5f), w * 0.09f, Color(0xFFFFF2D6), 0.08f + 0.06f * sin(t * 0.21f))
     for (i in 0 until 22) {
-        val x = fract(rnd(i, 1) + t * 0.003f * (rnd(i, 2) - 0.3f)) + 0.008f * sin(t * 0.4f + i)
-        val y = 0.05f + 0.38f * fract(rnd(i, 3) + t * 0.002f * (rnd(i, 4) - 0.5f) + 0.01f * sin(t * 0.3f + i))
-        val twinkle = 0.5f + 0.5f * sin(t * (0.8f + rnd(i, 5)) + i * 2f)
-        drawCircle(Color(0xFFFFF4E0), radius = unit * (0.8f + rnd(i, 6)), center = at(x, y), alpha = 0.6f * twinkle)
+        val p = fract(t / (30f + 20f * rnd(i, 15)) + rnd(i, 16))
+        val c = at(0.5f + 0.42f * rnd(i, 17) + 0.02f * sin(t * 0.3f + i), 0.2f + 0.7f * fract(rnd(i, 18) - p * 0.3f))
+        drawCircle(Color(0xFFFFF4DE), unit * (0.8f + 1.2f * rnd(i, 19)), c, alpha = 0.4f * sin(p * PI.toFloat()))
     }
 }
 
