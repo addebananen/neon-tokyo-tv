@@ -99,23 +99,30 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
 @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(26, 6, 32, 0.3); border-top-color: #1a0620; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* A whole screen picture for the home screen: a 16:9 frame instead of the circle */
+body.wide .card { max-width: 460px; }
+body.wide .ring { width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; }
+body.wide .stage { border-radius: 14px; }
+body.wide .round-only { display: none; }
+body.round .wide-only { display: none; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } .check { stroke-dashoffset: 0; } }
 </style>
 </head>
-<body>
+<body class="{{SHAPE}}">
 <div class="sky"></div>
 <main class="card">
   <div class="eyebrow">NEON TOKYO</div>
-  <h1 id="title">Photo for <span class="name">{{NAME}}</span></h1>
+  <h1 id="title"><span class="round-only">Photo</span><span class="wide-only">Background</span> for <span class="name">{{NAME}}</span></h1>
 
   <section id="pick" class="view">
-    <p>Take a selfie or pick a photo. Next you fit it in the circle.</p>
-    <label class="btn primary">
+    <p class="round-only">Take a selfie or pick a photo. Next you fit it in the circle.</p>
+    <p class="wide-only">Pick a photo for the TV's home screen. Next you choose the part that shows.</p>
+    <label class="btn primary round-only">
       <input type="file" accept="image/*" capture="user" id="selfie">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
       Take a selfie
     </label>
-    <label class="btn">
+    <label class="btn" id="libraryBtn">
       <input type="file" accept="image/*" id="library">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/></svg>
       Choose a photo
@@ -147,7 +154,8 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
       <svg viewBox="0 0 64 64" fill="none" stroke="#ffc46b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path class="check" d="M18 33l9 9 19-20"/></svg>
     </div>
     <h2>All set</h2>
-    <p>That's you on Neon Tokyo now. You can close this page.</p>
+    <p class="round-only">That's you on Neon Tokyo now. You can close this page.</p>
+    <p class="wide-only">It's on the home screen now. You can close this page.</p>
   </section>
 
   <section id="closed" class="view" hidden>
@@ -160,7 +168,10 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
 (function () {
   "use strict";
   var BASE = "{{BASE}}";
-  var OUT = 640; // the photo the TV gets, square
+  var WIDE = document.body.className === "wide";
+  // The picture the TV gets: a square photo, or a full HD screen
+  var OUT_W = WIDE ? 1920 : 640, OUT_H = WIDE ? 1080 : 640;
+  if (WIDE) document.getElementById("libraryBtn").className = "btn primary";
   var views = ["pick", "crop", "sent", "done", "closed"];
   var current = "pick";
   function show(name) {
@@ -199,17 +210,17 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
     img.src = objectUrl;
   }
 
-  // ---- Fitting it in the circle ----
-  // The picture always covers the circle: x and y are its top left corner in the stage,
-  // scale is how big it is drawn, z the zoom on top of the scale that just covers the circle.
-  var size = 0, cover = 1, z = 1, x = 0, y = 0;
+  // ---- Fitting it in the frame ----
+  // The picture always covers the frame: x and y are its top left corner in the stage,
+  // scale is how big it is drawn, z the zoom on top of the scale that just covers the frame.
+  var sw = 0, sh = 0, cover = 1, z = 1, x = 0, y = 0;
   function layout(reset) {
-    size = stage.clientWidth;
+    sw = stage.clientWidth; sh = stage.clientHeight;
     var w = img.naturalWidth, h = img.naturalHeight;
-    var newCover = Math.max(size / w, size / h);
+    var newCover = Math.max(sw / w, sh / h);
     if (reset) {
       cover = newCover; z = 1; zoom.value = "1";
-      x = (size - w * cover) / 2; y = (size - h * cover) / 2;
+      x = (sw - w * cover) / 2; y = (sh - h * cover) / 2;
     } else {
       // The stage changed size (rotation): keep the same part of the picture in view
       var ratio = newCover / cover;
@@ -221,8 +232,8 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
   }
   function clamp() {
     var w = img.naturalWidth * cover * z, h = img.naturalHeight * cover * z;
-    x = Math.min(0, Math.max(size - w, x));
-    y = Math.min(0, Math.max(size - h, y));
+    x = Math.min(0, Math.max(sw - w, x));
+    y = Math.min(0, Math.max(sh - h, y));
   }
   function apply() {
     clamp();
@@ -237,7 +248,7 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
     zoom.value = String(z);
     apply();
   }
-  zoom.addEventListener("input", function () { zoomTo(parseFloat(zoom.value), size / 2, size / 2); });
+  zoom.addEventListener("input", function () { zoomTo(parseFloat(zoom.value), sw / 2, sh / 2); });
   window.addEventListener("resize", function () { if (current === "crop") layout(false); });
 
   var pointers = {};
@@ -294,11 +305,11 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
     message("cropMsg", "");
     var scale = cover * z;
     var canvas = document.createElement("canvas");
-    canvas.width = OUT; canvas.height = OUT;
+    canvas.width = OUT_W; canvas.height = OUT_H;
     var ctx = canvas.getContext("2d");
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, -x / scale, -y / scale, size / scale, size / scale, 0, 0, OUT, OUT);
-    var data = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+    ctx.drawImage(img, -x / scale, -y / scale, sw / scale, sh / scale, 0, 0, OUT_W, OUT_H);
+    var data = canvas.toDataURL("image/jpeg", WIDE ? 0.86 : 0.9).split(",")[1];
     var form = new FormData();
     form.append("image", data);
     sendBtn.disabled = true;
@@ -342,7 +353,7 @@ input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; b
     if (state === lastState) return;
     lastState = state;
     if (state === "preview") {
-      document.getElementById("sentText").textContent = "There you are. Press OK on the remote to use it.";
+      document.getElementById("sentText").textContent = WIDE ? "It's on the TV. Press OK on the remote to use it." : "There you are. Press OK on the remote to use it.";
     } else if (state === "done") {
       show("done");
     } else if (state === "retry") {

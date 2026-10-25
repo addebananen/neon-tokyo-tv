@@ -18,7 +18,9 @@ class AvatarUploadServer(
     private val context: Context,
     private val token: String,
     profileName: String,
-    private val listener: Listener
+    private val listener: Listener,
+    /** A whole screen picture, 16 by 9, rather than a photo fitted in a circle. */
+    wide: Boolean = false
 ) : NanoHTTPD(port) {
 
     interface Listener {
@@ -39,6 +41,7 @@ class AvatarUploadServer(
         context.assets.open("photo_upload.html").bufferedReader().use { it.readText() }
             .replace("{{BASE}}", base)
             .replace("{{NAME}}", escapeHtml(profileName.ifBlank { "you" }))
+            .replace("{{SHAPE}}", if (wide) "wide" else "round")
     }
 
     companion object {

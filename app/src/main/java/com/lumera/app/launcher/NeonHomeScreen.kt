@@ -301,6 +301,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     }
     var linking by remember { mutableStateOf<Console?>(null) }
     var showInputs by remember { mutableStateOf(false) }
+    var showProfiles by remember { mutableStateOf(false) }
 
     val order = remember { HomeOrder(appContext) }
     var favouriteOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
@@ -437,6 +438,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                     modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = ignite.value }
                 ) {
+                    ProfilePill(profile, onClick = { showProfiles = true }, onFocus = {
+                        wallpaper = NeonWallpaper.TOKYO
+                        spotOn = false
+                    })
                     Pill("Search", Glyph.Search, onClick = { openSearch(context) }, onFocus = {
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
@@ -580,6 +585,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 onPick = { pickInput(it) },
                 onDismiss = { showInputs = false }
             )
+        }
+        if (showProfiles) {
+            HomeProfilesDialog(homeProfiles, onDismiss = { showProfiles = false })
         }
     }
 }
@@ -1161,6 +1169,44 @@ private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () ->
             Spacer(Modifier.width(5.dp))
             BasicText(
                 text = text,
+                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.text)
+            )
+        }
+    }
+}
+
+/** Who is home: the active profile's face and name, opening the profile picker. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ProfilePill(profile: HomeProfile, onClick: () -> Unit, onFocus: () -> Unit) {
+    val look = LocalHomeLook.current
+    val shape = RoundedCornerShape(50)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.onFocusChanged { if (it.isFocused) onFocus() },
+        shape = ClickableSurfaceDefaults.shape(shape = shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = look.pill,
+            contentColor = look.text,
+            focusedContainerColor = look.pillFocused,
+            focusedContentColor = look.text
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = Border(BorderStroke(0.5.dp, look.text.copy(alpha = 0.18f)), shape = shape),
+            focusedBorder = Border(BorderStroke(1.5.dp, look.accent), shape = shape)
+        ),
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = look.accent.copy(alpha = 0.55f), elevation = look.glow * 0.85f))
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 4.dp, end = 11.dp, top = 3.dp, bottom = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ProfileFace(profile, Modifier.size(19.dp), letterSize = 10.sp)
+            Spacer(Modifier.width(6.dp))
+            BasicText(
+                text = profile.name,
+                maxLines = 1,
                 style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.text)
             )
         }
@@ -2205,7 +2251,7 @@ private fun PickerRow(
 }
 
 /** A dialog's panel: lit neon edges for Neon, a quiet solid card in the other styles. */
-private fun Modifier.homePanel(look: HomeLook, shape: RoundedCornerShape): Modifier =
+internal fun Modifier.homePanel(look: HomeLook, shape: RoundedCornerShape): Modifier =
     if (look.glowingText) neonPanel(shape)
     else background(lerp(look.tileBottom, look.tileTop, 0.4f).copy(alpha = 0.98f), shape).border(1.dp, look.accent.copy(alpha = 0.45f), shape)
 
