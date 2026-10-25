@@ -650,6 +650,9 @@ private fun Sources(
             contentPadding = PaddingValues(room),
             userScrollEnabled = false,
             modifier = Modifier
+                // Down from the tabs lands on the first console, not on whichever is under the tab
+                .focusProperties { enter = { firstConsole } }
+                .focusGroup()
                 .wrapContentWidth(Alignment.Start)
                 .offset(x = Side - room, y = -room)
                 .width(BigTile.first * ConsoleColumns + Gap * (ConsoleColumns - 1) + room * 2)
