@@ -162,17 +162,19 @@ enum class HomeStyle(
         )
     ),
     City(
-        "city", "City", "Manhattan across the river at dusk",
+        "city", "City", "The Brooklyn Bridge and lower Manhattan at night",
         R.drawable.home_style_city, Ambience.CityLights,
         HomeLook(
-            accent = Color(0xFFFFB36B), accent2 = Color(0xFF9FC0FF), text = Color(0xFFFFF4E6), dim = Color(0xFFBBAACB),
-            pane = Color(0xB30B1230), pill = Color(0x990B1230), pillFocused = Color(0xCC24234E),
-            tileTop = Color(0xD91D1938), tileBottom = Color(0xD90B0A1E),
+            accent = Color(0xFFFFC27A), accent2 = Color(0xFF8FD3FF), text = Color(0xFFF6F8FF), dim = Color(0xFFB7BEDA),
+            pane = Color(0xB30A0E2E), pill = Color(0x990A0E2E), pillFocused = Color(0xCC1F2766),
+            tileTop = Color(0xD9161B48), tileBottom = Color(0xD9080A22),
             font = OswaldFamily, weight = FontWeight.Medium, italic = false,
             clockSize = 64.sp, clockColor = Color(0xFFFFF4E6), clockGlow = Color(0x99FF9A5A), clockBlur = 20f,
             shade = Color(0x660A0820), corner = 4.dp, glow = 12.dp, toward = Color(0xFFFFC08A), pull = 0.3f,
             letterSpacing = 2.5.sp
-        )
+        ),
+        light = R.drawable.home_style_city_glow,
+        drift = true
     ),
     Faith(
         "faith", "Faith", "The upper room, laid for the supper, in candle light",

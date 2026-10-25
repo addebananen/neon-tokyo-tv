@@ -1,0 +1,66 @@
+package com.lumera.app.launcher
+
+import androidx.compose.ui.graphics.Color
+
+/**
+ * Where things are in the style photos, as fractions of the 16:9 picture: found in the photo
+ * itself, so the lights that move sit exactly on the lights in it.
+ */
+internal object PhotoSpots {
+    /** City: the lamps strung along the Brooklyn Bridge cables, x, y. */
+    val bridgeLamps = floatArrayOf(
+        0.0281f, 0.1472f, 0.0708f, 0.1954f, 0.1115f, 0.2398f, 0.0286f, 0.2861f, 0.1057f, 0.3083f,
+        0.1141f, 0.338f, 0.1844f, 0.3148f, 0.2948f, 0.4204f, 0.3823f, 0.45f, 0.574f, 0.5167f, 0.5849f,
+        0.5102f, 0.6052f, 0.4981f, 0.6833f, 0.5037f, 0.6932f, 0.4972f, 0.7469f, 0.4546f, 0.7828f,
+        0.4676f, 0.8078f, 0.5639f
+    )
+
+    /** City: lit windows spread over the towers that show around the tiles, x, y. */
+    val windows = floatArrayOf(
+        0.0005f, 0.7213f, 0.9708f, 0.7694f, 0.5453f, 0.8519f, 0.2167f, 0.5167f, 0.4219f, 0.8343f,
+        0.063f, 0.2833f, 0.0182f, 0.2694f, 0.0359f, 0.6519f, 0.5307f, 0.4213f, 0.199f, 0.3889f,
+        0.8521f, 0.7046f, 0.2427f, 0.4028f, 0.212f, 0.7333f, 0.0312f, 0.7389f, 0.3464f, 0.7111f,
+        0.4333f, 0.8139f, 0.0036f, 0.6213f, 0.3745f, 0.7157f, 0.3927f, 0.7787f, 0.0078f, 0.5139f,
+        0.0167f, 0.6481f, 0.1917f, 0.8213f, 0.5333f, 0.7306f, 0.1974f, 0.3981f, 0.313f, 0.7657f,
+        0.625f, 0.863f, 0.4104f, 0.4046f, 0.4479f, 0.7343f, 0.2917f, 0.7556f, 0.337f, 0.7435f, 0.4094f,
+        0.3898f, 0.4896f, 0.7019f, 0.5312f, 0.4065f, 0.1057f, 0.3083f, 0.1333f, 0.85f, 0.7964f,
+        0.3204f, 0.0651f, 0.7037f, 0.4698f, 0.7019f, 0.4917f, 0.5056f, 0.1203f, 0.7019f, 0.3818f,
+        0.7481f, 0.2188f, 0.3546f, 0.5318f, 0.3778f, 0.0766f, 0.7361f, 0.9953f, 0.7269f, 0.2391f,
+        0.3833f, 0.4286f, 0.4204f, 0.0562f, 0.8074f, 0.1698f, 0.5093f, 0.574f, 0.5167f, 0.6328f,
+        0.7954f, 0.6057f, 0.85f, 0.7729f, 0.3046f, 0.5182f, 0.4639f, 0.2656f, 0.375f, 0.8052f, 0.4259f,
+        0.0042f, 0.8296f, 0.2479f, 0.3639f, 0.9646f, 0.8028f, 0.9448f, 0.7907f, 0.1188f, 0.725f,
+        0.3599f, 0.7787f, 0.7406f, 0.2843f, 0.7667f, 0.2704f, 0.5182f, 0.3991f, 0.4531f, 0.5009f,
+        0.5172f, 0.4852f, 0.5182f, 0.4343f, 0.625f, 0.3778f, 0.6479f, 0.4111f, 0.5318f, 0.3722f,
+        0.9781f, 0.7769f, 0.0635f, 0.3565f, 0.5333f, 0.7565f, 0.4562f, 0.513f, 0.0005f, 0.7f, 0.6479f,
+        0.4426f, 0.7953f, 0.4954f, 0.2276f, 0.7204f, 0.7896f, 0.5148f, 0.3484f, 0.7981f, 0.3214f,
+        0.787f, 0.5182f, 0.3269f, 0.2125f, 0.7676f, 0.6354f, 0.5046f, 0.4969f, 0.4639f, 0.624f,
+        0.2435f, 0.8531f, 0.7296f, 0.6615f, 0.487f, 0.0286f, 0.6824f
+    )
+
+    /** City: each window's light, a little lifted. */
+    /** City: each window's light, a little lifted. */
+    val windowColours = longArrayOf(
+        0xFFE3DCC9, 0xFFFBFEFF, 0xFFFFFFF8, 0xFFFFFFFC, 0xFFFEFCFF, 0xFFEDFFFF, 0xFFC5E9E1, 0xFFFCFEFE,
+        0xFFFFFFF9, 0xFFD7DDDC, 0xFFFCFDFA, 0xFFF9FCFB, 0xFFFCF7F2, 0xFFFAF9E5, 0xFFF1F4F0, 0xFFFFF8EF,
+        0xFFE2E2D3, 0xFFFDFEFE, 0xFFC6E3E6, 0xFFC5C9CB, 0xFFC9C9C9, 0xFFE2E0CA, 0xFFFCFFFF, 0xFFD1D6D0,
+        0xFFF6F8E8, 0xFFEBCCAA, 0xFFFAFFFE, 0xFFFAF5D3, 0xFFFDFDFA, 0xFFF0F7DA, 0xFFCDF9FF, 0xFFFFFDFF,
+        0xFFFFFEFB, 0xFFFFFFFE, 0xFFFFFFF9, 0xFFDADCD2, 0xFFEAEEE2, 0xFFFFEEDA, 0xFFFFFFFF, 0xFFEBF4E4,
+        0xFFE9FBF8, 0xFFFFFDFF, 0xFFFFFDFF, 0xFFF9FFFD, 0xFFFFFFFD, 0xFFFEFBFD, 0xFFFEFFFF, 0xFFFFFFFD,
+        0xFFFFFFFF, 0xFFFEFDFA, 0xFFFAFEFF, 0xFFF7F5FE, 0xFFFFFEFB, 0xFFFDFEFF, 0xFFFEFEFD, 0xFFFFFDEF,
+        0xFFFCFFFB, 0xFFFCFEFC, 0xFFFFFFFA, 0xFFFFFFF3, 0xFFF5FBF4, 0xFFD6E4D4, 0xFFFEFEFE, 0xFFFDF6E4,
+        0xFFFDFDFD, 0xFFF9F9FF, 0xFFFFFDF9, 0xFFFFFEFD, 0xFFFFFDFA, 0xFFF9FFFF, 0xFFFFFDFF, 0xFFFBFDFD,
+        0xFFFCDAA8, 0xFFFFFFFE, 0xFFEFFFFF, 0xFFD6D0C0, 0xFFFAFEFF, 0xFFFDFBE4, 0xFFFBFFFD, 0xFFFDFDFC,
+        0xFFFAFBFC, 0xFFFBF3FB, 0xFFFEFEFC, 0xFFFBFBFC, 0xFFFDFCFA, 0xFFFCFFFF, 0xFFFEFDFE, 0xFFFFFBF6,
+        0xFFEAFEFF, 0xFFCDCAC6
+    )
+
+    /** City: the colour the river takes from the lights above it, left to right in twelve bands. */
+    val riverColours = listOf(
+        Color(0xFF93D8EB), Color(0xFFAAD4EB), Color(0xFFA7D6EB), Color(0xFFEBEBCB), Color(0xFFDEEBE6), Color(0xFFCADFEB),
+        Color(0xFFD3E2EB), Color(0xFF85C7EB), Color(0xFF94D5EB), Color(0xFFCCEBEB), Color(0xFF91BFEB), Color(0xFFEBD0EB)
+    )
+
+    /** City: the beacon on top of One World Trade Center. */
+    const val SPIRE_X = 0.6458f
+    const val SPIRE_Y = 0.0528f
+}

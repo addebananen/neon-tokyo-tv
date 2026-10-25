@@ -79,7 +79,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Lake -> lake(t, lightImage)
                     Ambience.Petals -> petals(t)
                     Ambience.Calm -> calm(t)
-                    Ambience.CityLights -> cityLights(t)
+                    Ambience.CityLights -> cityLights(t, lightImage)
                     Ambience.Candles -> candles(t)
                     Ambience.Speed -> speed(t)
                     Ambience.NightRain -> nightRain(t)
@@ -295,33 +295,76 @@ private fun DrawScope.calm(t: Float) {
     )
 }
 
-/** City: windows going on and off, the red light on the spire, and a plane crossing. */
-private fun DrawScope.cityLights(t: Float) {
+/**
+ * City, a photo of the Brooklyn Bridge and lower Manhattan at night: the towers hum with light,
+ * windows brighten as people come home, the bridge lamps sparkle, the beacon on One World Trade
+ * Center pulses, cars cross the bridge, a plane blinks its way over and the river shimmers with
+ * the colours above it.
+ */
+private fun DrawScope.cityLights(t: Float, light: ImageBitmap?) {
+    val w = size.width
     val unit = 1.dp.toPx()
-    for (i in 0 until 34) {
-        val on = sin(t * (0.15f + 0.2f * rnd(i, 1)) + rnd(i, 2) * 6.28f)
-        if (on < 0.5f) continue
-        val a = ((on - 0.5f) * 4f).coerceAtMost(1f)
-        val c = at(0.56f + 0.4f * rnd(i, 3), 0.42f + 0.21f * rnd(i, 4))
-        drawRect(Color(0xFFFFD69A), topLeft = c, size = Size(2.5f * unit, 3f * unit), alpha = 0.8f * a)
+    if (light != null) {
+        drawImage(light, dstSize = IntSize(w.roundToInt(), h.roundToInt()), alpha = 0.1f + 0.06f * sin(t * 0.5f), blendMode = BlendMode.Plus)
     }
-    val blink = if (fract(t / 1.6f) < 0.12f) 1f else 0.25f
-    softLight(at(0.703f, 0.1435f), 14f * unit, Color(0xFFFF4A4A), 0.9f * blink)
-    // A plane every 50 seconds, high and slow, from right to left
-    val fly = fract(t / 50f)
-    if (fly < 0.5f) {
-        val p = fly / 0.5f
-        val c = at(1.02f - p * 0.75f, 0.11f + p * 0.03f)
-        drawCircle(Color.White, radius = 1.2f * unit, center = c, alpha = 0.8f)
-        if (fract(t) < 0.15f) softLight(c, 7f * unit, Color(0xFFFF6A6A), 0.9f)
+    // Windows coming on, one here and one there, and slowly going back to how they were
+    val windows = PhotoSpots.windows
+    for (i in 0 until windows.size / 2) {
+        val period = 14f + 30f * rnd(i, 1)
+        val p = fract(t / period + rnd(i, 2))
+        val on = if (p < 0.08f) p / 0.08f else if (p < 0.4f) 1f - (p - 0.08f) / 0.32f else 0f
+        if (on <= 0.02f) continue
+        val c = at(windows[i * 2], windows[i * 2 + 1])
+        softLight(c, unit * 7f, Color(PhotoSpots.windowColours[i]), 0.55f * on)
     }
-    // The river's reflections shimmer
-    for (i in 0 until 22) {
-        val y = 0.66f + 0.2f * rnd(i, 5).pow(1.3f)
-        val shimmer = 0.5f + 0.5f * sin(t * (1.1f + rnd(i, 6)) + i)
-        val c = at(0.25f + 0.73f * rnd(i, 7), y)
-        val len = size.width * (0.006f + 0.02f * rnd(i, 8))
-        drawLine(Color(0xFFFFC890), c, c + Offset(len, 0f), strokeWidth = 1.2f * unit, alpha = 0.22f * shimmer)
+    // Bridge lamps: a star each, breathing out of step
+    val lamps = PhotoSpots.bridgeLamps
+    for (i in 0 until lamps.size / 2) {
+        val c = at(lamps[i * 2], lamps[i * 2 + 1])
+        val shine = 0.5f + 0.5f * sin(t * (1.1f + 0.9f * rnd(i, 3)) + rnd(i, 4) * 6.28f)
+        val ray = unit * (9f + 9f * shine)
+        softLight(c, unit * 10f, Color(0xFFE8F4FF), 0.25f + 0.3f * shine)
+        drawLine(Color(0xFFEFF7FF), c - Offset(ray, 0f), c + Offset(ray, 0f), strokeWidth = unit, cap = StrokeCap.Round, alpha = 0.45f * shine)
+        drawLine(Color(0xFFEFF7FF), c - Offset(0f, ray * 0.8f), c + Offset(0f, ray * 0.8f), strokeWidth = unit, cap = StrokeCap.Round, alpha = 0.35f * shine)
+    }
+    // The beacon on the spire, a slow white heartbeat
+    val beat = fract(t / 2.4f)
+    val pulse = if (beat < 0.12f) beat / 0.12f else (1f - (beat - 0.12f) / 0.5f).coerceAtLeast(0f)
+    softLight(at(PhotoSpots.SPIRE_X, PhotoSpots.SPIRE_Y), unit * 26f, Color(0xFFF2F8FF), 0.75f * pulse)
+    // Cars on the bridge roadway, headlights coming, tail lights going, until the tiles hide them
+    for (i in 0 until 7) {
+        val inbound = i % 2 == 0
+        val p = fract(rnd(i, 5) + t * (0.018f + 0.008f * rnd(i, 6)) * (if (inbound) 1f else -1f))
+        val x = p * 0.46f
+        val c = at(x, 0.363f + 0.3f * x + (if (inbound) 0f else 0.006f))
+        val colour = if (inbound) Color(0xFFFFF1D6) else Color(0xFFFF4A3A)
+        val fade = (p / 0.06f).coerceIn(0f, 1f) * ((1f - p) / 0.06f).coerceIn(0f, 1f)
+        softLight(c, unit * 5f, colour, 0.7f * fade)
+        softLight(c + Offset(unit * 4f, unit * 1.2f), unit * 5f, colour, 0.7f * fade)
+    }
+    // A plane high over the harbour, every 50 seconds, its lights blinking
+    val flight = fract(t / 50f)
+    if (flight < 0.6f) {
+        val q = flight / 0.6f
+        val c = at(1.03f - q * 0.62f, 0.06f + 0.035f * q)
+        val strobe = if (fract(t * 0.9f) < 0.08f) 1f else 0f
+        val beacon = if (fract(t * 0.9f + 0.5f) < 0.18f) 1f else 0.15f
+        softLight(c, unit * 5f, Color(0xFFFFFFFF), 0.9f * strobe)
+        softLight(c + Offset(unit * 6f, unit * 1.5f), unit * 4f, Color(0xFFFF3B30), 0.85f * beacon)
+        drawCircle(Color(0xFFE8EEFF), radius = unit * 0.9f, center = c, alpha = 0.6f)
+    }
+    // The river: broken streaks of the lights above, rocking on the water
+    val river = PhotoSpots.riverColours
+    for (i in 0 until 60) {
+        val depth = rnd(i, 7).pow(1.2f)
+        val y = 0.885f + depth * 0.11f
+        val band = (rnd(i, 8) * river.size).toInt().coerceAtMost(river.size - 1)
+        val x = (band + rnd(i, 9)) / river.size + 0.006f * sin(t * 0.8f + i)
+        val flash = sin(t * (0.9f + 1.1f * rnd(i, 10)) + rnd(i, 11) * 6.28f).coerceAtLeast(0f).pow(3)
+        if (flash < 0.04f) continue
+        val len = w * (0.006f + 0.02f * rnd(i, 12)) * (0.7f + depth)
+        val c = at(x, y)
+        drawLine(river[band], c - Offset(len / 2, 0f), c + Offset(len / 2, 0f), strokeWidth = unit * (1f + depth), cap = StrokeCap.Round, alpha = 0.5f * flash)
     }
 }
 
