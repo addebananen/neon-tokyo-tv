@@ -7,6 +7,10 @@ APK="$1"
 OUT="$2"
 PKG=com.neontokyo.tv
 ACTIVITY=com.lumera.app.MainActivity
+# SMOKE_MODE=quick, for everyday builds, reviews two of the home styles that rotate from run to
+# run and leaves out the second profile and the scroll stress; the build for a release runs it all
+MODE="${SMOKE_MODE:-full}"
+RUN="${GITHUB_RUN_NUMBER:-0}"
 mkdir -p "$OUT"
 : > "$OUT/FAILURES.txt"
 step=0
@@ -181,7 +185,7 @@ photo_from_phone() {
   base="http://127.0.0.1:18080/$token"
   if ! curl -fsS -m 10 "$base" -o "$OUT/photo-page.html"; then fail "the photo page did not open"; return 1; fi
   if grep -q "{{" "$OUT/photo-page.html"; then fail "the photo page kept its placeholders"; fi
-  grep -q "Photo for" "$OUT/photo-page.html" || fail "the photo page has no title"
+  grep -q 'id="title"><span class="round-only">Photo</span>' "$OUT/photo-page.html" || fail "the photo page has no title"
   for asset in skyline.webp kanit-medium.ttf kanit-semibold-italic.ttf; do
     code=$(curl -s -m 10 -o /dev/null -w "%{http_code}" "$base/$asset")
     [ "$code" = 200 ] || fail "the photo page's $asset answered $code"
@@ -247,6 +251,23 @@ video_from_phone() {
   echo "$state" | grep -q '"done"' || fail "the phone was told $state instead of done"
   adb forward --remove tcp:18081 >/dev/null 2>&1
   return 0
+}
+
+# hold_ok <seconds>: holds OK down like a thumb on the remote. `input keyevent` can only tap or
+# long press, the shell may not write /dev/input, and the emulator console's keys never arrive
+# without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
+hold_ok() {
+  if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
+    local sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}" build tools
+    build=$(mktemp -d)
+    tools=$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)
+    javac -nowarn --release 8 -cp "$sdk/platforms/android-30/android.jar" -d "$build" "$(dirname "$0")/HoldKey.java" &&
+      "$tools/d8" --min-api 30 --lib "$sdk/platforms/android-30/android.jar" --output "$build" "$build/HoldKey.class" &&
+      adb push "$build/classes.dex" /data/local/tmp/holdkey.dex >/dev/null || return 1
+  fi
+  local ms
+  ms=$(awk -v s="$1" 'BEGIN { printf "%d", s * 1000 }')
+  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey 23 "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
@@ -572,25 +593,46 @@ adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" > "$OUT/ne
 sleep 8
 shot neon-home
 screen_has "WATCH &amp; LISTEN" || fail "Neon Home has no Watch and listen row"
-screen_has "HDMI 6" || fail "Neon Home does not show the consoles with their HDMI numbers"
+if screen_has "HDMI 6"; then fail "the consoles are still on the Home tab instead of on Källor"; fi
 screen_has "Neon Tokyo" || fail "Neon Home has no Neon Tokyo tile where Stremio used to be"
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Neon Home does not start on YouTube ($label has the focus)"
-key DPAD_DOWN
-sleep 1
-label=$(focused_label)
-[ "$label" = "PC" ] || fail "Down from YouTube did not reach the PC console ($label has the focus)"
-shot neon-home-consoles
-# A long press on a console asks which TV input it is on
-adb shell input keyevent --longpress DPAD_CENTER
-sleep 2
-shot neon-home-link
-screen_has "Which input is PC on" || fail "a long press on PC did not ask which input it is on"
-key BACK
-sleep 2
-if screen_has "Which input is PC on"; then fail "Back did not close the input picker"; fi
+# Holding OK for three seconds lifts a tile: the arrows move it, OK puts it down, and it stays
+if ! hold_ok 3.6; then
+  fail "could not hold OK down on the emulator"
+else
+  sleep 1
+  shot neon-home-lifted
+  screen_has "OK puts it down" || fail "holding OK on YouTube for three seconds did not lift it"
+  key DPAD_RIGHT
+  sleep 1
+  shot neon-home-moved
+  key DPAD_CENTER
+  sleep 1
+  if screen_has "OK puts it down"; then fail "OK did not put the lifted tile down"; fi
+  key DPAD_LEFT
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "YT Music" ] || fail "YouTube moved one step right, but $label is first instead of YT Music"
+  # A new Neon Home reads the order back; -S would kill the app and leave it on the profile picker
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" >/dev/null 2>&1
+  sleep 8
+  label=$(focused_label)
+  [ "$label" = "YT Music" ] || fail "the new order was gone when Neon Home opened again ($label is first)"
+  # And back to where it was, for the checks below
+  key DPAD_RIGHT
+  sleep 1
+  hold_ok 3.6
+  sleep 1
+  key DPAD_LEFT
+  sleep 1
+  key DPAD_CENTER
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "YouTube did not move back to the front ($label has the focus)"
+fi
 # Up from the tiles lands on the open tab, and pointing at All apps opens it
-key DPAD_UP DPAD_UP
+key DPAD_UP
 sleep 1
 label=$(focused_label)
 [ "$label" = "HOME" ] || fail "Up from YouTube did not land on the Home tab ($label has the focus)"
@@ -607,17 +649,176 @@ width=$(focused_width)
 key DPAD_RIGHT
 sleep 2
 shot neon-home-apps-focus
+# A short hold on an app in All apps puts it on Home in place of one of the four tiles: the
+# next app along, which is not on Home yet
+key DPAD_RIGHT
+sleep 1
+pinned=$(focused_label)
+adb shell input keyevent --longpress DPAD_CENTER
+sleep 2
+shot neon-home-pin
+if screen_has "Put $pinned on Home"; then
+  key DPAD_CENTER
+  sleep 2
+  key DPAD_UP
+  sleep 1
+  key DPAD_LEFT
+  sleep 2
+  key DPAD_DOWN
+  sleep 1
+  label=$(focused_label)
+  shot neon-home-pinned
+  [ "$label" = "$pinned" ] || fail "$pinned did not take the first Home tile ($label is there)"
+  # A short hold on a Home tile changes it, or puts the first four back
+  adb shell input keyevent --longpress DPAD_CENTER
+  sleep 2
+  shot neon-home-change
+  screen_has "Change $pinned" || fail "a short hold on a Home tile did not offer to change it"
+  key DPAD_UP
+  sleep 1
+  key DPAD_CENTER
+  sleep 2
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Back to the first four did not bring YouTube back to the front ($label is there)"
+  key DPAD_UP
+  sleep 1
+  key DPAD_RIGHT
+  sleep 2
+  key DPAD_DOWN
+  sleep 1
+  key DPAD_RIGHT
+  sleep 1
+else
+  key DPAD_LEFT
+  sleep 1
+  fail "a short hold on $pinned in All apps did not offer to put it on Home"
+  key BACK
+  sleep 1
+fi
+# Källor, next to All apps, has the consoles with their HDMI numbers
+key DPAD_UP
+sleep 1
+label=$(focused_label)
+[ "$label" = "ALL APPS" ] || fail "Up from the apps did not land on the All apps tab ($label has the focus)"
+key DPAD_RIGHT
+sleep 2
+shot neon-home-sources
+label=$(focused_label)
+[ "$label" = "KÄLLOR" ] || fail "right of All apps is $label, not the Källor tab"
+screen_has "HDMI 6" || fail "Källor does not show the consoles with their HDMI numbers"
+key DPAD_DOWN
+sleep 1
+label=$(focused_label)
+[ "$label" = "PC" ] || fail "Källor does not start with the PC on HDMI 1 ($label has the focus)"
+# Three big tiles to a row: 190dp, a little more while focused
+width=$(focused_width)
+[ "$width" -ge 340 ] && [ "$width" -le 450 ] || fail "Källor tiles are $width px wide instead of the big tile size"
+# A long press on a console asks which TV input it is on
+adb shell input keyevent --longpress DPAD_CENTER
+sleep 2
+shot neon-home-link
+screen_has "Which input is PC on" || fail "a long press on PC did not ask which input it is on"
+key BACK
+sleep 2
+if screen_has "Which input is PC on"; then fail "Back did not close the input picker"; fi
+# A console lifted on Källor goes down a whole row with Down
+if hold_ok 3.6; then
+  sleep 1
+  screen_has "OK puts it down" || fail "holding OK on PC for three seconds did not lift it"
+  key DPAD_DOWN
+  sleep 1
+  shot neon-home-sources-moved
+  key DPAD_CENTER
+  sleep 1
+  key DPAD_UP
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "Switch 2" ] || fail "PC moved down a row, but $label is above it instead of Switch 2"
+  key DPAD_DOWN
+  sleep 1
+  hold_ok 3.6
+  sleep 1
+  key DPAD_UP
+  sleep 1
+  key DPAD_CENTER
+  sleep 1
+  key DPAD_RIGHT
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "Switch 2" ] || fail "PC did not move back to the front of Källor ($label is next to it)"
+fi
 # Back goes to the Home tab first, then leaves the preview
 key BACK
 sleep 2
 label=$(focused_label)
-[ "$label" = "YouTube" ] || fail "Back on All apps did not return to YouTube ($label has the focus)"
+[ "$label" = "YouTube" ] || fail "Back on Källor did not return to YouTube ($label has the focus)"
 key BACK
 sleep 3
 shot neon-home-left noalive
 if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q NeonHomeActivity; then
   fail "Back on the Home tab did not leave the Neon Home preview"
 fi
+
+# Every home style, opened as a preview in it: a picture each of Home, and of All apps and
+# Källor for the style being reviewed
+others=(nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk)
+if [ "$MODE" = full ]; then
+  styles=(google_tv "${others[@]}" deepblue)
+  dreams=(lofi dusk nature deepblue)
+else
+  styles=(google_tv "${others[$((RUN * 2 % ${#others[@]}))]}" "${others[$(((RUN * 2 + 1) % ${#others[@]}))]}" deepblue)
+  dreams=("${styles[1]}" deepblue)
+fi
+echo "home styles under test ($MODE): ${styles[*]}"
+for style in "${styles[@]}"; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style "$style" >/dev/null 2>&1
+  sleep 7
+  shot "style-$style"
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
+  # The style under review is filmed too, for its motion
+  if [ "$style" = nature ]; then
+    adb shell settings put global animator_duration_scale 1
+    adb shell screenrecord --time-limit 16 --size 1280x720 --bit-rate 6000000 "/sdcard/style-$style.mp4" > "$OUT/style-record.txt" 2>&1
+    adb shell settings put global animator_duration_scale 0
+    adb pull "/sdcard/style-$style.mp4" "$OUT/style-$style.mp4" > /dev/null 2>&1 || true
+  fi
+  if [ "$style" = google_tv ]; then
+    key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
+    shot "style-$style-apps"
+    key DPAD_RIGHT; sleep 2
+    shot "style-$style-sources"
+    # Up from the tabs reaches the pills at the top; the profile pill is the first of them
+    key DPAD_UP; sleep 1
+    label=$(focused_label)
+    case "$label" in N|Neon|Search|Inputs|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3; do
+      # The pill reads as its face's letter or the profile's name
+      case "$label" in N|Neon) break ;; esac
+      key DPAD_LEFT; sleep 1
+      label=$(focused_label)
+    done
+    case "$label" in N|Neon) ;; *) fail "Left along the pills in the $style style ends on $label, not the profile pill" ;; esac
+    key DPAD_CENTER; sleep 2
+    shot "style-$style-profiles"
+    screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
+    key BACK; sleep 2
+    key BACK; sleep 2
+  fi
+  key BACK
+  sleep 2
+done
+
+# A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
+# opens over the app the way its Preview button does; clearing the task would close the app too
+for style in "${dreams[@]}"; do
+  adb shell am start -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
+  sleep 6
+  shot "dream-style-$style"
+  screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock"
+  key BACK
+  sleep 2
+done
 
 # Neon Home on the Home button, switched on and off the way the TV setup script does it. The
 # stock launcher answers Home ahead of any default for as long as it is on, so like the script
@@ -677,6 +878,7 @@ fi
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3
 
+if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
 menu_go Home
 sleep 8
@@ -757,6 +959,7 @@ if screen_has "What should we call you" || adb shell dumpsys input_method | grep
 else
   fail "Add Profile did not open the name step"
 fi
+fi
 
 # --- Leaving: two quick presses of Back switch the app off like an old TV ------
 menu_go Home
@@ -782,7 +985,8 @@ adb shell dumpsys meminfo "$PKG" > "$OUT/meminfo.txt" 2>&1
 kill "$LOGCAT_PID" 2>/dev/null
 sleep 1
 
-APP_PID_LINES=$(grep -n "FATAL EXCEPTION\|ANR in $PKG\|Application Not Responding" "$OUT/logcat-full.txt" || true)
+# Only the app's own crashes count: the stock launcher can fall over while the test disables it
+APP_PID_LINES=$( { grep -n -A1 "FATAL EXCEPTION" "$OUT/logcat-full.txt" | grep "Process: $PKG\b"; grep -n "ANR in $PKG" "$OUT/logcat-full.txt"; } || true)
 if [ -n "$APP_PID_LINES" ]; then
   fail "crash or ANR in logcat: $APP_PID_LINES"
   grep -A40 "FATAL EXCEPTION" "$OUT/logcat-full.txt" > "$OUT/crash.txt" || true

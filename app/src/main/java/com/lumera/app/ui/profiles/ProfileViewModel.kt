@@ -131,7 +131,9 @@ class ProfileViewModel @Inject constructor(
                         themeId = tempThemeId,
                         navPosition = "left",
                         homeTabLayout = "cinematic",
-                        roundCorners = true
+                        roundCorners = true,
+                        // Cast, trailers and More like this from the start, when the build has a TMDB key
+                        tmdbEnabled = com.lumera.app.BuildConfig.TMDB_API_KEY.isNotBlank()
                     )
                 ).toInt()
                 if (profileId > 0) {
