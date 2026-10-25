@@ -67,7 +67,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
         Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom, Ambience.Atomic -> 24
-        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch -> 30
+        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch, Ambience.Canopy -> 30
     }
     val time = rememberAmbientTime(fps)
     val context = LocalContext.current
@@ -101,6 +101,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Vapor -> vapor(t)
                     Ambience.Atomic -> atomic(t)
                     Ambience.Glitch -> glitch(t, lightImage)
+                    Ambience.Canopy -> canopy(t, lightImage)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -319,6 +320,7 @@ private fun DrawScope.calm(t: Float) {
  */
 private fun DrawScope.cityLights(t: Float, light: ImageBitmap?) {
     val w = size.width
+    val h = size.height
     val unit = 1.dp.toPx()
     if (light != null) {
         drawImage(light, dstSize = IntSize(w.roundToInt(), h.roundToInt()), alpha = 0.1f + 0.06f * sin(t * 0.5f), blendMode = BlendMode.Plus)
@@ -1089,5 +1091,107 @@ private fun DrawScope.glitch(t: Float, picture: ImageBitmap?) {
                 blendMode = BlendMode.Plus
             )
         }
+    }
+}
+
+/**
+ * Solarpunk, a photo of a garden under a glass dome with a waterfall pouring from its eye: the sun
+ * slides across the glass, shafts of light sway through the trees, the water falls and breathes
+ * mist, seeds drift up in the warm air and the train's lamps glow as it waits on its bridge.
+ */
+private fun DrawScope.canopy(t: Float, light: ImageBitmap?) {
+    val w = size.width
+    val h = size.height
+    val unit = 1.dp.toPx()
+    // Shafts of sun through the dome from the upper right, swaying a little
+    for (i in 0 until 4) {
+        val sway = 0.02f * sin(t * 0.11f + i * 1.7f)
+        val x0 = 0.58f + i * 0.11f + sway
+        val alpha = 0.05f + 0.03f * sin(t * 0.23f + i * 2.3f)
+        val path = Path().apply {
+            moveTo(x0 * w, 0f); lineTo((x0 + 0.05f) * w, 0f)
+            lineTo((x0 - 0.2f) * w, h); lineTo((x0 - 0.3f) * w, h); close()
+        }
+        drawPath(path, Brush.verticalGradient(0f to Color(0xFFFFF1C4).copy(alpha = alpha), 0.75f to Color(0xFFFFF1C4).copy(alpha = alpha * 0.4f), 1f to Color.Transparent), blendMode = BlendMode.Plus)
+    }
+    if (light != null) {
+        val dst = IntSize(w.roundToInt(), h.roundToInt())
+        drawImage(light, dstSize = dst, alpha = 0.08f + 0.05f * sin(t * 0.4f), blendMode = BlendMode.Plus)
+        // The sun sliding across the glass, pane by pane, every 16 seconds
+        val run = fract(t / 16f) * 1.6f - 0.3f
+        val half = 0.09f
+        val strips = 14
+        var edge = ((run - half).coerceIn(0f, 1f) * light.width).roundToInt()
+        val glass = (light.height * 0.5f).roundToInt()
+        for (k in 1..strips) {
+            val next = ((run - half + 2 * half * k / strips).coerceIn(0f, 1f) * light.width).roundToInt()
+            if (next > edge) {
+                val mid = (edge + next) / 2f / light.width
+                val strength = exp(-((mid - run) / (half * 0.5f)).pow(2))
+                val x0 = (edge.toFloat() / light.width * w).roundToInt()
+                val x1 = (next.toFloat() / light.width * w).roundToInt()
+                drawImage(
+                    light,
+                    srcOffset = IntOffset(edge, 0), srcSize = IntSize(next - edge, glass),
+                    dstOffset = IntOffset(x0, 0), dstSize = IntSize(x1 - x0, (h * 0.5f).roundToInt()),
+                    alpha = 0.45f * strength, blendMode = BlendMode.Plus
+                )
+            }
+            edge = next
+        }
+    }
+    // The waterfall: threads of water pouring out of the eye of the dome
+    val fall = Path().apply {
+        moveTo(0.258f * w, 0.505f * h); lineTo(0.438f * w, 0.505f * h)
+        lineTo(0.418f * w, 0.99f * h); lineTo(0.37f * w, 0.99f * h); close()
+    }
+    clipPath(fall) {
+        for (i in 0 until 46) {
+            val u = rnd(i, 1)
+            val speed = 0.42f + 0.25f * rnd(i, 2)
+            val p = fract(t * speed + rnd(i, 3))
+            val y = 0.5f + p * 0.52f
+            val narrow = (y - 0.505f) / 0.485f
+            val left = 0.258f + (0.37f - 0.258f) * narrow
+            val right = 0.438f + (0.418f - 0.438f) * narrow
+            val x = left + (right - left) * u
+            val len = h * (0.03f + 0.05f * rnd(i, 4)) * (0.6f + p)
+            drawLine(
+                Color(0xFFF2FBFF), Offset(x * w, y * h - len), Offset(x * w, y * h),
+                strokeWidth = unit * (0.8f + 1.2f * rnd(i, 5)), cap = StrokeCap.Round, alpha = 0.22f * sin(p * PI.toFloat())
+            )
+        }
+    }
+    // Spray where the water leaves the rim, and mist breathing out of the pool below
+    softLight(at(0.348f, 0.51f), w * 0.07f, Color(0xFFF4FBFF), 0.1f + 0.05f * sin(t * 1.3f))
+    for (i in 0 until 4) {
+        val p = fract(t / 9f + i / 4f)
+        val c = at(0.39f + (rnd(i, 6) - 0.5f) * 0.12f, 0.98f - p * 0.12f)
+        scale(scaleX = 1.6f, scaleY = 0.7f, pivot = c) {
+            softLight(c, w * (0.05f + 0.05f * p), Color(0xFFE6F6F2), 0.14f * sin(p * PI.toFloat()))
+        }
+    }
+    // Seeds and pollen drifting up through the warm air
+    for (i in 0 until 26) {
+        val p = fract(t / (24f + 14f * rnd(i, 7)) + rnd(i, 8))
+        val x = rnd(i, 9) + 0.03f * sin(t * 0.5f + i)
+        val y = 1.02f - p * 1.05f
+        val c = at(x, y)
+        val r = unit * (1.2f + 1.6f * rnd(i, 10))
+        val a = 0.55f * sin(p * PI.toFloat()) * (0.6f + 0.4f * sin(t * 2f + i))
+        softLight(c, r * 5f, Color(0xFFFFE6A0), a * 0.35f)
+        drawCircle(Color(0xFFFFF4D2), r * 0.6f, c, alpha = a)
+    }
+    // The train waiting on its bridge: lamps glowing and a gleam running along its windows
+    val lamp = at(0.632f, 0.875f)
+    softLight(lamp, w * 0.025f, Color(0xFFFFF0C8), 0.32f + 0.1f * sin(t * 0.9f))
+    softLight(lamp, w * 0.008f, Color.White, 0.5f)
+    val gleam = fract(t / 11f) * 1.6f - 0.3f
+    if (gleam in 0f..1f) {
+        val gx = (0.43f + gleam * 0.19f) * w
+        drawRect(
+            Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color(0x55FFFFFF), 1f to Color.Transparent, startX = gx - w * 0.02f, endX = gx + w * 0.02f),
+            topLeft = Offset(gx - w * 0.02f, 0.81f * h), size = Size(w * 0.04f, 0.04f * h), blendMode = BlendMode.Plus
+        )
     }
 }

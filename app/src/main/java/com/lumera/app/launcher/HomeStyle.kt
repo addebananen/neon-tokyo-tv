@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor, Atomic, Glitch }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor, Atomic, Glitch, Canopy }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -373,6 +373,23 @@ enum class HomeStyle(
             letterSpacing = 3.sp
         ),
         light = R.drawable.home_style_cyber_glitch
+    ),
+    Solarpunk(
+        "solarpunk", "Solarpunk", "A garden city under glass, a waterfall from the sky and a train through the trees",
+        R.drawable.home_style_solarpunk, Ambience.Canopy,
+        HomeLook(
+            accent = Color(0xFF8CF29A), accent2 = Color(0xFFFFD66E), text = Color(0xFFF4FFF2), dim = Color(0xFFB9D3BE),
+            pane = Color(0xB80A1C14), pill = Color(0x990A1C14), pillFocused = Color(0xD0163A28),
+            tileTop = Color(0xD9143024), tileBottom = Color(0xD9061410),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = false,
+            clockSize = 78.sp, clockColor = Color(0xFFF6FFF0), clockGlow = Color(0x998CF29A), clockBlur = 18f,
+            shade = Color(0x99041009), corner = 22.dp, glow = 14.dp, toward = Color(0xFFFFE08A), pull = 0.4f,
+            letterSpacing = 0.5.sp
+        ),
+        light = R.drawable.home_style_solarpunk_glow,
+        drift = true,
+        driftX = 0.36f,
+        driftY = 0.46f
     );
 
     companion object {
