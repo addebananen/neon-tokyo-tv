@@ -223,7 +223,7 @@ enum class HomeStyle(
         driftY = 0.33f
     ),
     LoFi(
-        "lofi", "Cozy Lo-Fi", "A reading nook on a rainy night, the cat watching the city through a round window",
+        "lofi", "Cozy Lo-Fi", "A hand-inked desk under a round window on a rainy night, the cat asleep on the rug",
         R.drawable.home_style_lofi, Ambience.LoFi,
         HomeLook(
             accent = Color(0xFFFFC874), accent2 = Color(0xFFC3A4FF), text = Color(0xFFFFF1E6), dim = Color(0xFFCBB6C8),

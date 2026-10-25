@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
@@ -545,29 +546,29 @@ private fun DrawScope.nightRain(t: Float) {
     }
 }
 
-/** Lo-Fi: the fairy lights painted round the window, in the order they hang. */
+/** Lo-Fi: the string lights painted along the top of the room, in the order they hang. */
 private val LoFiBulbs = floatArrayOf(
-    0.5704f, 0.3307f, 0.569f, 0.3205f, 0.5688f, 0.3015f, 0.5699f, 0.272f, 0.5721f, 0.2342f, 0.5755f, 0.2107f, 0.58f, 0.2017f, 0.5857f, 0.1849f, 0.5924f, 0.1585f, 0.6001f, 0.1246f, 0.6088f, 0.1059f, 0.6184f, 0.1026f, 0.6288f, 0.0922f, 0.64f, 0.0728f, 0.6518f, 0.0467f, 0.6641f, 0.0364f, 0.6769f, 0.0419f, 0.6901f, 0.0409f, 0.7035f, 0.0314f, 0.7171f, 0.0153f, 0.7308f, 0.0153f, 0.7444f, 0.0314f, 0.7578f, 0.0409f, 0.771f, 0.0419f, 0.7838f, 0.0364f, 0.7962f, 0.0467f, 0.8079f, 0.0728f, 0.8191f, 0.0922f, 0.8295f, 0.1026f, 0.8391f, 0.1059f, 0.8478f, 0.1246f, 0.8555f, 0.1585f, 0.8622f, 0.1849f, 0.8679f, 0.2017f, 0.8724f, 0.2107f, 0.8758f, 0.2342f, 0.8781f, 0.272f, 0.8791f, 0.3015f, 0.8789f, 0.3205f, 0.8775f, 0.3307f
+    0.3771f, 0.0484f, 0.4021f, 0.0779f, 0.4271f, 0.0907f, 0.4521f, 0.0831f, 0.4771f, 0.0588f, 0.5016f, 0.0592f, 0.5255f, 0.0842f, 0.5495f, 0.0926f, 0.5734f, 0.0805f, 0.5974f, 0.0518f, 0.6224f, 0.0518f, 0.6484f, 0.0805f, 0.6745f, 0.0926f, 0.7005f, 0.0842f, 0.7266f, 0.0592f, 0.7521f, 0.0588f, 0.7771f, 0.0831f, 0.8021f, 0.0907f, 0.8271f, 0.0779f, 0.8521f, 0.0484f, 0.8771f, 0.0503f, 0.9021f, 0.0834f, 0.9271f, 0.1f, 0.9521f, 0.096f, 0.9771f, 0.0755f
 )
 
 /**
- * Lo-Fi, a painted reading nook on a rainy night: drops gather and run down the round window,
- * lightning flickers far off over the city, the fairy lights twinkle, the paper lantern breathes,
- * steam curls off the mug and the cassette turns on the desk.
+ * Lo-Fi, a hand-inked painting of a desk under a round window on a rainy night: drops gather and
+ * run down the glass, lightning flickers far off over the city, the string lights twinkle, the desk
+ * lamp and the sconce glow warm, steam curls off the mug and the cat on the rug sleeps on.
  */
 private fun DrawScope.loFi(t: Float) {
     val w = size.width
     val h = size.height
     val unit = 1.dp.toPx()
     val px = w / 1920f
-    val glass = Offset(1390f * px, 300f * h / 1080f)
-    val radius = 250f * px
+    val glass = Offset(1170f * px, 292f * h / 1080f)
+    val radius = 226f * px
     val window = Path().apply { addOval(Rect(glass, radius)) }
     clipPath(window) {
         // Far-off lightning lighting the clouds for a moment every half minute or so
         val storm = fract(t / 27f)
         val flash = if (storm < 0.012f) 1f else if (storm in 0.018f..0.03f) 0.6f else 0f
-        if (flash > 0f) softLight(glass - Offset(radius * 0.3f, radius * 0.5f), radius * 1.4f, Color(0xFFE6D8FF), 0.28f * flash)
+        if (flash > 0f) softLight(glass - Offset(radius * 0.3f, radius * 0.5f), radius * 1.4f, Color(0xFFE6D8FF), 0.3f * flash)
         // Drops hang, then run: most of the way down happens in the second half
         for (i in 0 until 14) {
             val period = 5f + 6f * rnd(i, 1)
@@ -578,32 +579,33 @@ private fun DrawScope.loFi(t: Float) {
             val x = glass.x + (rnd(seed, 3) - 0.5f) * radius * 1.7f
             val y = glass.y - radius + radius * 2f * run
             val c = Offset(x, y)
-            drawLine(Color(0xFFD8CCFF), Offset(x, y - h * 0.06f), c, strokeWidth = 2f * unit, alpha = 0.12f, cap = StrokeCap.Round)
-            drawOval(Color(0xFFEFE8FF), topLeft = c - Offset(2.5f * unit, 3f * unit), size = Size(5f * unit, 6.5f * unit), alpha = 0.45f)
+            drawLine(Color(0xFFD8CCFF), Offset(x, y - h * 0.06f), c, strokeWidth = 2f * unit, alpha = 0.14f, cap = StrokeCap.Round)
+            drawOval(Color(0xFFEFE8FF), topLeft = c - Offset(2.5f * unit, 3f * unit), size = Size(5f * unit, 6.5f * unit), alpha = 0.5f)
         }
     }
-    // The fairy lights, twinkling one by one
+    // The string lights, twinkling one by one
     for (k in 0 until LoFiBulbs.size / 2) {
         val tw = 0.5f + 0.5f * sin(t * (0.7f + rnd(k, 4)) + k * 1.3f)
-        softLight(at(LoFiBulbs[k * 2], LoFiBulbs[k * 2 + 1]), 22f * unit, if (k % 3 == 0) Color(0xFFFF8FA8) else Color(0xFFFFC874), 0.35f * tw)
+        softLight(at(LoFiBulbs[k * 2], LoFiBulbs[k * 2 + 1]), 24f * unit, if (k % 4 == 1) Color(0xFFFF9AB8) else Color(0xFFFFCF7A), 0.38f * tw)
     }
-    // The paper lantern breathing warm
-    val lantern = at(0.5208f, 0.1981f)
-    softLight(lantern, w * 0.12f, Color(0xFFFFA060), 0.1f + 0.04f * sin(t * 0.8f) + 0.02f * sin(t * 2.3f))
+    // The desk lamp and the sconce glowing warm, never quite still
+    softLight(at(0.4592f, 0.3079f), w * 0.1f, Color(0xFFFFC070), 0.1f + 0.03f * sin(t * 0.8f) + 0.015f * sin(t * 2.3f))
+    softLight(at(0.9615f, 0.287f), w * 0.06f, Color(0xFFFFC070), 0.1f + 0.03f * sin(t * 0.6f + 1f))
     // Steam curling up off the mug
     for (i in 0 until 4) {
         val p = fract(t / 4.5f + i / 4f)
-        val c = at(1198f / 1920f + 0.008f * sin(p * 6f + i), 466f / 1080f - p * 0.11f)
-        softLight(c, (8f + 14f * p) * unit, Color(0xFFFFF4EA), 0.22f * sin(p * PI.toFloat()))
+        val c = at(0.5906f + 0.008f * sin(p * 6f + i), 0.463f - p * 0.11f)
+        softLight(c, (8f + 14f * p) * unit, Color(0xFFFFF4EA), 0.24f * sin(p * PI.toFloat()))
     }
-    // The cassette turning: spokes going round in both reels
-    for (reel in listOf(Offset(1500.4f, 890.5f), Offset(1560.4f, 893.5f))) {
-        val c = Offset(reel.x * px, reel.y * h / 1080f)
-        for (s in 0 until 3) {
-            val a = t * 2.4f + s * 2.094f
-            val dir = Offset(cos(a), sin(a))
-            drawLine(Color(0xFF2A2436), c + dir * (5f * px), c + dir * (12f * px), strokeWidth = 2.2f * px, cap = StrokeCap.Round)
+    // The cat asleep on the rug: little z's drifting up and fading
+    for (i in 0 until 3) {
+        val p = fract(t / 6f + i / 3f)
+        val c = at(0.205f + p * 0.02f + 0.006f * sin(p * 7f), 0.82f - p * 0.09f)
+        val s = (6f + 6f * p) * unit
+        val z = Path().apply {
+            moveTo(c.x - s / 2, c.y - s / 2); lineTo(c.x + s / 2, c.y - s / 2); lineTo(c.x - s / 2, c.y + s / 2); lineTo(c.x + s / 2, c.y + s / 2)
         }
+        drawPath(z, Color(0xFFFFF0D8), alpha = 0.7f * sin(p * PI.toFloat()), style = Stroke(width = 1.8f * unit, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
