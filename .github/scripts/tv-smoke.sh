@@ -7,6 +7,10 @@ APK="$1"
 OUT="$2"
 PKG=com.neontokyo.tv
 ACTIVITY=com.lumera.app.MainActivity
+# SMOKE_MODE=quick, for everyday builds, reviews two of the home styles that rotate from run to
+# run and leaves out the second profile and the scroll stress; the build for a release runs it all
+MODE="${SMOKE_MODE:-full}"
+RUN="${GITHUB_RUN_NUMBER:-0}"
 mkdir -p "$OUT"
 : > "$OUT/FAILURES.txt"
 step=0
@@ -757,7 +761,16 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-for style in google_tv nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk deepblue; do
+others=(nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk)
+if [ "$MODE" = full ]; then
+  styles=(google_tv "${others[@]}" deepblue)
+  dreams=(lofi dusk nature deepblue)
+else
+  styles=(google_tv "${others[$((RUN * 2 % ${#others[@]}))]}" "${others[$(((RUN * 2 + 1) % ${#others[@]}))]}" deepblue)
+  dreams=("${styles[1]}" deepblue)
+fi
+echo "home styles under test ($MODE): ${styles[*]}"
+for style in "${styles[@]}"; do
   adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style "$style" >/dev/null 2>&1
   sleep 7
   shot "style-$style"
@@ -796,9 +809,10 @@ for style in google_tv nature anime clean city faith car car_night lofi cottage 
   sleep 2
 done
 
-# A home style's own screensaver: its picture, its little lights and a quiet clock
-for style in lofi dusk nature deepblue; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
+# A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
+# opens over the app the way its Preview button does; clearing the task would close the app too
+for style in "${dreams[@]}"; do
+  adb shell am start -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
   sleep 6
   shot "dream-style-$style"
   screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock"
@@ -864,6 +878,7 @@ fi
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3
 
+if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
 menu_go Home
 sleep 8
@@ -943,6 +958,7 @@ if screen_has "What should we call you" || adb shell dumpsys input_method | grep
   fi
 else
   fail "Add Profile did not open the name step"
+fi
 fi
 
 # --- Leaving: two quick presses of Back switch the app off like an old TV ------

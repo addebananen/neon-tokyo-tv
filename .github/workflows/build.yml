@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, dev]
   workflow_dispatch:
+    inputs:
+      full:
+        description: Run the whole TV test (every home style, both profiles), as a release does
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -118,8 +123,11 @@ jobs:
           # which resolve when the resource table carries the package name
           "$BT/aapt2" dump resources neon-tokyo-test.apk 2>/dev/null | grep -m1 "Package name" || true
 
+      # Everyday builds run the quick test; the build for a release on main runs all of it
       - name: Run TV smoke test
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SMOKE_MODE: ${{ (github.ref == 'refs/heads/main' || inputs.full) && 'full' || 'quick' }}
         with:
           api-level: 30
           target: android-tv
