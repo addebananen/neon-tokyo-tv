@@ -19,7 +19,9 @@ class DreamVideoUploadServer(
     port: Int,
     private val context: Context,
     private val token: String,
-    private val listener: Listener
+    private val listener: Listener,
+    /** For a home profile's background rather than the screensaver: the page says so. */
+    private val background: Boolean = false
 ) : NanoHTTPD(port) {
 
     interface Listener {
@@ -45,6 +47,7 @@ class DreamVideoUploadServer(
     private val page: String by lazy {
         context.assets.open("dream_video_upload.html").bufferedReader().use { it.readText() }
             .replace("{{BASE}}", base)
+            .replace("<body>", if (background) "<body class=\"background\">" else "<body>")
     }
 
     companion object {

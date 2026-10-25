@@ -40,13 +40,14 @@ class AvatarServerManager {
     suspend fun startServer(
         context: Context,
         profileName: String,
-        listener: AvatarUploadServer.Listener
+        listener: AvatarUploadServer.Listener,
+        wide: Boolean = false
     ): ServerInfo? = withContext(Dispatchers.IO) {
         val ip = NetworkUtils.getLocalIpAddress() ?: return@withContext null
         val token = newToken()
         for (port in PORT_START..PORT_END) {
             try {
-                val avatarServer = AvatarUploadServer(port, context.applicationContext, token, profileName, listener)
+                val avatarServer = AvatarUploadServer(port, context.applicationContext, token, profileName, listener, wide)
                 avatarServer.start()
                 server = avatarServer
                 if (closed) {

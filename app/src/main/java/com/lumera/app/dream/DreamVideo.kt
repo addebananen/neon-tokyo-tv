@@ -24,12 +24,12 @@ object DreamVideo {
     fun roomFor(context: Context): Long = (folder(context).usableSpace - 512L * 1024 * 1024).coerceAtLeast(0)
 
     /**
-     * Makes [upload] the screensaver video if it has a picture the TV can open, and returns a
+     * Makes [upload] the screensaver video, at [target], if it has a picture the TV can open, and returns a
      * frame of it to show; otherwise deletes it, keeps the video there was, and returns null.
      */
-    fun install(context: Context, upload: File): Bitmap? {
+    fun install(context: Context, upload: File, target: File = file(context)): Bitmap? {
         val frame = frameOf(upload)
-        if (frame == null || !upload.renameTo(file(context))) {
+        if (frame == null || !upload.renameTo(target)) {
             upload.delete()
             return null
         }

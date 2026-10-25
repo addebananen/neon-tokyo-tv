@@ -8,6 +8,18 @@ import org.junit.Test
 class NeonHomeTest {
 
     @Test
+    fun homeTilesAreTheFourFavouritesUntilAdrianPicksHisOwn() {
+        assertEquals(listOf("YouTube", "YT Music", "Spotify", "Neon Tokyo"), homeSlots(emptyList(), emptyList()).map { it.name })
+        val tv4 = InstalledApp("se.tv4.tv4playtab", "TV4 Play", HomeCatalog.known("se.tv4.tv4playtab", "TV4 Play"))
+        val other = InstalledApp("com.example.radio", "Radio Sweden", null)
+        val keys = listOf(DefaultHomeKeys[0], DefaultHomeKeys[1], tv4.packageName, other.packageName)
+        val slots = homeSlots(keys, listOf(tv4, other))
+        assertEquals(listOf("YouTube", "YT Music", "TV4 Play", "Radio Sweden"), slots.map { it.name })
+        assertNull(slots[3].known)
+        assertEquals(HomeCatalog.monogramColor("Radio Sweden"), slots[3].color)
+    }
+
+    @Test
     fun consolesAreNumberedOneToSixInAdriansOrder() {
         assertEquals(listOf("PC", "Switch 2", "Xbox 360", "Wii U", "Wii", "Xbox"), HomeCatalog.consoles.map { it.name })
         assertEquals((1..6).toList(), HomeCatalog.consoles.map { it.port })

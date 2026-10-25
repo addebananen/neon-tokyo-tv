@@ -143,6 +143,14 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
 <script>
 (function () {
   "use strict";
+  // The same page sends a home screen background: only the words change
+  if (document.body.className === "background") {
+    document.title = "Neon Tokyo · Home screen video";
+    document.getElementById("title").textContent = "Your home screen";
+    document.querySelector("#pick p").textContent = "Pick a video and it plays behind your tiles on the TV, on a loop and without sound.";
+    document.querySelector("#done p").textContent = "Your video is behind the home screen now. You can close this page.";
+    document.querySelector("#closed p").textContent = "Open it again on the TV: hold OK on your profile on Neon Home, then Own video.";
+  }
   var BASE = "{{BASE}}";
   var MAX = 2 * 1024 * 1024 * 1024;
   var views = ["pick", "check", "sending", "done", "closed"];

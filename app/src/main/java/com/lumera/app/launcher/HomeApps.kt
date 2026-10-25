@@ -50,13 +50,19 @@ object HomeApps {
         }
     }
 
+    /** Opens the app with [packageName], or its Play Store page when it has gone from the TV. */
     fun open(context: Context, packageName: String) {
         val intent = launchIntent(context, packageName)
-        if (intent == null) {
-            Toast.makeText(context, "That app is no longer on the TV", Toast.LENGTH_SHORT).show()
+        if (intent != null) {
+            start(context, intent)
             return
         }
-        start(context, intent)
+        val store = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(store)
+        } catch (e: Exception) {
+            Toast.makeText(context, "That app is no longer on the TV", Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** Starts [intent], and says so on screen when nothing on the TV can open it. */

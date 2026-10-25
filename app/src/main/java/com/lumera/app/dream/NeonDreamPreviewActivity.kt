@@ -7,6 +7,8 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import com.lumera.app.dream.drive.CityDriveView
+import com.lumera.app.launcher.HomeDream
+import com.lumera.app.launcher.StyleDreamView
 
 /** Shows the screensaver right away, from Settings › Personalization. Any button ends it. */
 class NeonDreamPreviewActivity : Activity() {
@@ -18,7 +20,8 @@ class NeonDreamPreviewActivity : Activity() {
         super.onCreate(savedInstanceState)
         openedAt = SystemClock.uptimeMillis()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        scene = NeonDreamStyle.view(this)
+        // A home style's own screensaver can be asked for by its key, as the emulator test does
+        scene = intent.getStringExtra("style")?.let { HomeDream.preview(this, it) } ?: NeonDreamStyle.view(this)
         setContentView(scene)
         @Suppress("DEPRECATION")
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
@@ -28,12 +31,14 @@ class NeonDreamPreviewActivity : Activity() {
         super.onPause()
         (scene as? CityDriveView)?.onPause()
         (scene as? VideoDreamView)?.onPause()
+        (scene as? StyleDreamView)?.onPause()
     }
 
     override fun onResume() {
         super.onResume()
         (scene as? CityDriveView)?.onResume()
         (scene as? VideoDreamView)?.onResume()
+        (scene as? StyleDreamView)?.onResume()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
