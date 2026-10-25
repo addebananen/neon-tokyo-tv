@@ -249,34 +249,21 @@ video_from_phone() {
   return 0
 }
 
-# hold_ok <seconds>: holds OK down like a thumb on the remote (input keyevent can only tap or
-# long press). Each way of pressing a key from outside is tried until Android's input reader
-# says a key is down: the emulator console's keyboard first, then raw events as root
-key_edge() {  # key_edge <way> <1 down|0 up>
-  case "$1" in
-    emu:*) adb emu event send "EV_KEY:${1#emu:}:$2" EV_SYN:0:0 2>&1 | tr -d '\r' | head -1 ;;
-    root)
-      local dev
-      dev=$(adb shell getevent -pl 2>/dev/null | tr -d '\r' | awk '/^add device/{d=$4} /KEY_ENTER/{print d; exit}')
-      [ -n "$dev" ] && adb shell "sendevent $dev 1 28 $2 && sendevent $dev 0 0 0" 2>&1 | head -1 ;;
-  esac
-}
+# hold_ok <seconds>: holds OK down like a thumb on the remote. `input keyevent` can only tap or
+# long press, the shell may not write /dev/input, and the emulator console's keys never arrive
+# without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
 hold_ok() {
-  local way reply
-  for way in emu:KEY_ENTER emu:KEY_CENTER root; do
-    [ "$way" = root ] && { adb root >/dev/null 2>&1; timeout 30 adb wait-for-device; }
-    reply=$(key_edge "$way" 1)
-    sleep 0.4
-    if adb shell dumpsys input 2>/dev/null | grep -q 'KeyDowns: [1-9]'; then
-      sleep "$(awk -v s="$1" 'BEGIN { print (s > 0.6 ? s - 0.4 : 0.2) }')"
-      key_edge "$way" 0 >/dev/null
-      echo "held OK for $1 s with $way"
-      return 0
-    fi
-    key_edge "$way" 0 >/dev/null
-    echo "holding OK with $way did not reach Android (${reply:-no reply})"
-  done
-  return 1
+  if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
+    local sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}" build tools
+    build=$(mktemp -d)
+    tools=$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)
+    javac -nowarn --release 8 -cp "$sdk/platforms/android-30/android.jar" -d "$build" "$(dirname "$0")/HoldKey.java" &&
+      "$tools/d8" --min-api 30 --lib "$sdk/platforms/android-30/android.jar" --output "$build" "$build/HoldKey.class" &&
+      adb push "$build/classes.dex" /data/local/tmp/holdkey.dex >/dev/null || return 1
+  fi
+  local ms
+  ms=$(awk -v s="$1" 'BEGIN { printf "%d", s * 1000 }')
+  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey 23 "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
