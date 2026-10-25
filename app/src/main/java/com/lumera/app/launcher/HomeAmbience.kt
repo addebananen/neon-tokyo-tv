@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -66,7 +67,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
         Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom, Ambience.Atomic -> 24
-        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor -> 30
+        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch -> 30
     }
     val time = rememberAmbientTime(fps)
     val context = LocalContext.current
@@ -99,6 +100,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Sunroom -> sunroom(t, lightImage)
                     Ambience.Vapor -> vapor(t)
                     Ambience.Atomic -> atomic(t)
+                    Ambience.Glitch -> glitch(t, lightImage)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -1007,6 +1009,85 @@ private fun DrawScope.atomic(t: Float) {
                 drawCircle(if (on) Color(0xFFFFE08A) else Color(0xFF8A6A3A), radius = unit * 1.6f, center = c + Offset(-s * 0.7f + j * s * 0.35f, s * 0.05f))
             }
             if (fract(t / 3f) < 0.5f) softLight(c + Offset(0f, s * 0.6f), s * 0.9f, Color(0xFFBFFFF4), 0.18f)
+        }
+    }
+}
+
+/** Cyber Renaissance: the gilded frames in the gallery photo, corner by corner. */
+private val GalleryFrames = listOf(
+    floatArrayOf(0.628f, 0.191f, 0.95f, 0.022f, 0.943f, 0.652f, 0.628f, 0.596f),
+    floatArrayOf(0.342f, 0.163f, 0.494f, 0.181f, 0.494f, 0.593f, 0.344f, 0.593f),
+    floatArrayOf(0.533f, 0.218f, 0.596f, 0.205f, 0.596f, 0.338f, 0.533f, 0.342f)
+)
+
+/**
+ * Cyber Renaissance, a photo of old masters in a gallery at night: a scanning line traces the
+ * gilded frames, a halo turns over the marble figure, a band of interference drifts down and every
+ * few seconds the picture tears into slices of cyan and magenta for a moment.
+ */
+private fun DrawScope.glitch(t: Float, picture: ImageBitmap?) {
+    val w = size.width
+    val h = size.height
+    val unit = 1.dp.toPx()
+    // Frames traced by a moving dashed line, with brackets at the corners
+    GalleryFrames.forEachIndexed { i, f ->
+        val path = Path().apply {
+            moveTo(f[0] * w, f[1] * h); lineTo(f[2] * w, f[3] * h); lineTo(f[4] * w, f[5] * h); lineTo(f[6] * w, f[7] * h); close()
+        }
+        val on = 0.35f + 0.25f * sin(t * 1.4f + i * 2f)
+        drawPath(
+            path, Color(0xFF4DF0FF), alpha = on,
+            style = Stroke(width = unit * 1.2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(unit * 14f, unit * 10f), -t * unit * 40f * (if (i % 2 == 0) 1f else -1f)))
+        )
+        for (k in 0 until 4) {
+            val c = Offset(f[k * 2] * w, f[k * 2 + 1] * h)
+            val n = Offset(f[((k + 1) % 4) * 2] * w, f[((k + 1) % 4) * 2 + 1] * h)
+            val p = Offset(f[((k + 3) % 4) * 2] * w, f[((k + 3) % 4) * 2 + 1] * h)
+            val toN = (n - c) / (n - c).getDistance() * unit * 16f
+            val toP = (p - c) / (p - c).getDistance() * unit * 16f
+            drawLine(Color(0xFF9FF8FF), c, c + toN, strokeWidth = unit * 2f, alpha = 0.8f)
+            drawLine(Color(0xFF9FF8FF), c, c + toP, strokeWidth = unit * 2f, alpha = 0.8f)
+        }
+    }
+    // A halo turning over the marble figure
+    val head = at(0.245f, 0.262f)
+    val turn = t * 1.2f
+    for (k in 0 until 2) {
+        val rx = unit * (38f + k * 14f)
+        rotate(degrees = 8f * sin(turn + k), pivot = head) {
+            drawOval(
+                Color(0xFF4DF0FF), topLeft = head - Offset(rx, rx * 0.22f), size = Size(rx * 2f, rx * 0.44f),
+                alpha = 0.45f - k * 0.15f, style = Stroke(unit * 1.2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(unit * 6f, unit * 5f), turn * unit * 30f * (if (k == 0) 1f else -1f)))
+            )
+        }
+    }
+    // A band of interference drifting down
+    val band = fract(t / 9f) * h * 1.2f - h * 0.1f
+    drawRect(
+        Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color(0x1A9FF8FF), 1f to Color.Transparent, startY = band - unit * 18f, endY = band + unit * 18f),
+        topLeft = Offset(0f, band - unit * 18f), size = Size(w, unit * 36f)
+    )
+    // Every few seconds the picture tears for a moment
+    val beat = floor(t / 5.5f).toInt()
+    val tear = fract(t / 5.5f)
+    if (picture != null && tear < 0.06f) {
+        val sx = picture.width / w
+        val sy = picture.height / h
+        for (k in 0 until 5) {
+            val y0 = rnd(beat * 7 + k, 1) * h * 0.9f
+            val bandH = unit * (6f + 30f * rnd(beat * 7 + k, 2))
+            val shift = (rnd(beat * 7 + k, 3) - 0.5f) * unit * 70f
+            val colour = if (k % 2 == 0) Color(0xFF00F0FF) else Color(0xFFFF2BD6)
+            drawImage(
+                picture,
+                srcOffset = IntOffset(0, (y0 * sy).roundToInt()),
+                srcSize = IntSize(picture.width, (bandH * sy).roundToInt().coerceAtLeast(1)),
+                dstOffset = IntOffset(shift.roundToInt(), y0.roundToInt()),
+                dstSize = IntSize((picture.width / sx).roundToInt(), bandH.roundToInt()),
+                alpha = 0.55f,
+                colorFilter = ColorFilter.tint(colour, BlendMode.Modulate),
+                blendMode = BlendMode.Plus
+            )
         }
     }
 }

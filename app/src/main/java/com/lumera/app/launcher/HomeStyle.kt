@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor, Atomic }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor, Atomic, Glitch }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -359,6 +359,20 @@ enum class HomeStyle(
             shade = Color(0x990A1A20), corner = 22.dp, glow = 12.dp, toward = Color(0xFFF2C77B), pull = 0.4f,
             letterSpacing = 2.sp
         )
+    ),
+    Cyber(
+        "cyber", "Cyber Renaissance", "Old masters in a gallery at night, seen through a glitching lens",
+        R.drawable.home_style_cyber, Ambience.Glitch,
+        HomeLook(
+            accent = Color(0xFF4DF0FF), accent2 = Color(0xFFE8C27A), text = Color(0xFFF2F0EA), dim = Color(0xFFA9B5B3),
+            pane = Color(0xCC0B1517), pill = Color(0x990B1517), pillFocused = Color(0xE0163038),
+            tileTop = Color(0xD9142226), tileBottom = Color(0xD905090A),
+            font = CormorantFamily, weight = FontWeight.SemiBold, italic = false,
+            clockSize = 76.sp, clockColor = Color(0xFFF6F2E8), clockGlow = Color(0xAA4DF0FF), clockBlur = 14f,
+            shade = Color(0xAA020506), corner = 2.dp, glow = 14.dp, toward = Color(0xFFE8C27A), pull = 0.45f,
+            letterSpacing = 3.sp
+        ),
+        light = R.drawable.home_style_cyber_glitch
     );
 
     companion object {
