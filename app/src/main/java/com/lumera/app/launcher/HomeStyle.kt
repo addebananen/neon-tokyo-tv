@@ -1,0 +1,243 @@
+package com.lumera.app.launcher
+
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lumera.app.R
+import com.lumera.app.ui.components.NeonPalette
+import com.lumera.app.ui.theme.KanitFamily
+
+// The other faces the styles letter in (SIL Open Font License, see third_party/fonts)
+private val OutfitFamily = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
+private val NunitoFamily = FontFamily(
+    Font(R.font.nunito_bold, FontWeight.Bold),
+    Font(R.font.nunito_bold_italic, FontWeight.Bold, FontStyle.Italic)
+)
+private val CormorantFamily = FontFamily(
+    Font(R.font.cormorant_semibold, FontWeight.SemiBold),
+    Font(R.font.cormorant_semibold_italic, FontWeight.SemiBold, FontStyle.Italic)
+)
+private val OswaldFamily = FontFamily(Font(R.font.oswald_medium, FontWeight.Medium))
+
+/**
+ * How a style dresses the home screen: its colours, its type and its tiles. [text] and [dim] are
+ * for everything written on the screen and on the tiles; [accent] lights what has the focus and
+ * [accent2] the glyphs on the buttons and the rule beside a row's title.
+ */
+data class HomeLook(
+    val accent: Color,
+    val accent2: Color,
+    val text: Color,
+    val dim: Color,
+    /** Behind the tabs and the note at the foot of the screen. */
+    val pane: Color,
+    /** The buttons at the top, resting and in focus. */
+    val pill: Color,
+    val pillFocused: Color,
+    val tileTop: Color,
+    val tileBottom: Color,
+    val font: FontFamily,
+    val weight: FontWeight,
+    /** Titles, tabs and the clock lean when the face has an italic. */
+    val italic: Boolean,
+    val clockSize: TextUnit,
+    val clockColor: Color,
+    /** The clock's glow, or the soft shadow that keeps it readable on a bright picture. */
+    val clockGlow: Color,
+    val clockBlur: Float,
+    /** A soft shadow under writing that sits right on the picture, or none on a dark one. */
+    val shade: Color?,
+    val corner: Dp,
+    val glow: Dp,
+    /** How far an app's own colour is drawn towards [toward], so the tiles sit in the picture. */
+    val toward: Color?,
+    val pull: Float,
+    val letterSpacing: TextUnit = 1.sp,
+    val upperTitles: Boolean = true,
+    /** Writing lit like neon tubes, glowing in the accents, rather than shaded for readability. */
+    val glowingText: Boolean = false
+) {
+    val tileFill: Brush = Brush.verticalGradient(listOf(tileTop, tileBottom))
+    val fontStyle: FontStyle get() = if (italic) FontStyle.Italic else FontStyle.Normal
+
+    /** An app's colour as this style shows it. */
+    fun tint(color: Color): Color = if (toward == null) color else lerp(color, toward, pull)
+}
+
+/**
+ * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
+ * while the home screen shows.
+ */
+enum class Ambience { NeonSky, GoogleGlow, Mist, Petals, Calm, CityLights, Candles, Speed, NightRain, LoFi, Meadow }
+
+/**
+ * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
+ * the tile in focus. The others each have their own painting, light and type.
+ */
+enum class HomeStyle(
+    val key: String,
+    val title: String,
+    val blurb: String,
+    val backdrop: Int?,
+    val ambience: Ambience,
+    val look: HomeLook
+) {
+    Neon(
+        "neon", "Neon", "Tokyo at night, lit in the colour of what you point at",
+        null, Ambience.NeonSky,
+        HomeLook(
+            accent = NeonPalette.Magenta, accent2 = NeonPalette.Cyan, text = NeonPalette.Text, dim = Color(0xFFB9A6D6),
+            pane = Color(0xCC0D0721), pill = Color(0x990D0721), pillFocused = Color(0xCC1A0B36),
+            tileTop = Color(0xEB2A0F4F), tileBottom = Color(0xEB0D0721),
+            font = KanitFamily, weight = FontWeight.Medium, italic = true,
+            clockSize = 60.sp, clockColor = Color(0xFFFFF1F8), clockGlow = NeonPalette.Magenta.copy(alpha = 0.85f), clockBlur = 26f,
+            shade = null, corner = 10.dp, glow = 14.dp, toward = null, pull = 0f, glowingText = true
+        )
+    ),
+    GoogleTv(
+        "google_tv", "Google TV", "Calm charcoal and soft colour, like the TV's own home screen",
+        R.drawable.home_style_googletv, Ambience.GoogleGlow,
+        HomeLook(
+            accent = Color(0xFFE8EAED), accent2 = Color(0xFF8AB4F8), text = Color(0xFFE8EAED), dim = Color(0xFF9AA0A6),
+            pane = Color(0xB3303134), pill = Color(0x99303134), pillFocused = Color(0xFF5F6368),
+            tileTop = Color(0xE63C4043), tileBottom = Color(0xE6282A2D),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 54.sp, clockColor = Color(0xFFF1F3F4), clockGlow = Color(0x66000000), clockBlur = 12f,
+            shade = Color(0x55000000), corner = 14.dp, glow = 10.dp, toward = null, pull = 0f,
+            letterSpacing = 0.4.sp, upperTitles = false
+        )
+    ),
+    Nature(
+        "nature", "Nature", "An alpine lake at first light",
+        R.drawable.home_style_nature, Ambience.Mist,
+        HomeLook(
+            accent = Color(0xFFFFD2A0), accent2 = Color(0xFFA9C8F0), text = Color(0xFFFFF6EC), dim = Color(0xFFCDBCCB),
+            pane = Color(0xB3141D33), pill = Color(0x99141D33), pillFocused = Color(0xCC27345A),
+            tileTop = Color(0xD91E2A4A), tileBottom = Color(0xD90B1226),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 60.sp, clockColor = Color(0xFFFFF8F0), clockGlow = Color(0x99FFB98A), clockBlur = 22f,
+            shade = Color(0x660A1020), corner = 12.dp, glow = 12.dp, toward = Color(0xFFFFD2A0), pull = 0.3f,
+            letterSpacing = 2.sp
+        )
+    ),
+    Anime(
+        "anime", "Anime", "A summer afternoon under towering clouds",
+        R.drawable.home_style_anime, Ambience.Petals,
+        HomeLook(
+            accent = Color(0xFFFFFFFF), accent2 = Color(0xFFFFB7D5), text = Color(0xFFFFFFFF), dim = Color(0xFFD9ECFF),
+            pane = Color(0x99082450), pill = Color(0x80082450), pillFocused = Color(0xCC1450A0),
+            tileTop = Color(0xD9174A8E), tileBottom = Color(0xD90A2450),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = false,
+            clockSize = 62.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xAA0B3D91), clockBlur = 18f,
+            shade = Color(0x880B2A60), corner = 16.dp, glow = 14.dp, toward = Color(0xFFBFE4FF), pull = 0.25f,
+            letterSpacing = 1.5.sp
+        )
+    ),
+    Clean(
+        "clean", "Clean", "Black, quiet and still",
+        R.drawable.home_style_clean, Ambience.Calm,
+        HomeLook(
+            accent = Color(0xFFFFFFFF), accent2 = Color(0xFF8C8C8C), text = Color(0xFFF2F2F2), dim = Color(0xFF7C7C7C),
+            pane = Color(0xCC0B0B0B), pill = Color(0xB30B0B0B), pillFocused = Color(0xFF1E1E1E),
+            tileTop = Color(0xF2141414), tileBottom = Color(0xF2080808),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 64.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color.Transparent, clockBlur = 0f,
+            shade = null, corner = 6.dp, glow = 6.dp, toward = Color(0xFFEDEDED), pull = 0.86f,
+            letterSpacing = 3.sp
+        )
+    ),
+    City(
+        "city", "City", "Manhattan across the river at dusk",
+        R.drawable.home_style_city, Ambience.CityLights,
+        HomeLook(
+            accent = Color(0xFFFFB36B), accent2 = Color(0xFF9FC0FF), text = Color(0xFFFFF4E6), dim = Color(0xFFBBAACB),
+            pane = Color(0xB30B1230), pill = Color(0x990B1230), pillFocused = Color(0xCC24234E),
+            tileTop = Color(0xD91D1938), tileBottom = Color(0xD90B0A1E),
+            font = OswaldFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 64.sp, clockColor = Color(0xFFFFF4E6), clockGlow = Color(0x99FF9A5A), clockBlur = 20f,
+            shade = Color(0x660A0820), corner = 4.dp, glow = 12.dp, toward = Color(0xFFFFC08A), pull = 0.3f,
+            letterSpacing = 2.5.sp
+        )
+    ),
+    Faith(
+        "faith", "Faith", "The upper room, laid for the supper, in candle light",
+        R.drawable.home_style_faith, Ambience.Candles,
+        HomeLook(
+            accent = Color(0xFFE8C27A), accent2 = Color(0xFFF3E1B8), text = Color(0xFFFBF1DC), dim = Color(0xFFC9AF88),
+            pane = Color(0xB3201208), pill = Color(0x99201208), pillFocused = Color(0xCC3E2812),
+            tileTop = Color(0xE02E1D10), tileBottom = Color(0xE0140B05),
+            font = CormorantFamily, weight = FontWeight.SemiBold, italic = true,
+            clockSize = 72.sp, clockColor = Color(0xFFFFF4DC), clockGlow = Color(0xAAE8B060), clockBlur = 20f,
+            shade = Color(0x88140A04), corner = 4.dp, glow = 12.dp, toward = Color(0xFFE8C27A), pull = 0.7f,
+            letterSpacing = 1.5.sp
+        )
+    ),
+    Car(
+        "car", "Car", "A white racing coupé on the circuit at golden hour",
+        R.drawable.home_style_car_track, Ambience.Speed,
+        HomeLook(
+            accent = Color(0xFFFFB766), accent2 = Color(0xFFFFE2A6), text = Color(0xFFFFFFFF), dim = Color(0xFFE9CFB4),
+            pane = Color(0xB3281C22), pill = Color(0x99281C22), pillFocused = Color(0xCC4A3236),
+            tileTop = Color(0xD9332428), tileBottom = Color(0xD9140E10),
+            font = OswaldFamily, weight = FontWeight.Medium, italic = true,
+            clockSize = 66.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xAAFF9A40), clockBlur = 20f,
+            shade = Color(0x77201014), corner = 6.dp, glow = 12.dp, toward = Color(0xFFFFC27A), pull = 0.35f,
+            letterSpacing = 2.sp
+        )
+    ),
+    CarNight(
+        "car_night", "Car at night", "The coupé in black on a wet street, red leaves in the rain",
+        R.drawable.home_style_car_night, Ambience.NightRain,
+        HomeLook(
+            accent = Color(0xFFFF4A36), accent2 = Color(0xFFCFE6FF), text = Color(0xFFF5F2F2), dim = Color(0xFFBFAFB4),
+            pane = Color(0xB3101015), pill = Color(0x99101015), pillFocused = Color(0xCC2A1416),
+            tileTop = Color(0xE0181A20), tileBottom = Color(0xE0060608),
+            font = OswaldFamily, weight = FontWeight.Medium, italic = true,
+            clockSize = 66.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xAAFF3A2A), clockBlur = 22f,
+            shade = null, corner = 6.dp, glow = 14.dp, toward = Color(0xFFFF5A46), pull = 0.4f,
+            letterSpacing = 2.sp
+        )
+    ),
+    LoFi(
+        "lofi", "Cozy Lo-Fi", "A little room on a rainy night, the cat watching the drops",
+        R.drawable.home_style_lofi, Ambience.LoFi,
+        HomeLook(
+            accent = Color(0xFFFFC874), accent2 = Color(0xFFC3A4FF), text = Color(0xFFFFF1E6), dim = Color(0xFFCBB6C8),
+            pane = Color(0xB31D1524), pill = Color(0x991D1524), pillFocused = Color(0xCC3A2638),
+            tileTop = Color(0xD92C1E2C), tileBottom = Color(0xD9140E16),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = false,
+            clockSize = 62.sp, clockColor = Color(0xFFFFF1E6), clockGlow = Color(0x99FF9D5C), clockBlur = 22f,
+            shade = null, corner = 14.dp, glow = 12.dp, toward = Color(0xFFFFD2A8), pull = 0.3f,
+            letterSpacing = 1.5.sp
+        )
+    ),
+    Cottage(
+        "cottage", "Cottagecore", "A thatched cottage above a meadow in bloom",
+        R.drawable.home_style_cottage, Ambience.Meadow,
+        HomeLook(
+            accent = Color(0xFFC0606F), accent2 = Color(0xFF6E8A5A), text = Color(0xFF3E3426), dim = Color(0xFF7A6C56),
+            pane = Color(0xD9FBF6EC), pill = Color(0xCCFBF6EC), pillFocused = Color(0xFFFFFDF8),
+            tileTop = Color(0xEBFFFCF5), tileBottom = Color(0xEBF1E8D6),
+            font = CormorantFamily, weight = FontWeight.SemiBold, italic = true,
+            clockSize = 74.sp, clockColor = Color(0xFF3E3426), clockGlow = Color(0x99FFFDF6), clockBlur = 18f,
+            shade = Color(0xAAFFFBF2), corner = 12.dp, glow = 10.dp, toward = Color(0xFF4E5A3A), pull = 0.45f,
+            letterSpacing = 1.5.sp
+        )
+    );
+
+    companion object {
+        fun of(key: String?): HomeStyle = entries.firstOrNull { it.key == key } ?: Neon
+    }
+}
+
+/** The look of the profile whose home screen shows. */
+val LocalHomeLook = staticCompositionLocalOf { HomeStyle.Neon.look }

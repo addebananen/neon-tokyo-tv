@@ -20,11 +20,19 @@ class NeonHomeActivity : ComponentActivity() {
     // Opened from Settings to have a look, Back leaves it again; as the home screen it stays
     private var preview by mutableStateOf(false)
 
+    // A preview can be opened in a given style to see it, without changing the profile's own
+    private var previewStyle by mutableStateOf<HomeStyle?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
+        if (preview) previewStyle = intent.getStringExtra(EXTRA_STYLE)?.let(HomeStyle::of)
         setContent {
-            NeonHome(homePresses = homePresses.intValue, onLeave = if (preview) ({ finish() }) else null)
+            NeonHome(
+                homePresses = homePresses.intValue,
+                onLeave = if (preview) ({ finish() }) else null,
+                previewStyle = previewStyle
+            )
         }
     }
 
@@ -33,7 +41,13 @@ class NeonHomeActivity : ComponentActivity() {
         // Home pressed again while the home screen shows, or a preview that became the home screen
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
             preview = false
+            previewStyle = null
             homePresses.intValue++
         }
+    }
+
+    companion object {
+        /** The key of a [HomeStyle] to show a preview in. */
+        const val EXTRA_STYLE = "style"
     }
 }

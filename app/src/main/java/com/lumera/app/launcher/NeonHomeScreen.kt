@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -36,6 +37,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -64,6 +66,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -149,10 +152,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Glow
 import androidx.tv.material3.Surface
 import com.lumera.app.projectivy.NeonWallpaper
-import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.neonPanel
-import com.lumera.app.ui.theme.KanitFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -169,11 +170,6 @@ import kotlin.random.Random
 
 private enum class HomeTab { Home, Apps, Sources }
 
-private val TileShape = RoundedCornerShape(10.dp)
-private val SmallTileShape = RoundedCornerShape(8.dp)
-private val TileFill = Brush.verticalGradient(listOf(Color(0xEB2A0F4F), Color(0xEB0D0721)))
-private val Dim = Color(0xFFB9A6D6)
-private val Pane = Color(0xCC0D0721)
 
 private val BigTile = 190.dp to 82.dp
 private val SmallTile = 116.dp to 69.dp
@@ -209,9 +205,15 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val homeProfiles = remember { HomeProfiles.get(appContext) }
+    val profileList by homeProfiles.profiles.collectAsState()
+    val activeProfileId by homeProfiles.activeId.collectAsState()
+    val profile = homeProfiles.active(profileList, activeProfileId)
+    val style = previewStyle ?: profile.style
+    val look = style.look
     val inputs = remember { TvInputs(appContext) }
     val links = remember { ConsoleLinks(appContext) }
     var apps by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
@@ -281,6 +283,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
     val clockLight = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         launch {
+            if (!look.glowingText) {
+                clockLight.animateTo(1f, tween(700, easing = FastOutSlowInEasing))
+                return@launch
+            }
             clockLight.animateTo(1f, keyframes {
                 durationMillis = 780
                 0f at 90
@@ -389,188 +395,192 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            // While a tile is lifted every key goes to moving it, so the focus stays on it
-            .onPreviewKeyEvent { event ->
-                val current = lifted ?: return@onPreviewKeyEvent false
-                val native = event.nativeKeyEvent
-                val code = native.keyCode
-                val putsDown = code in SelectKeys || code == KeyEvent.KEYCODE_BACK
-                when (event.type) {
-                    KeyEventType.KeyDown -> when {
-                        code == KeyEvent.KEYCODE_DPAD_LEFT -> moveLifted(-1)
-                        code == KeyEvent.KEYCODE_DPAD_RIGHT -> moveLifted(1)
-                        code == KeyEvent.KEYCODE_DPAD_UP && columns(current.row) > 0 -> moveLifted(-columns(current.row))
-                        code == KeyEvent.KEYCODE_DPAD_DOWN && columns(current.row) > 0 -> moveLifted(columns(current.row))
-                        putsDown && native.repeatCount == 0 -> { dropArmed[0] = true }
+    CompositionLocalProvider(LocalHomeLook provides look) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxSize()
+                // While a tile is lifted every key goes to moving it, so the focus stays on it
+                .onPreviewKeyEvent { event ->
+                    val current = lifted ?: return@onPreviewKeyEvent false
+                    val native = event.nativeKeyEvent
+                    val code = native.keyCode
+                    val putsDown = code in SelectKeys || code == KeyEvent.KEYCODE_BACK
+                    when (event.type) {
+                        KeyEventType.KeyDown -> when {
+                            code == KeyEvent.KEYCODE_DPAD_LEFT -> moveLifted(-1)
+                            code == KeyEvent.KEYCODE_DPAD_RIGHT -> moveLifted(1)
+                            code == KeyEvent.KEYCODE_DPAD_UP && columns(current.row) > 0 -> moveLifted(-columns(current.row))
+                            code == KeyEvent.KEYCODE_DPAD_DOWN && columns(current.row) > 0 -> moveLifted(columns(current.row))
+                            putsDown && native.repeatCount == 0 -> { dropArmed[0] = true }
+                        }
+                        KeyEventType.KeyUp -> if (putsDown && dropArmed[0]) drop()
+                        else -> Unit
                     }
-                    KeyEventType.KeyUp -> if (putsDown && dropArmed[0]) drop()
-                    else -> Unit
+                    true
                 }
-                true
-            }
-    ) {
-        val tabsTop = maxHeight * 0.415f
-        val rowsTop = maxHeight * 0.485f
-        SkylineBackdrop(wallpaper)
-        SkySparkles()
-        FloorLight(spot, spotOn, ignite = { ignite.value })
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 30.dp),
-            verticalAlignment = Alignment.Top
         ) {
-            HomeClock(resumes, light = { clockLight.value }, ignite = { ignite.value })
-            Spacer(Modifier.weight(1f))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = ignite.value }
-            ) {
-                Pill("Search", Glyph.Search, onClick = { openSearch(context) }, onFocus = {
-                    wallpaper = NeonWallpaper.TOKYO
-                    spotOn = false
-                })
-                Pill("Inputs", Glyph.Hdmi, onClick = { showInputs = true }, onFocus = {
-                    wallpaper = NeonWallpaper.OCEAN
-                    spotOn = false
-                })
-                Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
-                    wallpaper = NeonWallpaper.TOKYO
-                    spotOn = false
-                })
+            val tabsTop = maxHeight * 0.415f
+            val rowsTop = maxHeight * 0.485f
+            HomeBackdrop(style, profile.background, wallpaper)
+            if (style == HomeStyle.Neon && profile.background == null) {
+                SkySparkles()
+                FloorLight(spot, spotOn, ignite = { ignite.value })
             }
-        }
 
-        Row(
-            modifier = Modifier
-                .padding(start = Side, top = tabsTop)
-                .graphicsLayer {
-                    alpha = ignite.value
-                    translationY = (1f - ignite.value) * 14.dp.toPx()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 30.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                HomeClock(resumes, light = { clockLight.value }, ignite = { ignite.value })
+                Spacer(Modifier.weight(1f))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = ignite.value }
+                ) {
+                    Pill("Search", Glyph.Search, onClick = { openSearch(context) }, onFocus = {
+                        wallpaper = NeonWallpaper.TOKYO
+                        spotOn = false
+                    })
+                    Pill("Inputs", Glyph.Hdmi, onClick = { showInputs = true }, onFocus = {
+                        wallpaper = NeonWallpaper.OCEAN
+                        spotOn = false
+                    })
+                    Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
+                        wallpaper = NeonWallpaper.TOKYO
+                        spotOn = false
+                    })
                 }
-                // Up from the tiles lands on the open tab, never on the other one, which would open it
-                .focusProperties {
-                    enter = {
-                        when (tab) {
-                            HomeTab.Home -> homeTab
-                            HomeTab.Apps -> appsTab
-                            HomeTab.Sources -> sourcesTab
+            }
+
+            Row(
+                modifier = Modifier
+                    .padding(start = Side, top = tabsTop)
+                    .graphicsLayer {
+                        alpha = ignite.value
+                        translationY = (1f - ignite.value) * 14.dp.toPx()
+                    }
+                    // Up from the tiles lands on the open tab, never on the other one, which would open it
+                    .focusProperties {
+                        enter = {
+                            when (tab) {
+                                HomeTab.Home -> homeTab
+                                HomeTab.Apps -> appsTab
+                                HomeTab.Sources -> sourcesTab
+                            }
                         }
                     }
-                }
-                .focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            TabPill("Home", tab == HomeTab.Home, homeTab, onFocus = {
-                tab = HomeTab.Home
-                spotOn = false
-            }, onClick = { focusFirst++ })
-            TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = {
-                tab = HomeTab.Apps
-                spotOn = false
-            }, onClick = { focusFirst++ })
-            TabPill("Källor", tab == HomeTab.Sources, sourcesTab, onFocus = {
-                tab = HomeTab.Sources
-                spotOn = false
-            }, onClick = { focusFirst++ })
-        }
+                    .focusGroup(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                TabPill("Home", tab == HomeTab.Home, homeTab, onFocus = {
+                    tab = HomeTab.Home
+                    spotOn = false
+                }, onClick = { focusFirst++ })
+                TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = {
+                    tab = HomeTab.Apps
+                    spotOn = false
+                }, onClick = { focusFirst++ })
+                TabPill("Källor", tab == HomeTab.Sources, sourcesTab, onFocus = {
+                    tab = HomeTab.Sources
+                    spotOn = false
+                }, onClick = { focusFirst++ })
+            }
 
-        AnimatedContent(
-            targetState = tab,
-            transitionSpec = {
-                (fadeIn(tween(180, delayMillis = 40)) + slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 14 })
-                    .togetherWith(fadeOut(tween(110)))
-            },
-            label = "HomeTab",
-            modifier = Modifier
-                .padding(top = rowsTop)
-                .fillMaxSize()
-                // Rising by layout rather than by layer, so the light under the focused tile rises with it
-                .offset { IntOffset(0, ((1f - ignite.value) * 26.dp.toPx()).roundToInt()) }
-                .graphicsLayer { alpha = ignite.value }
-        ) { shown ->
-            when (shown) {
-                HomeTab.Home -> HomeRows(
-                    favourites = favourites,
-                    lifted = lifted,
-                    onLift = { row, key -> lift(row, key) },
-                    installed = installed,
-                    firstFavourite = firstFavourite,
-                    onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
-                    onSpot = {
-                        spot = it
-                        spotOn = true
-                    },
-                    onOpenApp = { HomeApps.open(context, it) }
-                )
-                HomeTab.Sources -> Sources(
-                    consoles = consoles,
-                    lifted = lifted?.takeIf { it.row == HomeOrder.Row.Consoles }?.key,
-                    onLift = { lift(HomeOrder.Row.Consoles, it) },
-                    live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
-                    firstConsole = firstConsole,
-                    onFocusColor = { title, color -> wallpaper = NeonWallpaper.forCard(null, title, color.toArgb()) },
-                    onSpot = {
-                        spot = it
-                        spotOn = true
-                    },
-                    onOpen = { openConsole(it) },
-                    onLink = { linking = it }
-                )
-                HomeTab.Apps -> AllApps(
-                    apps = orderedApps,
-                    lifted = lifted?.takeIf { it.row == HomeOrder.Row.Apps }?.key,
-                    onLift = { lift(HomeOrder.Row.Apps, it) },
-                    firstApp = firstApp,
-                    onFocusColor = { pkg, title, color ->
-                        wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb())
-                        spotOn = false
-                    },
-                    onOpen = { HomeApps.open(context, it.packageName) }
-                )
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    (fadeIn(tween(180, delayMillis = 40)) + slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 14 })
+                        .togetherWith(fadeOut(tween(110)))
+                },
+                label = "HomeTab",
+                modifier = Modifier
+                    .padding(top = rowsTop)
+                    .fillMaxSize()
+                    // Rising by layout rather than by layer, so the light under the focused tile rises with it
+                    .offset { IntOffset(0, ((1f - ignite.value) * 26.dp.toPx()).roundToInt()) }
+                    .graphicsLayer { alpha = ignite.value }
+            ) { shown ->
+                when (shown) {
+                    HomeTab.Home -> HomeRows(
+                        favourites = favourites,
+                        lifted = lifted,
+                        onLift = { row, key -> lift(row, key) },
+                        installed = installed,
+                        firstFavourite = firstFavourite,
+                        onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
+                        onSpot = {
+                            spot = it
+                            spotOn = true
+                        },
+                        onOpenApp = { HomeApps.open(context, it) }
+                    )
+                    HomeTab.Sources -> Sources(
+                        consoles = consoles,
+                        lifted = lifted?.takeIf { it.row == HomeOrder.Row.Consoles }?.key,
+                        onLift = { lift(HomeOrder.Row.Consoles, it) },
+                        live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
+                        firstConsole = firstConsole,
+                        onFocusColor = { title, color -> wallpaper = NeonWallpaper.forCard(null, title, color.toArgb()) },
+                        onSpot = {
+                            spot = it
+                            spotOn = true
+                        },
+                        onOpen = { openConsole(it) },
+                        onLink = { linking = it }
+                    )
+                    HomeTab.Apps -> AllApps(
+                        apps = orderedApps,
+                        lifted = lifted?.takeIf { it.row == HomeOrder.Row.Apps }?.key,
+                        onLift = { lift(HomeOrder.Row.Apps, it) },
+                        firstApp = firstApp,
+                        onFocusColor = { pkg, title, color ->
+                            wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb())
+                            spotOn = false
+                        },
+                        onOpen = { HomeApps.open(context, it.packageName) }
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = lifted != null,
+                enter = fadeIn(tween(220)) + slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 },
+                exit = fadeOut(tween(160)),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp)
+            ) {
+                MoveHint(grid = lifted?.let { columns(it.row) > 0 } == true)
             }
         }
 
-        AnimatedVisibility(
-            visible = lifted != null,
-            enter = fadeIn(tween(220)) + slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 },
-            exit = fadeOut(tween(160)),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp)
-        ) {
-            MoveHint(grid = lifted?.let { columns(it.row) > 0 } == true)
+        linking?.let { console ->
+            InputPicker(
+                title = "Which input is ${console.name} on?",
+                hint = "Consoles that share an input through an HDMI switch light up together.",
+                inputs = inputList,
+                states = states,
+                selected = consoleInputs[console]?.id,
+                labels = { input -> HomeCatalog.consoles.filter { it != console && consoleInputs[it]?.id == input.id }.map { it.name } },
+                noneLabel = "Not plugged in",
+                onPick = { input ->
+                    links.link(console, input)
+                    linking = null
+                },
+                onDismiss = { linking = null }
+            )
         }
-    }
-
-    linking?.let { console ->
-        InputPicker(
-            title = "Which input is ${console.name} on?",
-            hint = "Consoles that share an input through an HDMI switch light up together.",
-            inputs = inputList,
-            states = states,
-            selected = consoleInputs[console]?.id,
-            labels = { input -> HomeCatalog.consoles.filter { it != console && consoleInputs[it]?.id == input.id }.map { it.name } },
-            noneLabel = "Not plugged in",
-            onPick = { input ->
-                links.link(console, input)
-                linking = null
-            },
-            onDismiss = { linking = null }
-        )
-    }
-    if (showInputs) {
-        InputPicker(
-            title = "Inputs",
-            hint = null,
-            inputs = inputList,
-            states = states,
-            selected = null,
-            labels = { input -> HomeCatalog.consoles.filter { consoleInputs[it]?.id == input.id }.map { it.name } },
-            noneLabel = null,
-            onPick = { pickInput(it) },
-            onDismiss = { showInputs = false }
-        )
+        if (showInputs) {
+            InputPicker(
+                title = "Inputs",
+                hint = null,
+                inputs = inputList,
+                states = states,
+                selected = null,
+                labels = { input -> HomeCatalog.consoles.filter { consoleInputs[it]?.id == input.id }.map { it.name } },
+                noneLabel = null,
+                onPick = { pickInput(it) },
+                onDismiss = { showInputs = false }
+            )
+        }
     }
 }
 
@@ -585,6 +595,8 @@ private fun HomeRows(
     onSpot: (Spot) -> Unit,
     onOpenApp: (KnownApp) -> Unit
 ) {
+    val look = LocalHomeLook.current
+    val tileShape = RoundedCornerShape(look.corner)
     Column(modifier = Modifier.padding(start = Side), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         RowTitle("Watch & listen")
         Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
@@ -592,11 +604,12 @@ private fun HomeRows(
                 val appKey = app.packages.first()
                 // Keyed, so a tile that moves keeps its focus and slides over to its new place
                 key(appKey) {
+                    val color = look.tint(app.color)
                     NeonTile(
                         width = BigTile.first,
                         height = BigTile.second,
-                        shape = TileShape,
-                        color = app.color,
+                        shape = tileShape,
+                        color = color,
                         onClick = { onOpenApp(app) },
                         onFocus = { onFocusColor(app.packages.first(), app.name, app.color) },
                         modifier = Modifier.animatePlacement(),
@@ -607,12 +620,12 @@ private fun HomeRows(
                         dimmed = app !in installed,
                         onFocusRect = { onSpot(Spot(it, app.color)) }
                     ) { focused ->
-                        TileScene(app, focused, TileShape)
+                        TileScene(app, color, focused, tileShape)
                         Row(
                             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            NeonGlyph(app.glyph, app.color, Modifier.size(42.dp))
+                            NeonGlyph(app.glyph, color, Modifier.size(42.dp))
                             Spacer(Modifier.width(11.dp))
                             TileName(app.name, 15.sp)
                         }
@@ -642,6 +655,8 @@ private fun Sources(
 ) {
     // Room round the tiles for a focused tile's glow, as on All apps
     val room = 12.dp
+    val look = LocalHomeLook.current
+    val tileShape = RoundedCornerShape(look.corner)
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Box(Modifier.padding(start = Side)) { RowTitle("Consoles") }
         LazyVerticalGrid(
@@ -661,11 +676,12 @@ private fun Sources(
         ) {
             itemsIndexed(consoles, key = { _, console -> console.id }) { index, console ->
                 val light = rememberLiveLight(live(console))
+                val color = look.tint(console.color)
                 NeonTile(
                     width = BigTile.first,
                     height = BigTile.second,
-                    shape = TileShape,
-                    color = console.color,
+                    shape = tileShape,
+                    color = color,
                     onClick = { onOpen(console) },
                     // A short hold asks which input it is on; the full three seconds lifts it
                     onLongClick = { onLink(console) },
@@ -679,14 +695,14 @@ private fun Sources(
                     },
                     onFocus = { onFocusColor(console.name, console.color) },
                     onFocusRect = { onSpot(Spot(it, console.color)) },
-                    behind = { LiveHalo(light, console.color, 10.dp) },
-                    front = { LiveEdge(light, live(console), console.color, 10.dp) }
+                    behind = { LiveHalo(light, color, look.corner) },
+                    front = { LiveEdge(light, live(console), color, look.corner) }
                 ) {
                     Row(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        NeonGlyph(console.glyph, console.color, Modifier.size(38.dp))
+                        NeonGlyph(console.glyph, color, Modifier.size(38.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
                             TileName(console.name, 15.sp)
@@ -696,7 +712,7 @@ private fun Sources(
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 9.sp,
                                     letterSpacing = 0.5.sp,
-                                    color = console.color
+                                    color = color
                                 ),
                                 modifier = Modifier.padding(top = 3.dp)
                             )
@@ -736,6 +752,8 @@ private fun AllApps(
     // The grid leaves room around the tiles for a focused tile's glow; the offset keeps the
     // tiles themselves in line with the rest of the screen
     val room = 12.dp
+    val look = LocalHomeLook.current
+    val tileShape = RoundedCornerShape(look.corner * 0.8f)
     val grid = rememberLazyGridState()
     // A lifted app moved past the top or bottom of the screen brings its row into view
     val liftedIndex = lifted?.let { key -> apps.indexOfFirst { it.packageName == key } } ?: -1
@@ -762,14 +780,15 @@ private fun AllApps(
     ) {
         itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
             val known = app.known
-            val color = known?.color ?: HomeCatalog.monogramColor(app.label)
+            val ownColor = known?.color ?: HomeCatalog.monogramColor(app.label)
+            val color = look.tint(ownColor)
             NeonTile(
                 width = SmallTile.first,
                 height = SmallTile.second,
-                shape = SmallTileShape,
+                shape = tileShape,
                 color = color,
                 onClick = { onOpen(app) },
-                onFocus = { onFocusColor(app.packageName, app.name, color) },
+                onFocus = { onFocusColor(app.packageName, app.name, ownColor) },
                 modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
                 focusRequester = if (index == 0) firstApp else null,
                 onHold = { onLift(app.packageName) },
@@ -781,7 +800,7 @@ private fun AllApps(
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
                     if (known != null) {
-                        NeonGlyph(known.glyph, known.color, Modifier.size(26.dp))
+                        NeonGlyph(known.glyph, color, Modifier.size(26.dp))
                     } else {
                         Monogram(app.label, color, Modifier.size(26.dp))
                     }
@@ -823,6 +842,7 @@ private fun NeonTile(
     front: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
+    val look = LocalHomeLook.current
     var focused by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
     val surfacePressed by interaction.collectIsPressedAsState()
@@ -946,11 +966,11 @@ private fun NeonTile(
             scale = ClickableSurfaceDefaults.scale(scale = 1f, focusedScale = 1f, pressedScale = 1f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = Color.Transparent,
-                contentColor = NeonPalette.Text,
+                contentColor = look.text,
                 focusedContainerColor = Color.Transparent,
-                focusedContentColor = NeonPalette.Text,
+                focusedContentColor = look.text,
                 pressedContainerColor = Color.Transparent,
-                pressedContentColor = NeonPalette.Text
+                pressedContentColor = look.text
             ),
             border = ClickableSurfaceDefaults.border(
                 border = Border(BorderStroke(0.5.dp, color.copy(alpha = 0.45f)), shape = shape),
@@ -958,14 +978,14 @@ private fun NeonTile(
                 pressedBorder = Border(BorderStroke(1.5.dp, color), shape = shape)
             ),
             glow = ClickableSurfaceDefaults.glow(
-                focusedGlow = Glow(elevationColor = color.copy(alpha = 0.6f), elevation = 14.dp)
+                focusedGlow = Glow(elevationColor = color.copy(alpha = 0.6f), elevation = look.glow)
             ),
             interactionSource = interaction
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(TileFill, shape)
+                    .background(look.tileFill, shape)
                     .graphicsLayer { alpha = if (dimmed) 0.5f else 1f }
             ) { content(focused) }
         }
@@ -1050,16 +1070,17 @@ private fun BoxScope.LiftArrows(color: Color) {
 /** The note at the foot of the screen while a tile is lifted. */
 @Composable
 private fun MoveHint(grid: Boolean) {
+    val look = LocalHomeLook.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(Pane)
+            .background(look.pane)
             .padding(horizontal = 18.dp, vertical = 8.dp)
     ) {
         BasicText(
             text = if (grid) "Move it with the arrows  ·  OK puts it down" else "Move it with ◀ ▶  ·  OK puts it down",
-            style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = NeonPalette.Text)
+            style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 12.sp, color = look.text)
         )
     }
 }
@@ -1113,6 +1134,7 @@ private fun BoxScope.TubeCore(shape: RoundedCornerShape, color: Color, lit: () -
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () -> Unit) {
+    val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(
         onClick = onClick,
@@ -1120,26 +1142,26 @@ private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () ->
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0x990D0721),
-            contentColor = NeonPalette.Text,
-            focusedContainerColor = Color(0xCC1A0B36),
-            focusedContentColor = NeonPalette.Text
+            containerColor = look.pill,
+            contentColor = look.text,
+            focusedContainerColor = look.pillFocused,
+            focusedContentColor = look.text
         ),
         border = ClickableSurfaceDefaults.border(
-            border = Border(BorderStroke(0.5.dp, NeonPalette.Text.copy(alpha = 0.18f)), shape = shape),
-            focusedBorder = Border(BorderStroke(1.5.dp, NeonPalette.Magenta), shape = shape)
+            border = Border(BorderStroke(0.5.dp, look.text.copy(alpha = 0.18f)), shape = shape),
+            focusedBorder = Border(BorderStroke(1.5.dp, look.accent), shape = shape)
         ),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = NeonPalette.Magenta.copy(alpha = 0.55f), elevation = 12.dp))
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = look.accent.copy(alpha = 0.55f), elevation = look.glow * 0.85f))
     ) {
         Row(
             modifier = Modifier.padding(start = 9.dp, end = 11.dp, top = 5.dp, bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NeonGlyph(glyph, NeonPalette.Cyan, Modifier.size(13.dp))
+            NeonGlyph(glyph, look.accent2, Modifier.size(13.dp))
             Spacer(Modifier.width(5.dp))
             BasicText(
                 text = text,
-                style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, color = NeonPalette.Text)
+                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.text)
             )
         }
     }
@@ -1149,6 +1171,7 @@ private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () ->
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun TabPill(text: String, selected: Boolean, focusRequester: FocusRequester, onFocus: () -> Unit, onClick: () -> Unit) {
+    val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     val line by animateFloatAsState(if (selected) 1f else 0f, tween(170, easing = FastOutSlowInEasing), label = "TabLine")
     Surface(
@@ -1159,26 +1182,26 @@ private fun TabPill(text: String, selected: Boolean, focusRequester: FocusReques
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Pane,
-            contentColor = NeonPalette.Text,
-            focusedContainerColor = Pane,
-            focusedContentColor = NeonPalette.Text
+            containerColor = look.pane,
+            contentColor = look.text,
+            focusedContainerColor = look.pane,
+            focusedContentColor = look.text
         ),
         border = ClickableSurfaceDefaults.border(
-            focusedBorder = Border(BorderStroke(1.5.dp, NeonPalette.Magenta), shape = shape)
+            focusedBorder = Border(BorderStroke(1.5.dp, look.accent), shape = shape)
         ),
-        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = NeonPalette.Magenta.copy(alpha = 0.55f), elevation = 12.dp))
+        glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = look.accent.copy(alpha = 0.55f), elevation = look.glow * 0.85f))
     ) {
         BasicText(
-            text = text.uppercase(),
+            text = if (look.upperTitles) text.uppercase() else text,
             style = TextStyle(
-                fontFamily = KanitFamily,
-                fontWeight = FontWeight.Medium,
-                fontStyle = FontStyle.Italic,
+                fontFamily = look.font,
+                fontWeight = look.weight,
+                fontStyle = look.fontStyle,
                 fontSize = 13.sp,
-                letterSpacing = 1.sp,
-                color = if (selected) NeonPalette.Text else Dim,
-                shadow = if (selected) Shadow(NeonPalette.Magenta.copy(alpha = 0.55f), blurRadius = 12f) else null
+                letterSpacing = look.letterSpacing,
+                color = if (selected) look.text else look.dim,
+                shadow = if (selected && look.glowingText) Shadow(look.accent.copy(alpha = 0.55f), blurRadius = 12f) else null
             ),
             modifier = Modifier
                 .padding(start = 11.dp, end = 11.dp, top = 4.dp, bottom = 7.dp)
@@ -1191,8 +1214,8 @@ private fun TabPill(text: String, selected: Boolean, focusRequester: FocusReques
                         val half = size.width / 2f * line
                         val from = Offset(size.width / 2f - half, y)
                         val to = Offset(size.width / 2f + half, y)
-                        drawLine(NeonPalette.Magenta.copy(alpha = 0.25f), from, to, strokeWidth = thick * 5f, cap = StrokeCap.Round)
-                        drawLine(NeonPalette.Magenta, from, to, strokeWidth = thick, cap = StrokeCap.Round)
+                        if (look.glowingText) drawLine(look.accent.copy(alpha = 0.25f), from, to, strokeWidth = thick * 5f, cap = StrokeCap.Round)
+                        drawLine(look.accent, from, to, strokeWidth = thick, cap = StrokeCap.Round)
                     }
                 }
         )
@@ -1201,17 +1224,22 @@ private fun TabPill(text: String, selected: Boolean, focusRequester: FocusReques
 
 @Composable
 private fun RowTitle(text: String) {
+    val look = LocalHomeLook.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         NeonText(
-            text = text.uppercase(),
+            text = if (look.upperTitles) text.uppercase() else text,
             style = TextStyle(
-                fontFamily = KanitFamily,
-                fontWeight = FontWeight.Medium,
-                fontStyle = FontStyle.Italic,
+                fontFamily = look.font,
+                fontWeight = look.weight,
+                fontStyle = look.fontStyle,
                 fontSize = 13.sp,
-                letterSpacing = 1.sp,
-                color = NeonPalette.Text,
-                shadow = Shadow(NeonPalette.Cyan.copy(alpha = 0.6f), blurRadius = 12f)
+                letterSpacing = look.letterSpacing,
+                color = look.text,
+                shadow = when {
+                    look.glowingText -> Shadow(look.accent2.copy(alpha = 0.6f), blurRadius = 12f)
+                    look.shade != null -> Shadow(look.shade, blurRadius = 10f)
+                    else -> null
+                }
             )
         )
         Spacer(Modifier.width(10.dp))
@@ -1220,16 +1248,17 @@ private fun RowTitle(text: String) {
             Modifier
                 .width(150.dp)
                 .height(1.dp)
-                .background(Brush.horizontalGradient(listOf(NeonPalette.Cyan.copy(alpha = 0.55f), Color.Transparent)))
+                .background(Brush.horizontalGradient(listOf(look.accent2.copy(alpha = 0.55f), Color.Transparent)))
         )
     }
 }
 
 @Composable
 private fun TileName(text: String, size: TextUnit) {
+    val look = LocalHomeLook.current
     BasicText(
         text = text,
-        style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = size, color = NeonPalette.Text),
+        style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = size, color = look.text),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
     )
@@ -1238,17 +1267,18 @@ private fun TileName(text: String, size: TextUnit) {
 /** For an app without an icon of its own: its first letter in a neon ring. */
 @Composable
 private fun Monogram(label: String, color: Color, modifier: Modifier = Modifier) {
+    val look = LocalHomeLook.current
     Box(modifier, contentAlignment = Alignment.Center) {
         NeonGlyph(Glyph.Ring, color, Modifier.fillMaxSize())
         BasicText(
             text = label.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "•",
             style = TextStyle(
-                fontFamily = KanitFamily,
-                fontWeight = FontWeight.SemiBold,
-                fontStyle = FontStyle.Italic,
+                fontFamily = look.font,
+                fontWeight = if (look.glowingText) FontWeight.SemiBold else look.weight,
+                fontStyle = look.fontStyle,
                 fontSize = 12.sp,
                 color = color,
-                shadow = Shadow(color.copy(alpha = 0.7f), blurRadius = 8f)
+                shadow = if (look.glowingText) Shadow(color.copy(alpha = 0.7f), blurRadius = 8f) else null
             )
         )
     }
@@ -1439,7 +1469,7 @@ private enum class Scene { Video, Record, Equalizer, Film }
  * so it never recomposes or lays anything out again.
  */
 @Composable
-private fun BoxScope.TileScene(app: KnownApp, focused: Boolean, shape: RoundedCornerShape) {
+private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, shape: RoundedCornerShape) {
     val scene = when (app) {
         HomeCatalog.YouTube -> Scene.Video
         HomeCatalog.YtMusic -> Scene.Record
@@ -1457,10 +1487,10 @@ private fun BoxScope.TileScene(app: KnownApp, focused: Boolean, shape: RoundedCo
             .clip(shape)
             .drawWithCache {
                 when (scene) {
-                    Scene.Video -> videoScene(app.color, time, light)
-                    Scene.Record -> recordScene(app.color, time, light)
-                    Scene.Equalizer -> equalizerScene(app.color, time, light)
-                    Scene.Film -> filmScene(app.color, time, light)
+                    Scene.Video -> videoScene(color, time, light)
+                    Scene.Record -> recordScene(color, time, light)
+                    Scene.Equalizer -> equalizerScene(color, time, light)
+                    Scene.Film -> filmScene(color, time, light)
                 }
             }
     )
@@ -1822,17 +1852,18 @@ private fun HomeClock(resumes: Int, light: () -> Float, ignite: () -> Float) {
     val date = remember(now, locale) {
         SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale).format(Date(now)).uppercase(locale)
     }
+    val look = LocalHomeLook.current
     Column {
         NeonText(
             text = time,
             style = TextStyle(
-                fontFamily = KanitFamily,
-                fontWeight = FontWeight.Medium,
-                fontStyle = FontStyle.Italic,
-                fontSize = 60.sp,
+                fontFamily = look.font,
+                fontWeight = look.weight,
+                fontStyle = look.fontStyle,
+                fontSize = look.clockSize,
                 letterSpacing = (-0.5).sp,
-                color = Color(0xFFFFF1F8),
-                shadow = Shadow(NeonPalette.Magenta.copy(alpha = 0.85f), blurRadius = 26f)
+                color = look.clockColor,
+                shadow = if (look.clockBlur > 0f) Shadow(look.clockGlow, blurRadius = look.clockBlur) else null
             ),
             // An unlit tube still shows a little. The alpha goes on each stroke rather than on an
             // offscreen copy of the text, which would cut the glow off at the edges of the text
@@ -1845,14 +1876,109 @@ private fun HomeClock(resumes: Int, light: () -> Float, ignite: () -> Float) {
         BasicText(
             text = date,
             style = TextStyle(
-                fontFamily = KanitFamily,
-                fontWeight = FontWeight.Medium,
-                fontStyle = FontStyle.Italic,
+                fontFamily = look.font,
+                fontWeight = look.weight,
+                fontStyle = look.fontStyle,
                 fontSize = 13.sp,
                 letterSpacing = 0.6.sp,
-                color = Dim
+                color = if (look.glowingText) look.dim else look.text.copy(alpha = 0.82f),
+                shadow = look.shade?.let { Shadow(it, blurRadius = 10f) }
             ),
             modifier = Modifier.graphicsLayer { alpha = ignite() }
+        )
+    }
+}
+
+/**
+ * What fills the screen behind everything: the picture the profile sent from a phone, or its
+ * style's painting with the little things that move in it, or for Neon the skyline. A new style
+ * fades in over the old one.
+ */
+@Composable
+private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWallpaper) {
+    Crossfade(targetState = picture to style, animationSpec = tween(650), label = "HomeBackdrop") { (shownPicture, shown) ->
+        Box(Modifier.fillMaxSize()) {
+            when {
+                shownPicture != null -> PictureBackdrop(shownPicture)
+                shown.backdrop == null -> SkylineBackdrop(wallpaper)
+                else -> {
+                    PaintingBackdrop(shown.backdrop)
+                    StyleAmbience(shown.ambience)
+                }
+            }
+        }
+    }
+}
+
+/** A style's painting, decoded once off the main thread and faded in. */
+@Composable
+private fun PaintingBackdrop(drawable: Int) {
+    val context = LocalContext.current
+    var image by remember(drawable) { mutableStateOf(PaintingCache.cached(drawable)) }
+    LaunchedEffect(drawable) {
+        if (image == null) image = withContext(Dispatchers.Default) { PaintingCache.load(context, drawable) }
+    }
+    val shown = image ?: return
+    Image(shown, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+}
+
+/** The paintings last shown; full screen pictures, so only two are kept. */
+private object PaintingCache {
+    private val pictures = object : LinkedHashMap<Int, ImageBitmap>(3, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, ImageBitmap>?): Boolean = size > 2
+    }
+
+    @Synchronized
+    fun cached(drawable: Int): ImageBitmap? = pictures[drawable]
+
+    fun load(context: Context, drawable: Int): ImageBitmap? {
+        cached(drawable)?.let { return it }
+        val image = runCatching { android.graphics.BitmapFactory.decodeResource(context.resources, drawable) }
+            .getOrNull()?.asImageBitmap() ?: return null
+        synchronized(this) { pictures[drawable] = image }
+        return image
+    }
+}
+
+/**
+ * A picture someone sent from their phone, drifting slowly closer and back so it never sits
+ * quite still, darkened where the clock and the tiles sit so they stay easy to read.
+ */
+@Composable
+private fun PictureBackdrop(path: String) {
+    var image by remember(path) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(path) {
+        image = withContext(Dispatchers.IO) {
+            runCatching { android.graphics.BitmapFactory.decodeFile(path) }.getOrNull()?.asImageBitmap()
+        }
+    }
+    val drift = rememberInfiniteTransition(label = "PictureDrift")
+    val zoom by drift.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(40_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "PictureZoom"
+    )
+    val shown = image ?: return
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            shown,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().graphicsLayer {
+                scaleX = zoom
+                scaleY = zoom
+            }
+        )
+        Spacer(
+            Modifier.fillMaxSize().drawBehind {
+                drawRect(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f)))
+                drawCircle(
+                    Brush.radialGradient(0f to Color.Black.copy(alpha = 0.5f), 1f to Color.Transparent, center = Offset(size.width * 0.12f, size.height * 0.14f), radius = size.width * 0.32f),
+                    radius = size.width * 0.32f,
+                    center = Offset(size.width * 0.12f, size.height * 0.14f)
+                )
+            }
         )
     }
 }
@@ -1931,6 +2057,7 @@ private fun InputPicker(
     onPick: (TvInput?) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val look = LocalHomeLook.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val first = remember { FocusRequester() }
         LaunchedEffect(Unit) {
@@ -1954,25 +2081,25 @@ private fun InputPicker(
             Column(
                 modifier = Modifier
                     .width(400.dp)
-                    .neonPanel(RoundedCornerShape(14.dp))
+                    .homePanel(look, RoundedCornerShape(14.dp))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 NeonText(
                     text = title,
                     style = TextStyle(
-                        fontFamily = KanitFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontStyle = FontStyle.Italic,
+                        fontFamily = look.font,
+                        fontWeight = if (look.glowingText) FontWeight.SemiBold else look.weight,
+                        fontStyle = look.fontStyle,
                         fontSize = 18.sp,
-                        color = NeonPalette.Text,
-                        shadow = Shadow(NeonPalette.Magenta.copy(alpha = 0.6f), blurRadius = 16f)
+                        color = look.text,
+                        shadow = if (look.glowingText) Shadow(look.accent.copy(alpha = 0.6f), blurRadius = 16f) else null
                     )
                 )
                 if (inputs.isEmpty()) {
                     BasicText(
                         "This TV shows no inputs to pick from.",
-                        style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = Dim)
+                        style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 12.sp, color = look.dim)
                     )
                 }
                 inputs.forEachIndexed { index, input ->
@@ -2001,7 +2128,7 @@ private fun InputPicker(
                 if (hint != null) {
                     BasicText(
                         hint,
-                        style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, color = Dim),
+                        style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.dim),
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
@@ -2021,6 +2148,7 @@ private fun PickerRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val look = LocalHomeLook.current
     val shape = RoundedCornerShape(9.dp)
     Surface(
         onClick = onClick,
@@ -2028,13 +2156,13 @@ private fun PickerRow(
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0x14F6EAFF),
-            contentColor = NeonPalette.Text,
-            focusedContainerColor = Color(0x33FF3D9A),
-            focusedContentColor = NeonPalette.Text
+            containerColor = look.text.copy(alpha = 0.08f),
+            contentColor = look.text,
+            focusedContainerColor = look.accent.copy(alpha = 0.2f),
+            focusedContentColor = look.text
         ),
         border = ClickableSurfaceDefaults.border(
-            focusedBorder = Border(BorderStroke(1.5.dp, NeonPalette.Magenta), shape = shape)
+            focusedBorder = Border(BorderStroke(1.5.dp, look.accent), shape = shape)
         )
     ) {
         Row(
@@ -2046,7 +2174,7 @@ private fun PickerRow(
                 Box(
                     Modifier
                         .size(7.dp)
-                        .background(if (on) Color.White else Dim.copy(alpha = 0.35f), CircleShape)
+                        .background(if (on) look.accent2 else look.dim.copy(alpha = 0.35f), CircleShape)
                 )
                 Spacer(Modifier.width(10.dp))
             }
@@ -2054,7 +2182,7 @@ private fun PickerRow(
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 BasicText(
                     text = title,
-                    style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = NeonPalette.Text),
+                    style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 13.sp, color = look.text),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
@@ -2063,18 +2191,23 @@ private fun PickerRow(
                     Spacer(Modifier.width(8.dp))
                     BasicText(
                         text = detail,
-                        style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = Dim),
+                        style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 11.sp, color = look.dim),
                         maxLines = 1
                     )
                 }
             }
             if (chosen) {
                 Spacer(Modifier.width(8.dp))
-                BasicText("✓", style = TextStyle(fontSize = 14.sp, color = NeonPalette.Magenta))
+                BasicText("✓", style = TextStyle(fontSize = 14.sp, color = look.accent))
             }
         }
     }
 }
+
+/** A dialog's panel: lit neon edges for Neon, a quiet solid card in the other styles. */
+private fun Modifier.homePanel(look: HomeLook, shape: RoundedCornerShape): Modifier =
+    if (look.glowingText) neonPanel(shape)
+    else background(lerp(look.tileBottom, look.tileTop, 0.4f).copy(alpha = 0.98f), shape).border(1.dp, look.accent.copy(alpha = 0.45f), shape)
 
 /** Google's search where the TV has it, otherwise the assistant. */
 private fun openSearch(context: Context) {

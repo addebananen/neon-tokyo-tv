@@ -709,6 +709,25 @@ if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity
   fail "Back on the Home tab did not leave the Neon Home preview"
 fi
 
+# Every home style, opened as a preview in it: a picture each of Home, and of All apps and
+# Källor for the style being reviewed
+for style in google_tv nature anime clean city faith car car_night lofi cottage; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style "$style" >/dev/null 2>&1
+  sleep 7
+  shot "style-$style"
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
+  if [ "$style" = google_tv ]; then
+    key UP; sleep 1; key RIGHT; sleep 2
+    shot "style-$style-apps"
+    key RIGHT; sleep 2
+    shot "style-$style-sources"
+    key BACK; sleep 2
+  fi
+  key BACK
+  sleep 2
+done
+
 # Neon Home on the Home button, switched on and off the way the TV setup script does it. The
 # stock launcher answers Home ahead of any default for as long as it is on, so like the script
 # the test turns it off meanwhile, and on again afterwards
