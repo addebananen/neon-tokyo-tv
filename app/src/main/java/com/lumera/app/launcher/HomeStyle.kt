@@ -92,8 +92,10 @@ enum class HomeStyle(
     val look: HomeLook,
     /** Where the light falls in a photo, so the ambience can make it breathe. */
     val light: Int? = null,
-    /** A photo drifts slowly closer and back, as a painting would not. */
-    val drift: Boolean = false
+    /** A photo drifts slowly closer and back, as a painting would not, towards this point. */
+    val drift: Boolean = false,
+    val driftX: Float = 0.62f,
+    val driftY: Float = 0.3f
 ) {
     Neon(
         "neon", "Neon", "Tokyo at night, lit in the colour of what you point at",
@@ -205,17 +207,20 @@ enum class HomeStyle(
         )
     ),
     CarNight(
-        "car_night", "Car at night", "The coupé in black on a wet street, red leaves in the rain",
+        "car_night", "Car at night", "A dark supercar coming down a wet road in the rain",
         R.drawable.home_style_car_night, Ambience.NightRain,
         HomeLook(
-            accent = Color(0xFFFF4A36), accent2 = Color(0xFFCFE6FF), text = Color(0xFFF5F2F2), dim = Color(0xFFBFAFB4),
-            pane = Color(0xB3101015), pill = Color(0x99101015), pillFocused = Color(0xCC2A1416),
-            tileTop = Color(0xE0181A20), tileBottom = Color(0xE0060608),
+            accent = Color(0xFF9FD8FF), accent2 = Color(0xFFE6F4FF), text = Color(0xFFF4F8FA), dim = Color(0xFFAFBDC2),
+            pane = Color(0xB30A0F10), pill = Color(0x990A0F10), pillFocused = Color(0xCC1A2A30),
+            tileTop = Color(0xE0141B1C), tileBottom = Color(0xE0050808),
             font = OswaldFamily, weight = FontWeight.Medium, italic = true,
-            clockSize = 66.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xAAFF3A2A), clockBlur = 22f,
-            shade = null, corner = 6.dp, glow = 14.dp, toward = Color(0xFFFF5A46), pull = 0.4f,
+            clockSize = 66.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xAA8FCBFF), clockBlur = 22f,
+            shade = null, corner = 6.dp, glow = 14.dp, toward = Color(0xFFBFE4FF), pull = 0.45f,
             letterSpacing = 2.sp
-        )
+        ),
+        drift = true,
+        driftX = 0.475f,
+        driftY = 0.33f
     ),
     LoFi(
         "lofi", "Cozy Lo-Fi", "A little room on a rainy night, the cat watching the drops",

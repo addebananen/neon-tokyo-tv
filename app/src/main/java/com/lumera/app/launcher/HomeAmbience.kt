@@ -471,29 +471,63 @@ private fun DrawScope.speed(t: Float) {
     spinningWheels(t, Color(0xFFFFF0DA))
 }
 
-/** Car at night: rain falling through the street light, rings on the wet road. */
+/**
+ * Car at night, a photo of a dark supercar coming at you down a wet road: the headlights flare
+ * with a streak across the lens, light rushes past from the point it comes out of, rain falls
+ * through the beams and the road shines under them.
+ */
 private fun DrawScope.nightRain(t: Float) {
+    val w = size.width
     val h = size.height
     val unit = 1.dp.toPx()
-    for (i in 0 until 70) {
-        val p = fract(rnd(i, 1) + t * (0.9f + 0.5f * rnd(i, 2)))
-        val x = rnd(i, 3) * size.width
+    val origin = at(0.475f, 0.33f)
+    // Light rushing past, out of the point the car comes from, faster the further out it is
+    for (i in 0 until 28) {
+        val angle = rnd(i, 1) * 2f * PI.toFloat()
+        val p = fract(rnd(i, 2) + t * (0.35f + 0.3f * rnd(i, 3)))
+        val near = p * p
+        val from = w * (0.12f + near * 0.75f)
+        val len = w * (0.02f + near * 0.12f)
+        val dir = Offset(cos(angle), sin(angle) * 0.62f)
+        val a = from * dir.x
+        if (abs(a) < w * 0.12f && sin(angle) < 0.3f) continue
+        drawLine(
+            Color(0xFFDDEBEF),
+            origin + dir * from, origin + dir * (from + len),
+            strokeWidth = unit * (0.6f + 1.4f * near), cap = StrokeCap.Round, alpha = 0.22f * near * (1f - p)
+        )
+    }
+    // Rain, slanting through the beams
+    for (i in 0 until 80) {
+        val p = fract(rnd(i, 4) + t * (1.1f + 0.6f * rnd(i, 5)))
+        val x = rnd(i, 6) * w
         val y = p * (h + 60f * unit) - 30f * unit
-        val len = (14f + 18f * rnd(i, 4)) * unit
-        drawLine(Color(0xFFD6E4FF), Offset(x, y), Offset(x - len * 0.12f, y + len), strokeWidth = unit, alpha = 0.12f + 0.12f * rnd(i, 5))
+        val len = (12f + 16f * rnd(i, 7)) * unit
+        val lit = (1f - abs(x / w - 0.475f) / 0.25f).coerceIn(0f, 1f) * (1f - abs(y / h - 0.42f) / 0.35f).coerceIn(0f, 1f)
+        drawLine(Color(0xFFE2EEFF), Offset(x, y), Offset(x - len * 0.18f, y + len), strokeWidth = unit, alpha = 0.1f + 0.1f * rnd(i, 8) + 0.35f * lit)
     }
-    for (i in 0 until 10) {
-        val period = 1.4f + rnd(i, 6)
-        val cycle = floor(t / period + rnd(i, 7))
-        val p = fract(t / period + rnd(i, 7))
-        val seed = i * 31 + cycle.toInt()
-        val c = Offset(rnd(seed, 8) * size.width, (0.62f + 0.36f * rnd(seed, 9)) * h)
-        val r = (4f + 18f * p) * unit
-        scale(scaleX = 1f, scaleY = 0.28f, pivot = c) {
-            drawCircle(Color(0xFFE6EEFF), radius = r, center = c, style = Stroke(unit), alpha = 0.3f * (1f - p))
-        }
+    // The headlights: a slow breath and a blue streak across the lens
+    val lights = listOf(at(0.385f, 0.335f), at(0.57f, 0.35f))
+    val breath = 0.5f + 0.5f * sin(t * 1.3f)
+    lights.forEachIndexed { i, c ->
+        softLight(c, w * 0.035f, Color(0xFFEAF6FF), 0.35f + 0.2f * breath)
+        softLight(c, w * 0.09f, Color(0xFF9FD0FF), 0.08f + 0.06f * breath)
+        val reach = w * (0.16f + 0.04f * sin(t * 0.9f + i))
+        drawLine(
+            Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color(0xFFB8DCFF), 1f to Color.Transparent, startX = c.x - reach, endX = c.x + reach),
+            c - Offset(reach, 0f), c + Offset(reach, 0f), strokeWidth = unit * 1.6f, alpha = 0.4f + 0.25f * breath
+        )
     }
-    spinningWheels(t * 0.15f, Color(0xFFB8C0D0))
+    // The road shining in the beams below the tiles, rushing towards you
+    for (i in 0 until 26) {
+        val p = fract(rnd(i, 9) + t * (0.5f + 0.4f * rnd(i, 10)))
+        val side = if (i % 2 == 0) 0.39f else 0.565f
+        val y = 0.7f + p * p * 0.3f
+        val x = side + (rnd(i, 11) - 0.5f) * (0.05f + p * 0.12f)
+        val len = h * (0.01f + 0.05f * p)
+        val c = at(x, y)
+        drawLine(Color(0xFFEFF6FF), c, c + Offset(0f, len), strokeWidth = unit * (1f + p * 2f), cap = StrokeCap.Round, alpha = 0.3f * (1f - p) * (0.5f + rnd(i, 12)))
+    }
 }
 
 /** Cozy Lo-Fi: drops running down the window, the fairy lights twinkling and steam off the mug. */

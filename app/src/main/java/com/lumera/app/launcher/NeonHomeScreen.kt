@@ -1948,7 +1948,7 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
             when {
                 shownPicture != null -> PictureBackdrop(shownPicture)
                 shown.backdrop == null -> SkylineBackdrop(wallpaper)
-                shown.drift -> DriftingBox {
+                shown.drift -> DriftingBox(shown.driftX, shown.driftY) {
                     PaintingBackdrop(shown.backdrop)
                     StyleAmbience(shown.ambience, light = shown.light)
                 }
@@ -1963,7 +1963,7 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
 
 /** A photo and what moves in it, drifting slowly closer and back together so nothing slips. */
 @Composable
-private fun DriftingBox(content: @Composable () -> Unit) {
+private fun DriftingBox(towardX: Float, towardY: Float, content: @Composable () -> Unit) {
     val drift = rememberInfiniteTransition(label = "StyleDrift")
     val zoom by drift.animateFloat(
         initialValue = 1f,
@@ -1975,7 +1975,7 @@ private fun DriftingBox(content: @Composable () -> Unit) {
         Modifier.fillMaxSize().graphicsLayer {
             scaleX = zoom
             scaleY = zoom
-            transformOrigin = TransformOrigin(0.62f, 0.3f)
+            transformOrigin = TransformOrigin(towardX, towardY)
         }
     ) { content() }
 }
