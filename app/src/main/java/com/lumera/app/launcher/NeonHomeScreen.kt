@@ -167,7 +167,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
-private enum class HomeTab { Home, Apps }
+private enum class HomeTab { Home, Apps, Sources }
 
 private val TileShape = RoundedCornerShape(10.dp)
 private val SmallTileShape = RoundedCornerShape(8.dp)
@@ -186,6 +186,9 @@ private val SelectKeys = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_EN
 /** Columns of the All apps grid; Up and Down move a lifted app by a whole row. */
 private const val AppColumns = 6
 
+/** Columns of the consoles on the Sources tab, which Up and Down move a lifted console across. */
+private const val ConsoleColumns = 3
+
 // Holding OK lifts a tile to move it: the light starts round its edge after [HoldShowsMs] and
 // has gone all the way round at [HoldMs]
 private const val HoldShowsMs = 400L
@@ -195,13 +198,14 @@ private const val HoldMs = 3_000L
 private data class Lifted(val row: HomeOrder.Row, val key: String)
 
 /**
- * The Neon Tokyo home screen: the clock, Search, Inputs and Settings at the top, and two tabs.
- * Home has the big tiles for YouTube, YT Music, Spotify and Neon Tokyo and a row of consoles, each
- * with the HDMI number Adrian gave it; All apps has every app on the TV with its neon icon.
+ * The Neon Tokyo home screen: the clock, Search, Inputs and Settings at the top, and three tabs.
+ * Home has the big tiles for YouTube, YT Music, Spotify and Neon Tokyo; All apps has every app on
+ * the TV with its neon icon; Källor (Sources) has the consoles, each with the HDMI number Adrian
+ * gave it.
  * A console that is switched on gets a glowing outline that breathes and a small white star
  * that twinkles in its corner. The skyline behind takes the colour of the tile in focus.
  * Holding OK on a tile for three seconds lifts it: the arrows move it along its row, or round
- * the All apps grid, and OK or Back puts it down there, where it stays.
+ * the grid of All apps or Källor, and OK or Back puts it down there, where it stays.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -335,15 +339,21 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
     }
     val firstFavourite = remember { FocusRequester() }
     val firstApp = remember { FocusRequester() }
+    val firstConsole = remember { FocusRequester() }
     val homeTab = remember { FocusRequester() }
     val appsTab = remember { FocusRequester() }
+    val sourcesTab = remember { FocusRequester() }
     // Goes up to send the focus to the first tile of the open tab
     var focusFirst by remember { mutableIntStateOf(1) }
     LaunchedEffect(focusFirst) {
         // A tab that just opened is only there after a frame or two
         repeat(10) {
             withFrameNanos { }
-            val target = if (tab == HomeTab.Home) firstFavourite else firstApp
+            val target = when (tab) {
+                HomeTab.Home -> firstFavourite
+                HomeTab.Apps -> firstApp
+                HomeTab.Sources -> firstConsole
+            }
             if (runCatching { target.requestFocus() }.isSuccess) return@LaunchedEffect
         }
     }
@@ -392,8 +402,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                     KeyEventType.KeyDown -> when {
                         code == KeyEvent.KEYCODE_DPAD_LEFT -> moveLifted(-1)
                         code == KeyEvent.KEYCODE_DPAD_RIGHT -> moveLifted(1)
-                        code == KeyEvent.KEYCODE_DPAD_UP && current.row == HomeOrder.Row.Apps -> moveLifted(-AppColumns)
-                        code == KeyEvent.KEYCODE_DPAD_DOWN && current.row == HomeOrder.Row.Apps -> moveLifted(AppColumns)
+                        code == KeyEvent.KEYCODE_DPAD_UP && columns(current.row) > 0 -> moveLifted(-columns(current.row))
+                        code == KeyEvent.KEYCODE_DPAD_DOWN && columns(current.row) > 0 -> moveLifted(columns(current.row))
                         putsDown && native.repeatCount == 0 -> { dropArmed[0] = true }
                     }
                     KeyEventType.KeyUp -> if (putsDown && dropArmed[0]) drop()
@@ -441,7 +451,15 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
                     translationY = (1f - ignite.value) * 14.dp.toPx()
                 }
                 // Up from the tiles lands on the open tab, never on the other one, which would open it
-                .focusProperties { enter = { if (tab == HomeTab.Home) homeTab else appsTab } }
+                .focusProperties {
+                    enter = {
+                        when (tab) {
+                            HomeTab.Home -> homeTab
+                            HomeTab.Apps -> appsTab
+                            HomeTab.Sources -> sourcesTab
+                        }
+                    }
+                }
                 .focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -451,6 +469,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
             }, onClick = { focusFirst++ })
             TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = {
                 tab = HomeTab.Apps
+                spotOn = false
+            }, onClick = { focusFirst++ })
+            TabPill("Källor", tab == HomeTab.Sources, sourcesTab, onFocus = {
+                tab = HomeTab.Sources
                 spotOn = false
             }, onClick = { focusFirst++ })
         }
@@ -472,20 +494,30 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
             when (shown) {
                 HomeTab.Home -> HomeRows(
                     favourites = favourites,
-                    consoles = consoles,
                     lifted = lifted,
                     onLift = { row, key -> lift(row, key) },
                     installed = installed,
-                    live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
                     firstFavourite = firstFavourite,
                     onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
                     onSpot = {
                         spot = it
                         spotOn = true
                     },
-                    onOpenApp = { HomeApps.open(context, it) },
-                    onOpenConsole = { openConsole(it) },
-                    onLinkConsole = { linking = it }
+                    onOpenApp = { HomeApps.open(context, it) }
+                )
+                HomeTab.Sources -> Sources(
+                    consoles = consoles,
+                    lifted = lifted?.takeIf { it.row == HomeOrder.Row.Consoles }?.key,
+                    onLift = { lift(HomeOrder.Row.Consoles, it) },
+                    live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
+                    firstConsole = firstConsole,
+                    onFocusColor = { title, color -> wallpaper = NeonWallpaper.forCard(null, title, color.toArgb()) },
+                    onSpot = {
+                        spot = it
+                        spotOn = true
+                    },
+                    onOpen = { openConsole(it) },
+                    onLink = { linking = it }
                 )
                 HomeTab.Apps -> AllApps(
                     apps = orderedApps,
@@ -507,7 +539,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
             exit = fadeOut(tween(160)),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp)
         ) {
-            MoveHint(grid = lifted?.row == HomeOrder.Row.Apps)
+            MoveHint(grid = lifted?.let { columns(it.row) > 0 } == true)
         }
     }
 
@@ -545,17 +577,13 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null) {
 @Composable
 private fun HomeRows(
     favourites: List<KnownApp>,
-    consoles: List<Console>,
     lifted: Lifted?,
     onLift: (HomeOrder.Row, String) -> Unit,
     installed: Set<KnownApp>,
-    live: (Console) -> Boolean,
     firstFavourite: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
     onSpot: (Spot) -> Unit,
-    onOpenApp: (KnownApp) -> Unit,
-    onOpenConsole: (Console) -> Unit,
-    onLinkConsole: (Console) -> Unit
+    onOpenApp: (KnownApp) -> Unit
 ) {
     Column(modifier = Modifier.padding(start = Side), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         RowTitle("Watch & listen")
@@ -592,41 +620,81 @@ private fun HomeRows(
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
-        RowTitle("Consoles")
-        Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
-            consoles.forEach { console ->
-                key(console.id) {
-                    val light = rememberLiveLight(live(console))
-                    NeonTile(
-                        width = SmallTile.first,
-                        height = SmallTile.second,
-                        shape = SmallTileShape,
-                        color = console.color,
-                        onClick = { onOpenConsole(console) },
-                        // A short hold asks which input it is on; the full three seconds lifts it
-                        onLongClick = { onLinkConsole(console) },
-                        modifier = Modifier.animatePlacement(),
-                        onHold = { onLift(HomeOrder.Row.Consoles, console.id) },
-                        lift = liftOf(lifted, HomeOrder.Row.Consoles, console.id),
-                        onFocus = { onFocusColor(null, console.name, console.color) },
-                        onFocusRect = { onSpot(Spot(it, console.color)) },
-                        behind = { LiveHalo(light, console.color, 8.dp) },
-                        front = { LiveEdge(light, live(console), console.color, 8.dp) }
+    }
+}
+
+/**
+ * Källor, the consoles and the PC by their HDMI numbers, as big tiles three to a row. One that
+ * is switched on glows and has its star; a short hold asks which input it is on.
+ */
+@Composable
+private fun Sources(
+    consoles: List<Console>,
+    lifted: String?,
+    onLift: (String) -> Unit,
+    live: (Console) -> Boolean,
+    firstConsole: FocusRequester,
+    onFocusColor: (String, Color) -> Unit,
+    onSpot: (Spot) -> Unit,
+    onOpen: (Console) -> Unit,
+    onLink: (Console) -> Unit
+) {
+    // Room round the tiles for a focused tile's glow, as on All apps
+    val room = 12.dp
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Box(Modifier.padding(start = Side)) { RowTitle("Consoles") }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(ConsoleColumns),
+            horizontalArrangement = Arrangement.spacedBy(Gap),
+            verticalArrangement = Arrangement.spacedBy(Gap),
+            contentPadding = PaddingValues(room),
+            userScrollEnabled = false,
+            modifier = Modifier
+                .wrapContentWidth(Alignment.Start)
+                .offset(x = Side - room, y = -room)
+                .width(BigTile.first * ConsoleColumns + Gap * (ConsoleColumns - 1) + room * 2)
+                .fillMaxHeight()
+        ) {
+            itemsIndexed(consoles, key = { _, console -> console.id }) { index, console ->
+                val light = rememberLiveLight(live(console))
+                NeonTile(
+                    width = BigTile.first,
+                    height = BigTile.second,
+                    shape = TileShape,
+                    color = console.color,
+                    onClick = { onOpen(console) },
+                    // A short hold asks which input it is on; the full three seconds lifts it
+                    onLongClick = { onLink(console) },
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null),
+                    focusRequester = if (index == 0) firstConsole else null,
+                    onHold = { onLift(console.id) },
+                    lift = when (lifted) {
+                        null -> Lift.None
+                        console.id -> Lift.Lifted
+                        else -> Lift.Other
+                    },
+                    onFocus = { onFocusColor(console.name, console.color) },
+                    onFocusRect = { onSpot(Spot(it, console.color)) },
+                    behind = { LiveHalo(light, console.color, 10.dp) },
+                    front = { LiveEdge(light, live(console), console.color, 10.dp) }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
-                            NeonGlyph(console.glyph, console.color, Modifier.size(26.dp))
-                            Spacer(Modifier.weight(1f))
-                            TileName(console.name, 11.5.sp)
+                        NeonGlyph(console.glyph, console.color, Modifier.size(38.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            TileName(console.name, 15.sp)
                             BasicText(
                                 text = "HDMI ${console.port}",
                                 style = TextStyle(
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 7.5.sp,
-                                    letterSpacing = 0.4.sp,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 0.5.sp,
                                     color = console.color
                                 ),
-                                modifier = Modifier.padding(top = 2.dp)
+                                modifier = Modifier.padding(top = 3.dp)
                             )
                         }
                     }
@@ -634,6 +702,13 @@ private fun HomeRows(
             }
         }
     }
+}
+
+/** Grid columns of a row, which Up and Down move a lifted tile across; 0 for a single row. */
+private fun columns(row: HomeOrder.Row): Int = when (row) {
+    HomeOrder.Row.Favourites -> 0
+    HomeOrder.Row.Consoles -> ConsoleColumns
+    HomeOrder.Row.Apps -> AppColumns
 }
 
 /** How a tile shows a lift: none going on, it is the one lifted, or another one is. */

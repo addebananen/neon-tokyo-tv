@@ -589,28 +589,11 @@ adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" > "$OUT/ne
 sleep 8
 shot neon-home
 screen_has "WATCH &amp; LISTEN" || fail "Neon Home has no Watch and listen row"
-screen_has "HDMI 6" || fail "Neon Home does not show the consoles with their HDMI numbers"
+if screen_has "HDMI 6"; then fail "the consoles are still on the Home tab instead of on Källor"; fi
 screen_has "Neon Tokyo" || fail "Neon Home has no Neon Tokyo tile where Stremio used to be"
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Neon Home does not start on YouTube ($label has the focus)"
-key DPAD_DOWN
-sleep 1
-label=$(focused_label)
-[ "$label" = "PC" ] || fail "Down from YouTube did not reach the PC console ($label has the focus)"
-shot neon-home-consoles
-# A long press on a console asks which TV input it is on
-adb shell input keyevent --longpress DPAD_CENTER
-sleep 2
-shot neon-home-link
-screen_has "Which input is PC on" || fail "a long press on PC did not ask which input it is on"
-key BACK
-sleep 2
-if screen_has "Which input is PC on"; then fail "Back did not close the input picker"; fi
 # Holding OK for three seconds lifts a tile: the arrows move it, OK puts it down, and it stays
-key DPAD_UP
-sleep 1
-label=$(focused_label)
-[ "$label" = "YouTube" ] || fail "Up from PC did not return to YouTube ($label has the focus)"
 if ! hold_ok 3.6; then
   fail "could not hold OK down on the emulator"
 else
@@ -644,10 +627,8 @@ else
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "YouTube did not move back to the front ($label has the focus)"
 fi
-key DPAD_DOWN
-sleep 1
 # Up from the tiles lands on the open tab, and pointing at All apps opens it
-key DPAD_UP DPAD_UP
+key DPAD_UP
 sleep 1
 label=$(focused_label)
 [ "$label" = "HOME" ] || fail "Up from YouTube did not land on the Home tab ($label has the focus)"
@@ -664,11 +645,63 @@ width=$(focused_width)
 key DPAD_RIGHT
 sleep 2
 shot neon-home-apps-focus
+# Källor, next to All apps, has the consoles with their HDMI numbers
+key DPAD_UP
+sleep 1
+label=$(focused_label)
+[ "$label" = "ALL APPS" ] || fail "Up from the apps did not land on the All apps tab ($label has the focus)"
+key DPAD_RIGHT
+sleep 2
+shot neon-home-sources
+label=$(focused_label)
+[ "$label" = "KÄLLOR" ] || fail "right of All apps is $label, not the Källor tab"
+screen_has "HDMI 6" || fail "Källor does not show the consoles with their HDMI numbers"
+key DPAD_DOWN
+sleep 1
+label=$(focused_label)
+[ "$label" = "PC" ] || fail "Källor does not start with the PC on HDMI 1 ($label has the focus)"
+# Three big tiles to a row: 190dp, a little more while focused
+width=$(focused_width)
+[ "$width" -ge 340 ] && [ "$width" -le 450 ] || fail "Källor tiles are $width px wide instead of the big tile size"
+# A long press on a console asks which TV input it is on
+adb shell input keyevent --longpress DPAD_CENTER
+sleep 2
+shot neon-home-link
+screen_has "Which input is PC on" || fail "a long press on PC did not ask which input it is on"
+key BACK
+sleep 2
+if screen_has "Which input is PC on"; then fail "Back did not close the input picker"; fi
+# A console lifted on Källor goes down a whole row with Down
+if hold_ok 3.6; then
+  sleep 1
+  screen_has "OK puts it down" || fail "holding OK on PC for three seconds did not lift it"
+  key DPAD_DOWN
+  sleep 1
+  shot neon-home-sources-moved
+  key DPAD_CENTER
+  sleep 1
+  key DPAD_UP
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "Switch 2" ] || fail "PC moved down a row, but $label is above it instead of Switch 2"
+  key DPAD_DOWN
+  sleep 1
+  hold_ok 3.6
+  sleep 1
+  key DPAD_UP
+  sleep 1
+  key DPAD_CENTER
+  sleep 1
+  key DPAD_RIGHT
+  sleep 1
+  label=$(focused_label)
+  [ "$label" = "Switch 2" ] || fail "PC did not move back to the front of Källor ($label is next to it)"
+fi
 # Back goes to the Home tab first, then leaves the preview
 key BACK
 sleep 2
 label=$(focused_label)
-[ "$label" = "YouTube" ] || fail "Back on All apps did not return to YouTube ($label has the focus)"
+[ "$label" = "YouTube" ] || fail "Back on Källor did not return to YouTube ($label has the focus)"
 key BACK
 sleep 3
 shot neon-home-left noalive
