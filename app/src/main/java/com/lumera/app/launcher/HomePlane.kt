@@ -54,8 +54,7 @@ internal fun planeMedia(context: Context, style: HomeStyle, picture: String?): P
     picture != null && isVideo(picture) -> PlaneMedia(Uri.fromFile(File(picture)), loop = true)
     picture != null -> PictureStill.of(picture)?.let { PlaneMedia(Uri.fromFile(it), loop = false) }
     style.video != null -> PlaneMedia(resource(context, style.video), loop = true)
-    style.still != null -> PlaneMedia(resource(context, style.still), loop = false)
-    else -> null
+    else -> style.still?.let { PlaneMedia(resource(context, it), loop = false) }
 }
 
 private fun resource(context: Context, id: Int) = Uri.parse("android.resource://${context.packageName}/$id")
