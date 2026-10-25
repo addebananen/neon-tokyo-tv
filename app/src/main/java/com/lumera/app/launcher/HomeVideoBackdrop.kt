@@ -40,6 +40,13 @@ import androidx.media3.exoplayer.ExoPlayer
 @Composable
 internal fun VideoBackdrop(video: Int, poster: Int?) {
     val context = LocalContext.current
+    VideoBackdrop(remember(video) { Uri.parse("android.resource://${context.packageName}/$video") }, poster)
+}
+
+/** A film from a file or the app's resources, as above; [poster] may be null for a profile's own. */
+@Composable
+internal fun VideoBackdrop(video: Uri, poster: Int?) {
+    val context = LocalContext.current
     val shown = remember(video) { Animatable(0f) }
     var failed by remember(video) { mutableStateOf(false) }
     val player = remember(video) { loopingPlayer(context, video, onError = { failed = true }) }
@@ -103,7 +110,7 @@ internal fun VideoBackdrop(video: Int, poster: Int?) {
     }
 }
 
-private fun loopingPlayer(context: Context, video: Int, onError: () -> Unit): ExoPlayer =
+private fun loopingPlayer(context: Context, video: Uri, onError: () -> Unit): ExoPlayer =
     ExoPlayer.Builder(context).build().apply {
         // Only the picture: no sound is decoded, and the TV's audio is left alone
         trackSelectionParameters = trackSelectionParameters.buildUpon()
@@ -117,7 +124,7 @@ private fun loopingPlayer(context: Context, video: Int, onError: () -> Unit): Ex
                 onError()
             }
         })
-        setMediaItem(MediaItem.fromUri(Uri.parse("android.resource://${context.packageName}/$video")))
+        setMediaItem(MediaItem.fromUri(video))
         prepare()
         playWhenReady = true
     }

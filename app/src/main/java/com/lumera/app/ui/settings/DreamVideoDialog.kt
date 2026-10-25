@@ -87,7 +87,11 @@ import java.io.File
 @Composable
 fun DreamVideoDialog(
     onDismissRequest: () -> Unit,
-    onVideoSet: () -> Unit
+    onVideoSet: () -> Unit,
+    /** Where the video goes: the one screensaver video, or a home profile's own. */
+    target: File? = null,
+    /** A home profile's background rather than a screensaver: the words follow, the screensaver stays. */
+    background: Boolean = false
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -115,14 +119,15 @@ fun DreamVideoDialog(
             override fun onVideoReceived(file: File) {
                 checking = true
                 scope.launch {
-                    val shown: Bitmap? = withContext(Dispatchers.IO) { DreamVideo.install(context, file) }
+                    val shown: Bitmap? = withContext(Dispatchers.IO) { DreamVideo.install(context, file, target ?: DreamVideo.file(context)) }
                     checking = false
                     progress = null
                     if (shown == null) {
                         serverManager.state = DreamVideoUploadServer.STATE_ERROR
                         note = "The TV can't play that video. Try another one."
                     } else {
-                        NeonDreamStyle.set(context, NeonDreamStyle.VIDEO)
+                        // A profile's own video plays when the screensaver follows the home style
+                        if (!background) NeonDreamStyle.set(context, if (target == null) NeonDreamStyle.VIDEO else NeonDreamStyle.HOME)
                         serverManager.state = DreamVideoUploadServer.STATE_DONE
                         frame = shown.asImageBitmap()
                         onVideoSet()
@@ -134,7 +139,7 @@ fun DreamVideoDialog(
                 progress = null
                 note = "The video stopped arriving. Send it again from your phone."
             }
-        })
+        }, background)
         if (info == null) {
             offline = true
         } else {
@@ -170,6 +175,7 @@ fun DreamVideoDialog(
                 if (shown != null) {
                     VideoReady(
                         frame = shown,
+                        background = background,
                         onPreview = {
                             context.startActivity(Intent(context, NeonDreamPreviewActivity::class.java))
                         },
@@ -177,6 +183,7 @@ fun DreamVideoDialog(
                     )
                 } else {
                     VideoWaiting(
+                        background = background,
                         serverInfo = serverInfo,
                         qr = qr,
                         offline = offline,
@@ -194,6 +201,7 @@ fun DreamVideoDialog(
 
 @Composable
 private fun VideoWaiting(
+    background: Boolean,
     serverInfo: ServerInfo?,
     qr: ImageBitmap?,
     offline: Boolean,
@@ -238,7 +246,7 @@ private fun VideoWaiting(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            NeonText("SCREENSAVER", style = NeonType.eyebrow())
+            NeonText(if (background) "HOME BACKGROUND" else "SCREENSAVER", style = NeonType.eyebrow())
             Spacer(Modifier.height(6.dp))
             NeonText(if (offline) "No network" else "Your own video", style = NeonType.headline(32.sp))
             Spacer(Modifier.height(20.dp))
@@ -311,6 +319,7 @@ private fun UploadBar(progress: Float) {
 @Composable
 private fun VideoReady(
     frame: ImageBitmap,
+    background: Boolean,
     onPreview: () -> Unit,
     onDone: () -> Unit
 ) {
@@ -363,28 +372,34 @@ private fun VideoReady(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            NeonText("SCREENSAVER", style = NeonType.eyebrow())
+            NeonText(if (background) "HOME BACKGROUND" else "SCREENSAVER", style = NeonType.eyebrow())
             Spacer(Modifier.height(6.dp))
             NeonText("Your video is on", style = NeonType.headline(32.sp))
             Spacer(Modifier.height(12.dp))
             Text(
-                "It plays on a loop, without sound, whenever the TV rests.",
+                if (background) "It loops without sound behind your tiles, and rests while an app is open."
+                else "It plays on a loop, without sound, whenever the TV rests.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = NeonPalette.Lilac
             )
             Spacer(Modifier.height(30.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                VoidButton(
-                    text = "Preview",
-                    onClick = onPreview,
-                    isPrimary = true,
-                    modifier = Modifier.width(200.dp),
-                    focusRequester = previewRequester
-                )
+                // A background shows as soon as the dialog closes, so it has nothing to preview
+                if (!background) {
+                    VoidButton(
+                        text = "Preview",
+                        onClick = onPreview,
+                        isPrimary = true,
+                        modifier = Modifier.width(200.dp),
+                        focusRequester = previewRequester
+                    )
+                }
                 VoidButton(
                     text = "Done",
                     onClick = onDone,
-                    modifier = Modifier.width(160.dp)
+                    isPrimary = background,
+                    modifier = Modifier.width(160.dp),
+                    focusRequester = if (background) previewRequester else null
                 )
             }
         }

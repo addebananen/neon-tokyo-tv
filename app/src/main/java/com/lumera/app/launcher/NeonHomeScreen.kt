@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.view.KeyEvent
 import android.view.ViewConfiguration
 import android.provider.Settings
@@ -2017,6 +2018,7 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
     Crossfade(targetState = picture to style, animationSpec = tween(650), label = "HomeBackdrop") { (shownPicture, shown) ->
         Box(Modifier.fillMaxSize()) {
             when {
+                shownPicture != null && isVideo(shownPicture) -> VideoBackdrop(Uri.fromFile(java.io.File(shownPicture)), poster = null)
                 shownPicture != null -> PictureBackdrop(shownPicture)
                 // A film carries its own motion, so the painting's little lights stay off
                 shown.video != null -> VideoBackdrop(shown.video, poster = shown.backdrop)
@@ -2034,9 +2036,12 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
     }
 }
 
+/** Whether a profile's own background is a video rather than a picture, by how it was saved. */
+internal fun isVideo(path: String) = path.endsWith(".mp4")
+
 /** A photo and what moves in it, drifting slowly closer and back together so nothing slips. */
 @Composable
-private fun DriftingBox(towardX: Float, towardY: Float, content: @Composable () -> Unit) {
+internal fun DriftingBox(towardX: Float, towardY: Float, content: @Composable () -> Unit) {
     val drift = rememberInfiniteTransition(label = "StyleDrift")
     val zoom by drift.animateFloat(
         initialValue = 1f,
@@ -2088,7 +2093,7 @@ private object PaintingCache {
  * quite still, darkened where the clock and the tiles sit so they stay easy to read.
  */
 @Composable
-private fun PictureBackdrop(path: String) {
+internal fun PictureBackdrop(path: String) {
     var image by remember(path) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(path) {
         image = withContext(Dispatchers.IO) {

@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import com.lumera.app.ui.settings.DreamVideoDialog
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -282,6 +283,8 @@ private fun ProfileEditor(
     var name by remember(profile.id) { mutableStateOf(profile.name) }
     var takingPhoto by remember { mutableStateOf(false) }
     var takingBackground by remember { mutableStateOf(false) }
+    var takingDreamVideo by remember { mutableStateOf(false) }
+    var takingVideo by remember { mutableStateOf(false) }
     val styleList = remember { FocusRequester() }
     LaunchedEffect(profile.id) {
         withFrameNanos { }
@@ -293,7 +296,7 @@ private fun ProfileEditor(
     }
     Column(
         modifier = Modifier
-            .width(820.dp)
+            .width(920.dp)
             .homePanel(look, RoundedCornerShape(18.dp))
             .padding(horizontal = 30.dp, vertical = 22.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -305,10 +308,15 @@ private fun ProfileEditor(
                 NameField(name, look, onChange = { name = it.take(20) }, onDone = { saveName() })
             }
             PanelButton("Photo", look) { takingPhoto = true }
-            PanelButton(if (profile.background == null) "Own background" else "New background", look) { takingBackground = true }
+            PanelButton("Own picture", look) { takingBackground = true }
+            PanelButton("Own video", look) { takingVideo = true }
             if (profile.background != null) PanelButton("Use the painting", look) { profiles.update(profile.copy(background = null)) }
         }
-        PanelNote("STYLE", look)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PanelNote("STYLE", look)
+            Spacer(Modifier.weight(1f))
+            PanelNote(profile.style.blurb, look)
+        }
         StylePicker(profile.style, look, styleList) { style ->
             saveName()
             profiles.update(profile.copy(name = name.trim().ifEmpty { profile.name }, style = style))
@@ -318,9 +326,9 @@ private fun ProfileEditor(
                 saveName()
                 onDone()
             }
+            PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
+            if (profile.dreamVideo != null) PanelButton("Style's screensaver", look) { profiles.update(profile.copy(dreamVideo = null)) }
             if (canDelete) PanelButton("Remove profile", look, onClick = onDelete)
-            Spacer(Modifier.weight(1f))
-            PanelNote(profile.style.blurb, look)
         }
     }
     if (takingPhoto) {
@@ -332,6 +340,23 @@ private fun ProfileEditor(
                 val saved = keepFile(context, profiles, ref)
                 if (saved != null) profiles.update(profile.copy(photo = saved))
             }
+        )
+    }
+    if (takingVideo) {
+        val target = remember { profiles.newFile("background", "mp4") }
+        DreamVideoDialog(
+            onDismissRequest = { takingVideo = false },
+            onVideoSet = { profiles.update(profile.copy(background = target.absolutePath)) },
+            target = target,
+            background = true
+        )
+    }
+    if (takingDreamVideo) {
+        val target = remember { profiles.newFile("dream", "mp4") }
+        DreamVideoDialog(
+            onDismissRequest = { takingDreamVideo = false },
+            onVideoSet = { profiles.update(profile.copy(dreamVideo = target.absolutePath)) },
+            target = target
         )
     }
     if (takingBackground) {

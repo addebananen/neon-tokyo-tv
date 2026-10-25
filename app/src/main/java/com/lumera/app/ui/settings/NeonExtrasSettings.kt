@@ -74,6 +74,7 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
     SettingRow("Screensaver") {
         Column {
             val scene = when (dreamStyle) {
+                NeonDreamStyle.HOME -> "Home style: the picture and motion of the style on Neon Home, under a quiet clock, or the video a home profile sent for it. Neon gets the city drive."
                 NeonDreamStyle.SKYLINE -> "Skyline: the Neon Tokyo night, a neon clock and shooting stars."
                 NeonDreamStyle.VIDEO -> "Your video: it plays on a loop, without sound, whenever the TV rests."
                 else -> "City drive: a car cruising an endless neon Tokyo, district after district, rain and all, under a clock that says you'll be back soon."
@@ -86,6 +87,7 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
             )
             VoidSegmentedControl(
                 options = listOf(
+                    "Home style" to NeonDreamStyle.HOME,
                     "City drive" to NeonDreamStyle.DRIVE,
                     "Skyline" to NeonDreamStyle.SKYLINE,
                     "Your video" to NeonDreamStyle.VIDEO

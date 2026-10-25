@@ -33,13 +33,13 @@ class DreamVideoServerManager {
         set(value) { server?.state = value }
 
     /** Starts the server; returns where the phone finds it, or null without a network. */
-    suspend fun startServer(context: Context, listener: DreamVideoUploadServer.Listener): ServerInfo? =
+    suspend fun startServer(context: Context, listener: DreamVideoUploadServer.Listener, background: Boolean = false): ServerInfo? =
         withContext(Dispatchers.IO) {
             val ip = NetworkUtils.getLocalIpAddress() ?: return@withContext null
             val token = AvatarServerManager.newToken()
             for (port in PORT_START..PORT_END) {
                 try {
-                    val videoServer = DreamVideoUploadServer(port, context.applicationContext, token, listener)
+                    val videoServer = DreamVideoUploadServer(port, context.applicationContext, token, listener, background)
                     videoServer.start(READ_TIMEOUT_MS)
                     server = videoServer
                     if (closed) {

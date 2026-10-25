@@ -757,7 +757,7 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-for style in google_tv nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk; do
+for style in google_tv nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk deepblue; do
   adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style "$style" >/dev/null 2>&1
   sleep 7
   shot "style-$style"
@@ -792,6 +792,16 @@ for style in google_tv nature anime clean city faith car car_night lofi cottage 
     key BACK; sleep 2
     key BACK; sleep 2
   fi
+  key BACK
+  sleep 2
+done
+
+# A home style's own screensaver: its picture, its little lights and a quiet clock
+for style in lofi dusk nature deepblue; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
+  sleep 6
+  shot "dream-style-$style"
+  screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock"
   key BACK
   sleep 2
 done

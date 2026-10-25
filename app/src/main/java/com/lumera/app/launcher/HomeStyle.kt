@@ -407,6 +407,20 @@ enum class HomeStyle(
         ),
         // No slow zoom here: it would push the artist's signature off the corner
         light = R.drawable.home_style_dusk_glow
+    ),
+    DeepBlue(
+        "deepblue", "Deep Blue", "A girl adrift in the light under the sea, fish circling and a whale gliding past, animated by Adrian",
+        R.drawable.home_style_deepblue, Ambience.Calm,
+        HomeLook(
+            accent = Color(0xFF7FF6FF), accent2 = Color(0xFFB9F1FF), text = Color(0xFFF1FDFF), dim = Color(0xFFA9D3E0),
+            pane = Color(0xB3041A2E), pill = Color(0x99041A2E), pillFocused = Color(0xCC0B3550),
+            tileTop = Color(0xD90A2C46), tileBottom = Color(0xD9031322),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = false,
+            clockSize = 66.sp, clockColor = Color(0xFFF1FDFF), clockGlow = Color(0xCC00131F), clockBlur = 24f,
+            shade = Color(0x99001320), corner = 16.dp, glow = 14.dp, toward = Color(0xFF8FEFFF), pull = 0.35f,
+            letterSpacing = 1.5.sp
+        ),
+        video = R.raw.home_style_deepblue
     );
 
     companion object {
