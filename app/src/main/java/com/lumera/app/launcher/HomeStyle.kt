@@ -236,17 +236,20 @@ enum class HomeStyle(
         )
     ),
     Cottage(
-        "cottage", "Cottagecore", "A thatched cottage above a meadow in bloom",
+        "cottage", "Cottagecore", "A turf-roofed cottage above the sea, buttercups in the grass",
         R.drawable.home_style_cottage, Ambience.Meadow,
         HomeLook(
-            accent = Color(0xFFC0606F), accent2 = Color(0xFF6E8A5A), text = Color(0xFF3E3426), dim = Color(0xFF7A6C56),
-            pane = Color(0xD9FBF6EC), pill = Color(0xCCFBF6EC), pillFocused = Color(0xFFFFFDF8),
-            tileTop = Color(0xEBFFFCF5), tileBottom = Color(0xEBF1E8D6),
+            accent = Color(0xFF4F6B2E), accent2 = Color(0xFFC9981C), text = Color(0xFF23272B), dim = Color(0xFF5E6458),
+            pane = Color(0xD9F7F8F4), pill = Color(0xCCF7F8F4), pillFocused = Color(0xFFFFFFFF),
+            tileTop = Color(0xEBFDFDFA), tileBottom = Color(0xEBEDEFE6),
             font = CormorantFamily, weight = FontWeight.SemiBold, italic = true,
-            clockSize = 74.sp, clockColor = Color(0xFF3E3426), clockGlow = Color(0x99FFFDF6), clockBlur = 18f,
-            shade = Color(0xAAFFFBF2), corner = 12.dp, glow = 10.dp, toward = Color(0xFF4E5A3A), pull = 0.45f,
+            clockSize = 74.sp, clockColor = Color(0xFF23272B), clockGlow = Color(0x99FFFFFF), clockBlur = 18f,
+            shade = Color(0xAAFFFFFF), corner = 12.dp, glow = 10.dp, toward = Color(0xFF3E5226), pull = 0.45f,
             letterSpacing = 1.5.sp
-        )
+        ),
+        drift = true,
+        driftX = 0.5f,
+        driftY = 0.35f
     );
 
     companion object {

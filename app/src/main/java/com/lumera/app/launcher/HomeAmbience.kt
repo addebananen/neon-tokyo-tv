@@ -571,31 +571,72 @@ private fun DrawScope.loFi(t: Float) {
     }
 }
 
-/** Cottagecore: smoke from the chimney, butterflies over the meadow, pollen in the sun. */
+/**
+ * Cottagecore, a photo of a turf-roofed cottage above the sea on a misty day: smoke curls from the
+ * chimney, gusts of wind run through the meadow and set the buttercups nodding, sea fog drifts
+ * past, a fine drizzle falls and now and then a gull glides over the water.
+ */
 private fun DrawScope.meadow(t: Float) {
+    val w = size.width
+    val h = size.height
     val unit = 1.dp.toPx()
-    for (i in 0 until 5) {
-        val p = fract(t / 9f + i / 5f)
-        val c = at(1552f / 1920f + p * 0.04f + 0.006f * sin(p * 7f + i), 180f / 1080f - p * 0.14f)
-        softLight(c, (10f + 26f * p) * unit, Color(0xFFFBF8F2), 0.5f * sin(p * PI.toFloat()) * (1f - p * 0.5f))
+    // Smoke from the chimney, leaning with the wind
+    for (i in 0 until 7) {
+        val p = fract(t / 11f + i / 7f)
+        val c = at(PhotoSpots.CHIMNEY_X - p * 0.07f + 0.008f * sin(p * 6f + i), PhotoSpots.CHIMNEY_Y - 0.01f - p * 0.16f)
+        softLight(c, (8f + 30f * p) * unit, Color(0xFF7D838C), 0.32f * sin(p * PI.toFloat()) * (1f - p * 0.6f))
     }
-    listOf(Triple(0.42f, 0.78f, Color(0xFFF2B24A)), Triple(0.88f, 0.8f, Color(0xFFF6F2FF)), Triple(0.62f, 0.9f, Color(0xFFE88AA0))).forEachIndexed { i, (bx, by, color) ->
-        val x = bx + 0.06f * sin(t * 0.21f + i * 2f) + 0.02f * sin(t * 0.9f + i)
-        val y = by + 0.03f * sin(t * 0.33f + i * 3f) + 0.01f * sin(t * 2.1f + i)
-        val c = at(x, y)
-        val flap = 0.25f + 0.75f * abs(sin(t * 11f + i))
-        val s = 6f * unit
-        listOf(-1f, 1f).forEach { side ->
-            scale(scaleX = flap, scaleY = 1f, pivot = c) {
-                drawOval(color, topLeft = Offset(c.x + side * s * 0.9f - s * 0.9f, c.y - s * 0.6f), size = Size(s * 1.8f, s * 1.2f), alpha = 0.9f)
-            }
+    // Sea fog drifting along the horizon
+    for (i in 0 until 4) {
+        val x = fract(rnd(i, 1) + t * (0.004f + 0.002f * rnd(i, 2))) * 1.5f - 0.25f
+        val c = at(x, 0.33f + 0.05f * rnd(i, 3))
+        scale(scaleX = 1f, scaleY = 0.18f, pivot = c) {
+            softLight(c, w * (0.16f + 0.08f * rnd(i, 4)), Color(0xFFF4F5FA), 0.35f)
         }
     }
-    for (i in 0 until 24) {
-        val p = fract(rnd(i, 1) + t * (0.01f + 0.01f * rnd(i, 2)))
-        val x = fract(rnd(i, 3) + p * 0.2f + 0.01f * sin(t * 0.6f + i))
-        val y = 0.15f + 0.6f * fract(rnd(i, 4) - p * 0.3f)
-        val glint = 0.4f + 0.6f * sin(t * (1f + rnd(i, 5)) + i).coerceAtLeast(0f)
-        drawCircle(Color(0xFFFFF6D8), radius = (1f + rnd(i, 6)) * unit, center = at(x, y), alpha = 0.5f * glint)
+    // Gusts running through the meadow, left to right
+    val gusts = 2
+    val strength = FloatArray(gusts)
+    for (g in 0 until gusts) {
+        val p = fract(t / 9f + g * 0.5f)
+        val x = -0.3f + p * 1.6f
+        strength[g] = x
+        val band = w * 0.18f
+        drawRect(
+            Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color(0x26F2FFC8), 1f to Color.Transparent, startX = x * w - band, endX = x * w + band),
+            topLeft = Offset(x * w - band, h * 0.74f),
+            size = Size(band * 2, h * 0.26f)
+        )
+    }
+    // Buttercups nodding as a gust passes
+    val flowers = PhotoSpots.buttercups
+    for (i in 0 until flowers.size / 2) {
+        val fx = flowers[i * 2]
+        var push = 0f
+        for (g in 0 until gusts) push += exp(-((fx - strength[g]) / 0.12f).pow(2))
+        val sway = (0.4f * sin(t * 2.2f + i) + push * 1.6f) * unit
+        drawCircle(Color(0xFFFFD84A), radius = unit * 1.6f, center = at(fx, flowers[i * 2 + 1]) + Offset(sway, -abs(sway) * 0.3f), alpha = 0.55f + 0.3f * push.coerceAtMost(1f))
+    }
+    // A fine drizzle
+    for (i in 0 until 50) {
+        val p = fract(rnd(i, 5) + t * (0.6f + 0.3f * rnd(i, 6)))
+        val x = rnd(i, 7) * w
+        val y = p * (h + 40f * unit) - 20f * unit
+        val len = (8f + 8f * rnd(i, 8)) * unit
+        drawLine(Color(0xFFFFFFFF), Offset(x, y), Offset(x - len * 0.25f, y + len), strokeWidth = unit * 0.8f, alpha = 0.1f + 0.1f * rnd(i, 9))
+    }
+    // A gull over the sea, every 30 seconds
+    val flight = fract(t / 30f)
+    if (flight < 0.4f) {
+        val q = flight / 0.4f
+        val c = at(0.02f + q * 0.2f, 0.42f - 0.04f * sin(q * PI.toFloat()))
+        val span = unit * 11f
+        val flap = 0.3f + 0.7f * sin(t * 5f)
+        val wing = Path().apply {
+            moveTo(c.x - span, c.y - flap * span * 0.4f)
+            quadraticTo(c.x - span * 0.4f, c.y - span * 0.32f, c.x, c.y)
+            quadraticTo(c.x + span * 0.4f, c.y - span * 0.32f, c.x + span, c.y - flap * span * 0.4f)
+        }
+        drawPath(wing, Color(0xFF4E555E), alpha = 0.8f * sin(q * PI.toFloat()).pow(0.3f), style = Stroke(width = unit * 1.6f, cap = StrokeCap.Round))
     }
 }
