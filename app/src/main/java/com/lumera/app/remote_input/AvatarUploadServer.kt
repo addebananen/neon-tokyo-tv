@@ -51,7 +51,7 @@ class AvatarUploadServer(
         const val STATE_DONE = "done"
         const val STATE_RETRY = "retry"
         const val STATE_ERROR = "error"
-        private const val MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+        private const val MAX_IMAGE_SIZE = 12 * 1024 * 1024 // 12 MB, room for a 4K background
 
         fun escapeHtml(text: String): String = buildString(text.length) {
             for (c in text) when (c) {

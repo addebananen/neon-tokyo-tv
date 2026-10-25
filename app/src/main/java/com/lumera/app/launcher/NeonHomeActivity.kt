@@ -43,6 +43,9 @@ class NeonHomeActivity : ComponentActivity() {
             preview = false
             previewStyle = null
             homePresses.intValue++
+        } else {
+            // Asked to show a style while already open, as from Settings again: show it
+            intent.getStringExtra(EXTRA_STYLE)?.let { previewStyle = HomeStyle.of(it) }
         }
     }
 

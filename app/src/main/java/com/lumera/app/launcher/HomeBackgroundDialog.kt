@@ -1,6 +1,5 @@
 package com.lumera.app.launcher
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -80,9 +79,9 @@ fun HomeBackgroundDialog(profileName: String, profiles: HomeProfiles, onDismiss:
                     val file = profiles.newFile("background")
                     val image = withContext(Dispatchers.IO) {
                         runCatching {
-                            val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
                             file.writeBytes(bytes)
-                            decoded.asImageBitmap()
+                            // A 4K picture is shown here at the size it takes on the screen
+                            decodeSampled(file, 1080)
                         }.getOrNull()
                     }
                     if (image == null) {
