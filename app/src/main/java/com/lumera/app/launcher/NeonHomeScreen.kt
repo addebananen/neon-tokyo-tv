@@ -391,6 +391,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         drop()
         linking = null
         showInputs = false
+        showProfiles = false
+        pinning = null
+        changing = null
         tab = HomeTab.Home
         focusFirst++
     }
@@ -629,7 +632,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             slots.getOrNull(index)?.let { slot ->
                 ChangeHomeTileDialog(
                     slot = slot,
-                    apps = apps,
+                    apps = orderedApps,
                     onPick = { app ->
                         placeOnHome(app.packageName, index)
                         changing = null
@@ -949,8 +952,15 @@ private fun NeonTile(
                     hold.job?.cancel()
                     hold.job = holdScope.launch {
                         delay(HoldShowsMs)
-                        holdLight.snapTo(0f)
-                        holdLight.animateTo(1f, tween((HoldMs - HoldShowsMs).toInt(), easing = LinearEasing))
+                        // Timed by the clock rather than as an animation, so a TV with its
+                        // animations sped up or off still takes the full three seconds to lift
+                        val start = android.os.SystemClock.uptimeMillis()
+                        while (true) {
+                            val run = (android.os.SystemClock.uptimeMillis() - start).toFloat() / (HoldMs - HoldShowsMs)
+                            holdLight.snapTo(run.coerceAtMost(1f))
+                            if (run >= 1f) break
+                            withFrameNanos { }
+                        }
                         hold.lifted = true
                         keyHeld = false
                         onHold()
@@ -2008,6 +2018,8 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
         Box(Modifier.fillMaxSize()) {
             when {
                 shownPicture != null -> PictureBackdrop(shownPicture)
+                // A film carries its own motion, so the painting's little lights stay off
+                shown.video != null -> VideoBackdrop(shown.video, poster = shown.backdrop)
                 shown.backdrop == null -> SkylineBackdrop(wallpaper)
                 shown.drift -> DriftingBox(shown.driftX, shown.driftY) {
                     PaintingBackdrop(shown.backdrop)
@@ -2043,7 +2055,7 @@ private fun DriftingBox(towardX: Float, towardY: Float, content: @Composable () 
 
 /** A style's painting, decoded once off the main thread and faded in. */
 @Composable
-private fun PaintingBackdrop(drawable: Int) {
+internal fun PaintingBackdrop(drawable: Int) {
     val context = LocalContext.current
     var image by remember(drawable) { mutableStateOf(PaintingCache.cached(drawable)) }
     LaunchedEffect(drawable) {

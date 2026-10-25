@@ -10,8 +10,8 @@ import java.io.File
 import java.util.UUID
 
 /**
- * Someone's home screen: their name, their photo, the style it wears and, if they sent one from
- * their phone, a picture of their own behind it. These belong to the home screen alone; the
+ * Someone's home screen: their name, their photo, the style it wears and, if they sent them from
+ * their phone, a picture of their own behind it and a video for the screensaver. These belong to the home screen alone; the
  * profiles inside Neon Tokyo are separate.
  */
 data class HomeProfile(
@@ -21,7 +21,9 @@ data class HomeProfile(
     /** A photo file in the app's own storage, or null for the first letter of the name. */
     val photo: String? = null,
     /** A picture file shown instead of the style's painting, or null. */
-    val background: String? = null
+    val background: String? = null,
+    /** A video file the screensaver plays while this profile shows, or null for its style's own. */
+    val dreamVideo: String? = null
 )
 
 /**
@@ -57,6 +59,7 @@ class HomeProfiles private constructor(private val context: Context) {
         if (old != null) {
             if (old.photo != profile.photo) deleteFile(old.photo)
             if (old.background != profile.background) deleteFile(old.background)
+            if (old.dreamVideo != profile.dreamVideo) deleteFile(old.dreamVideo)
         }
         store(_profiles.value.map { if (it.id == profile.id) profile else it })
     }
@@ -68,13 +71,15 @@ class HomeProfiles private constructor(private val context: Context) {
         val gone = list.firstOrNull { it.id == id } ?: return
         deleteFile(gone.photo)
         deleteFile(gone.background)
+        deleteFile(gone.dreamVideo)
         val rest = list - gone
         store(rest)
         if (_activeId.value == id) select(rest.first().id)
     }
 
-    /** Where photos and pictures sent from a phone are kept. */
-    fun newFile(kind: String): File = File(File(context.filesDir, DIR).apply { mkdirs() }, "${kind}_${UUID.randomUUID()}.jpg")
+    /** Where photos, pictures and videos sent from a phone are kept. */
+    fun newFile(kind: String, extension: String = "jpg"): File =
+        File(File(context.filesDir, DIR).apply { mkdirs() }, "${kind}_${UUID.randomUUID()}.$extension")
 
     private fun deleteFile(path: String?) {
         path ?: return
@@ -93,6 +98,7 @@ class HomeProfiles private constructor(private val context: Context) {
                 put("style", p.style.key)
                 p.photo?.let { put("photo", it) }
                 p.background?.let { put("background", it) }
+                p.dreamVideo?.let { put("dreamVideo", it) }
             })
         }
         prefs.edit().putString(KEY_PROFILES, array.toString()).apply()
@@ -108,7 +114,8 @@ class HomeProfiles private constructor(private val context: Context) {
                     name = o.optString("name"),
                     style = HomeStyle.of(o.optString("style")),
                     photo = o.optString("photo").ifEmpty { null }?.takeIf { File(it).exists() },
-                    background = o.optString("background").ifEmpty { null }?.takeIf { File(it).exists() }
+                    background = o.optString("background").ifEmpty { null }?.takeIf { File(it).exists() },
+                    dreamVideo = o.optString("dreamVideo").ifEmpty { null }?.takeIf { File(it).exists() }
                 )
             }
         }.getOrDefault(emptyList())

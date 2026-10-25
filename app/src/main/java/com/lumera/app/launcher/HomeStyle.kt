@@ -95,7 +95,9 @@ enum class HomeStyle(
     /** A photo drifts slowly closer and back, as a painting would not, towards this point. */
     val drift: Boolean = false,
     val driftX: Float = 0.62f,
-    val driftY: Float = 0.3f
+    val driftY: Float = 0.3f,
+    /** A film that loops behind everything instead of the painting, which shows until it plays. */
+    val video: Int? = null
 ) {
     Neon(
         "neon", "Neon", "Tokyo at night, lit in the colour of what you point at",

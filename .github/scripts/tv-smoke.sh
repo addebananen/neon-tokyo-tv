@@ -645,7 +645,10 @@ width=$(focused_width)
 key DPAD_RIGHT
 sleep 2
 shot neon-home-apps-focus
-# A short hold on an app in All apps puts it on Home in place of one of the four tiles
+# A short hold on an app in All apps puts it on Home in place of one of the four tiles: the
+# next app along, which is not on Home yet
+key DPAD_RIGHT
+sleep 1
 pinned=$(focused_label)
 adb shell input keyevent --longpress DPAD_CENTER
 sleep 2
@@ -682,6 +685,8 @@ if screen_has "Put $pinned on Home"; then
   key DPAD_RIGHT
   sleep 1
 else
+  key DPAD_LEFT
+  sleep 1
   fail "a short hold on $pinned in All apps did not offer to put it on Home"
   key BACK
   sleep 1

@@ -381,7 +381,7 @@ private fun NameField(value: String, look: HomeLook, onChange: (String) -> Unit,
     )
 }
 
-/** The styles side by side, each a little picture of its painting; pointing at one is enough to choose it. */
+/** The styles side by side, each a little picture of its painting; OK on one chooses it. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun StylePicker(current: HomeStyle, look: HomeLook, focusRequester: FocusRequester, onChoose: (HomeStyle) -> Unit) {
