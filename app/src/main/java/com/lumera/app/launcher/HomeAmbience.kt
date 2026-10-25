@@ -14,15 +14,18 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
@@ -48,17 +51,17 @@ import kotlinx.coroutines.withContext
 
 /**
  * The small things that move in a style's picture: rain running down the window, petals on the
- * wind, candles breathing. They are drawn on one layer of their own, from the time alone, so
+ * wind, the lights of a city. They are drawn on one layer of their own, from the time alone, so
  * nothing is laid out or recomposed while they play; they run at a few frames a second, as
  * slow things need no more, and stop whenever the home screen is not in front.
- * Places are fractions of the screen and match the paintings in res/drawable-nodpi.
+ * Places are fractions of the screen and match the pictures in res/drawable-nodpi.
  */
 @Composable
 fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int? = null) {
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Candles, Ambience.LoFi, Ambience.Meadow -> 24
+        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain -> 30
     }
     val time = rememberAmbientTime(fps)
@@ -80,7 +83,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Petals -> petals(t)
                     Ambience.Calm -> calm(t)
                     Ambience.CityLights -> cityLights(t, lightImage)
-                    Ambience.Candles -> candles(t)
+                    Ambience.Glory -> glory(t, lightImage)
                     Ambience.Speed -> speed(t)
                     Ambience.NightRain -> nightRain(t)
                     Ambience.LoFi -> loFi(t)
@@ -368,24 +371,64 @@ private fun DrawScope.cityLights(t: Float, light: ImageBitmap?) {
     }
 }
 
-/** Faith: the candles breathe and dust drifts in the light from the windows. */
-private fun DrawScope.candles(t: Float) {
+/**
+ * Faith, a photo of a cross on a hilltop against the setting sun: the sky breathes, rays of light
+ * turn slowly behind the hill, kept to the sky so the hill stays dark, motes of gold drift up in
+ * the light and now and then a few birds cross over.
+ */
+private fun DrawScope.glory(t: Float, sky: ImageBitmap?) {
+    val w = size.width
+    val h = size.height
     val unit = 1.dp.toPx()
-    listOf(0.271f, 0.396f, 0.604f, 0.729f).forEachIndexed { i, x ->
-        val flicker = 0.75f + 0.12f * sin(t * 7.1f + i * 2f) + 0.08f * sin(t * 13.3f + i * 5f) + 0.05f * sin(t * 2.2f + i)
-        val c = at(x, 0.566f)
-        softLight(c, 48f * unit * flicker, Color(0xFFFFB85A), 0.32f * flicker)
-        softLight(c, 5f * unit, Color(0xFFFFF3C8), 0.9f * flicker)
+    val sun = at(0.48f, 0.57f)
+    if (sky != null) {
+        val dst = IntSize(w.roundToInt(), h.roundToInt())
+        drawImage(sky, dstSize = dst, alpha = 0.07f + 0.06f * sin(t * 0.4f), blendMode = BlendMode.Plus)
+        drawIntoCanvas { canvas ->
+            canvas.saveLayer(Rect(0f, 0f, w, h), Paint().apply { blendMode = BlendMode.Plus })
+            val reach = w * 1.1f
+            for (i in 0 until 16) {
+                val angle = (i * 22.5f + t * 0.9f + 5f * sin(t * 0.17f + i)) * (PI.toFloat() / 180f)
+                val spread = (1.6f + 2.4f * rnd(i, 1)) * (PI.toFloat() / 180f)
+                val strength = 0.09f + 0.07f * sin(t * (0.25f + 0.3f * rnd(i, 2)) + i * 1.7f)
+                val ray = Path().apply {
+                    moveTo(sun.x, sun.y)
+                    lineTo(sun.x + reach * cos(angle - spread), sun.y + reach * sin(angle - spread))
+                    lineTo(sun.x + reach * cos(angle + spread), sun.y + reach * sin(angle + spread))
+                    close()
+                }
+                drawPath(ray, Brush.radialGradient(0f to Color(0xFFFFE9B8).copy(alpha = strength), 1f to Color.Transparent, center = sun, radius = reach))
+            }
+            // Only where there is sky
+            drawImage(sky, dstSize = dst, blendMode = BlendMode.DstIn)
+            canvas.restore()
+        }
     }
-    softLight(at(0.5f, 0.597f), 30f * unit, Color(0xFFFFDB8A), 0.2f + 0.08f * sin(t * 0.8f))
-    // Dust in the beam from the middle window, widening as it falls into the room
-    for (i in 0 until 34) {
-        val p = fract(rnd(i, 1) - t * (0.006f + 0.008f * rnd(i, 2)))
-        val y = 0.38f + p * 0.55f
-        val spread = 0.04f + p * 0.17f
-        val x = 0.5f + (rnd(i, 3) - 0.5f) * 2f * spread + 0.01f * sin(t * 0.5f + i)
-        val twinkle = 0.4f + 0.6f * sin(t * (0.8f + rnd(i, 4)) + i).coerceAtLeast(0f)
-        drawCircle(Color(0xFFFFE6B0), radius = (0.8f + rnd(i, 5)) * unit, center = at(x, y), alpha = 0.45f * twinkle * sin(p * PI.toFloat()))
+    // Motes of gold rising in the light
+    for (i in 0 until 26) {
+        val life = fract(rnd(i, 3) + t * (0.02f + 0.02f * rnd(i, 4)))
+        val x = 0.3f + 0.4f * rnd(i, 5) + 0.015f * sin(t * 0.7f + i * 2.1f)
+        val y = 0.54f - life * 0.4f
+        val a = sin(life * PI.toFloat()) * (0.35f + 0.35f * rnd(i, 6))
+        drawCircle(Color(0xFFFFF2CC), radius = unit * (1.2f + 1.6f * rnd(i, 7)), center = at(x, y), alpha = a, blendMode = BlendMode.Plus)
+    }
+    // A few birds crossing the evening sky every 36 seconds
+    val flight = fract(t / 36f)
+    if (flight < 0.5f) {
+        val q = flight / 0.5f
+        for (b in 0 until 5) {
+            val x = -0.05f + q * 1.1f - b * 0.028f - (b % 2) * 0.01f
+            val y = 0.15f + b * 0.016f * (if (b % 2 == 0) 1f else -0.6f) + 0.02f * sin(q * 5f + b)
+            val span = unit * (12f - b * 0.8f)
+            val flap = sin(t * 8f + b * 1.3f)
+            val c = at(x, y)
+            val wing = Path().apply {
+                moveTo(c.x - span, c.y - flap * span * 0.45f)
+                quadraticTo(c.x - span * 0.45f, c.y - span * 0.3f, c.x, c.y)
+                quadraticTo(c.x + span * 0.45f, c.y - span * 0.3f, c.x + span, c.y - flap * span * 0.45f)
+            }
+            drawPath(wing, Color(0xFF1C0F08), alpha = 0.85f, style = Stroke(width = unit * 1.7f, cap = StrokeCap.Round))
+        }
     }
 }
 

@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Candles, Speed, NightRain, LoFi, Meadow }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -177,8 +177,8 @@ enum class HomeStyle(
         drift = true
     ),
     Faith(
-        "faith", "Faith", "The upper room, laid for the supper, in candle light",
-        R.drawable.home_style_faith, Ambience.Candles,
+        "faith", "Faith", "A cross on the hilltop against the setting sun",
+        R.drawable.home_style_faith, Ambience.Glory,
         HomeLook(
             accent = Color(0xFFE8C27A), accent2 = Color(0xFFF3E1B8), text = Color(0xFFFBF1DC), dim = Color(0xFFC9AF88),
             pane = Color(0xB3201208), pill = Color(0x99201208), pillFocused = Color(0xCC3E2812),
@@ -187,7 +187,9 @@ enum class HomeStyle(
             clockSize = 72.sp, clockColor = Color(0xFFFFF4DC), clockGlow = Color(0xAAE8B060), clockBlur = 20f,
             shade = Color(0x88140A04), corner = 4.dp, glow = 12.dp, toward = Color(0xFFE8C27A), pull = 0.7f,
             letterSpacing = 1.5.sp
-        )
+        ),
+        light = R.drawable.home_style_faith_glow,
+        drift = true
     ),
     Car(
         "car", "Car", "A white racing coupé on the circuit at golden hour",
