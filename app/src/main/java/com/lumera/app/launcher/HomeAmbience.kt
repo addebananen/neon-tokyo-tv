@@ -61,7 +61,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest -> 24
+        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos -> 30
     }
     val time = rememberAmbientTime(fps)
@@ -90,6 +90,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Meadow -> meadow(t)
                     Ambience.Forest -> forest(t)
                     Ambience.Cosmos -> cosmos(t, lightImage)
+                    Ambience.Bubbles -> bubbles(t)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -742,5 +743,77 @@ private fun DrawScope.cosmos(t: Float, core: ImageBitmap?) {
             Brush.linearGradient(0f to Color.Transparent, 1f to Color(0xFFFFFFFF), start = tail, end = head),
             tail, head, strokeWidth = unit * 1.6f, cap = StrokeCap.Round, alpha = sin(q * PI.toFloat())
         )
+    }
+}
+
+/**
+ * Frutiger Aero, a photo of a green field under a deep blue sky: glossy bubbles rise and sway with
+ * a shine on each, the sun glints in the corner, gusts run through the grass and a plane draws a
+ * fresh trail across the sky.
+ */
+private fun DrawScope.bubbles(t: Float) {
+    val w = size.width
+    val h = size.height
+    val unit = 1.dp.toPx()
+    // The sun's glint in the top right
+    val sun = at(0.93f, 0.04f)
+    val glint = 0.5f + 0.5f * sin(t * 0.6f)
+    softLight(sun, w * 0.16f, Color(0xFFFFFFFF), 0.28f + 0.12f * glint)
+    rotate(degrees = t * 3f, pivot = sun) {
+        for (i in 0 until 6) {
+            val a = i * 60f * (PI.toFloat() / 180f)
+            val reach = w * (0.1f + 0.04f * glint)
+            drawLine(
+                Brush.linearGradient(0f to Color(0x99FFFFFF), 1f to Color.Transparent, start = sun, end = sun + Offset(cos(a), sin(a)) * reach),
+                sun, sun + Offset(cos(a), sin(a)) * reach, strokeWidth = unit * 2f
+            )
+        }
+    }
+    // A plane drawing a fresh trail, every 45 seconds
+    val flight = fract(t / 45f)
+    if (flight < 0.7f) {
+        val q = flight / 0.7f
+        val from = at(0.98f, 0.08f)
+        val to = at(0.35f, 0.3f)
+        val head = from + (to - from) * q
+        val tail = from + (to - from) * (q - 0.35f).coerceAtLeast(0f)
+        val fade = (1f - (q - 0.85f) / 0.15f).coerceIn(0f, 1f)
+        drawLine(Brush.linearGradient(0f to Color.Transparent, 1f to Color(0xCCFFFFFF), start = tail, end = head), tail, head, strokeWidth = unit * 2.4f, cap = StrokeCap.Round, alpha = fade)
+        drawCircle(Color(0xFFFFFFFF), radius = unit * 1.6f, center = head, alpha = fade)
+    }
+    // Gusts through the grass
+    for (g in 0 until 2) {
+        val x = -0.3f + fract(t / 8f + g * 0.5f) * 1.6f
+        val band = w * 0.2f
+        drawRect(
+            Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color(0x30F4FFB0), 1f to Color.Transparent, startX = x * w - band, endX = x * w + band),
+            topLeft = Offset(x * w - band, h * 0.72f),
+            size = Size(band * 2, h * 0.28f)
+        )
+    }
+    // Bubbles rising, each with a rim of colour and a window of light
+    for (i in 0 until 11) {
+        val life = fract(rnd(i, 1) + t * (0.018f + 0.016f * rnd(i, 2)))
+        val r = unit * (14f + 46f * rnd(i, 3).pow(2))
+        val x = (0.08f + 0.88f * rnd(i, 4)) * w + 0.03f * w * sin(t * (0.3f + 0.3f * rnd(i, 5)) + i)
+        val y = (1.1f - life * 1.3f) * h
+        val c = Offset(x, y)
+        val wobble = 1f + 0.04f * sin(t * 2f + i)
+        scale(scaleX = wobble, scaleY = 2f - wobble, pivot = c) {
+            drawCircle(
+                Brush.radialGradient(
+                    0f to Color(0x08FFFFFF), 0.78f to Color(0x14BFF4FF), 0.92f to Color(0x55E0F8FF), 1f to Color(0x10FFFFFF),
+                    center = c, radius = r
+                ),
+                radius = r, center = c
+            )
+            drawCircle(Color(0x66B8FFE0), radius = r * 0.97f, center = c, style = Stroke(unit * 1.2f))
+            drawArc(
+                Color(0x99FFFFFF), startAngle = 200f, sweepAngle = 70f, useCenter = false,
+                topLeft = c - Offset(r * 0.72f, r * 0.72f), size = Size(r * 1.44f, r * 1.44f),
+                style = Stroke(unit * (1.5f + r / (unit * 30f)), cap = StrokeCap.Round)
+            )
+            drawCircle(Color(0xCCFFFFFF), radius = r * 0.09f, center = c + Offset(r * 0.38f, r * 0.42f))
+        }
     }
 }

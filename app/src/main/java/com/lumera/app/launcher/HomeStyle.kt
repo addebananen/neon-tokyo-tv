@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -283,6 +283,22 @@ enum class HomeStyle(
         drift = true,
         driftX = 0.7f,
         driftY = 0.2f
+    ),
+    Aero(
+        "aero", "Frutiger Aero", "A green field under a blue sky, glossy bubbles rising",
+        R.drawable.home_style_aero, Ambience.Bubbles,
+        HomeLook(
+            accent = Color(0xFF7FE0FF), accent2 = Color(0xFFB6F07A), text = Color(0xFFFFFFFF), dim = Color(0xFFDDF2FF),
+            pane = Color(0xCC0F5FA8), pill = Color(0x991569B8), pillFocused = Color(0xE02A8CE0),
+            tileTop = Color(0xC83A9BE6), tileBottom = Color(0xD00A4E96),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = false,
+            clockSize = 70.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xAA2A8CE0), clockBlur = 18f,
+            shade = Color(0x99104C8C), corner = 20.dp, glow = 14.dp, toward = Color(0xFF9FE6FF), pull = 0.35f,
+            letterSpacing = 0.5.sp, upperTitles = false
+        ),
+        drift = true,
+        driftX = 0.5f,
+        driftY = 0.3f
     );
 
     companion object {
