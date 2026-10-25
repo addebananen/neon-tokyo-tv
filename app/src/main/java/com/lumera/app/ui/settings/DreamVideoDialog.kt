@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lumera.app.dream.DreamVideo
+import com.lumera.app.dream.DreamVideoShrink
 import com.lumera.app.dream.NeonDreamPreviewActivity
 import com.lumera.app.dream.NeonDreamStyle
 import com.lumera.app.remote_input.DreamVideoServerManager
@@ -102,6 +103,7 @@ fun DreamVideoDialog(
     var phoneConnected by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<Float?>(null) }
     var checking by remember { mutableStateOf(false) }
+    var shrinking by remember { mutableStateOf<Float?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -119,7 +121,18 @@ fun DreamVideoDialog(
             override fun onVideoReceived(file: File) {
                 checking = true
                 scope.launch {
-                    val shown: Bitmap? = withContext(Dispatchers.IO) { DreamVideo.install(context, file, target ?: DreamVideo.file(context)) }
+                    // A phone's film is made lighter first, so it doesn't fill the TV's storage
+                    var upload = file
+                    if (withContext(Dispatchers.IO) { DreamVideoShrink.needed(file) }) {
+                        shrinking = 0f
+                        val small = File(file.parentFile, "shrunk.mp4")
+                        if (DreamVideoShrink.shrink(context, file, small) { shrinking = it }) {
+                            file.delete()
+                            upload = small
+                        }
+                        shrinking = null
+                    }
+                    val shown: Bitmap? = withContext(Dispatchers.IO) { DreamVideo.install(context, upload, target ?: DreamVideo.file(context)) }
                     checking = false
                     progress = null
                     if (shown == null) {
@@ -190,6 +203,7 @@ fun DreamVideoDialog(
                         phoneConnected = phoneConnected,
                         progress = progress,
                         checking = checking,
+                        shrinking = shrinking,
                         note = note,
                         onCancel = onDismissRequest
                     )
@@ -208,6 +222,7 @@ private fun VideoWaiting(
     phoneConnected: Boolean,
     progress: Float?,
     checking: Boolean,
+    shrinking: Float?,
     note: String?,
     onCancel: () -> Unit
 ) {
@@ -266,6 +281,7 @@ private fun VideoWaiting(
                 } else {
                     StatusLine(
                         text = when {
+                            shrinking != null -> "Making it lighter for the TV…  ${(shrinking * 100).toInt()}%"
                             checking -> "Checking that it plays…"
                             note != null -> note
                             phoneConnected -> "Phone connected. Choose a video there."
