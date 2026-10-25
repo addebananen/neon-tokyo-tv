@@ -782,7 +782,7 @@ for style in "${styles[@]}"; do
   sleep 7
   shot "style-$style"
   # The picture or film is shown by the video chip; the drawn painting only stands in for it
-  plane=$(adb logcat -d -s PlaneSurface:I PlaneSurface:W | tr -d '\r' | grep -o "showing .*\|can't play.*" | tail -n 1)
+  plane=$(adb logcat -d -s PlaneSurface:I | tr -d '\r' | grep -o "showing .*\|can't play.*" | tail -n 1)
   echo "$style backdrop: ${plane:-nothing on the video chip}"
   if ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
   label=$(focused_label)
