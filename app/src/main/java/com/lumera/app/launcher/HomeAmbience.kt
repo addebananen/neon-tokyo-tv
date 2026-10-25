@@ -545,44 +545,65 @@ private fun DrawScope.nightRain(t: Float) {
     }
 }
 
-/** Cozy Lo-Fi: drops running down the window, the fairy lights twinkling and steam off the mug. */
+/** Lo-Fi: the fairy lights painted round the window, in the order they hang. */
+private val LoFiBulbs = floatArrayOf(
+    0.5704f, 0.3307f, 0.569f, 0.3205f, 0.5688f, 0.3015f, 0.5699f, 0.272f, 0.5721f, 0.2342f, 0.5755f, 0.2107f, 0.58f, 0.2017f, 0.5857f, 0.1849f, 0.5924f, 0.1585f, 0.6001f, 0.1246f, 0.6088f, 0.1059f, 0.6184f, 0.1026f, 0.6288f, 0.0922f, 0.64f, 0.0728f, 0.6518f, 0.0467f, 0.6641f, 0.0364f, 0.6769f, 0.0419f, 0.6901f, 0.0409f, 0.7035f, 0.0314f, 0.7171f, 0.0153f, 0.7308f, 0.0153f, 0.7444f, 0.0314f, 0.7578f, 0.0409f, 0.771f, 0.0419f, 0.7838f, 0.0364f, 0.7962f, 0.0467f, 0.8079f, 0.0728f, 0.8191f, 0.0922f, 0.8295f, 0.1026f, 0.8391f, 0.1059f, 0.8478f, 0.1246f, 0.8555f, 0.1585f, 0.8622f, 0.1849f, 0.8679f, 0.2017f, 0.8724f, 0.2107f, 0.8758f, 0.2342f, 0.8781f, 0.272f, 0.8791f, 0.3015f, 0.8789f, 0.3205f, 0.8775f, 0.3307f
+)
+
+/**
+ * Lo-Fi, a painted reading nook on a rainy night: drops gather and run down the round window,
+ * lightning flickers far off over the city, the fairy lights twinkle, the paper lantern breathes,
+ * steam curls off the mug and the cassette turns on the desk.
+ */
 private fun DrawScope.loFi(t: Float) {
+    val w = size.width
+    val h = size.height
     val unit = 1.dp.toPx()
-    val left = 840f / 1920f
-    val right = 1830f / 1920f
-    val top = 92f / 1080f
-    val bottom = 552f / 1080f
-    for (i in 0 until 12) {
-        val period = 5f + 6f * rnd(i, 1)
-        val cycle = floor(t / period + rnd(i, 2))
-        val p = fract(t / period + rnd(i, 2))
-        val seed = i * 17 + cycle.toInt()
+    val px = w / 1920f
+    val glass = Offset(1390f * px, 300f * h / 1080f)
+    val radius = 250f * px
+    val window = Path().apply { addOval(Rect(glass, radius)) }
+    clipPath(window) {
+        // Far-off lightning lighting the clouds for a moment every half minute or so
+        val storm = fract(t / 27f)
+        val flash = if (storm < 0.012f) 1f else if (storm in 0.018f..0.03f) 0.6f else 0f
+        if (flash > 0f) softLight(glass - Offset(radius * 0.3f, radius * 0.5f), radius * 1.4f, Color(0xFFE6D8FF), 0.28f * flash)
         // Drops hang, then run: most of the way down happens in the second half
-        val run = if (p < 0.35f) p * 0.15f else 0.0525f + (p - 0.35f) / 0.65f * 0.9475f
-        val x = left + 0.02f + (right - left - 0.04f) * rnd(seed, 3)
-        val y = top + (bottom - top) * run
-        val c = at(x, y)
-        drawLine(Color(0xFFC8D4FF), at(x, (y - 0.06f).coerceAtLeast(top)), c, strokeWidth = 2f * unit, alpha = 0.12f, cap = StrokeCap.Round)
-        drawOval(Color(0xFFE6ECFF), topLeft = c - Offset(2.5f * unit, 3f * unit), size = Size(5f * unit, 6.5f * unit), alpha = 0.45f)
-    }
-    // The fairy lights, as painted: four swags along the top of the frame
-    var k = 0
-    for (seg in 0 until 4) {
-        val x0 = 740f + seg * 290f
-        for (step in 1..9) {
-            val s = step / 10f
-            val x = (x0 + 290f * s) / 1920f
-            val y = (92f + sin(s * PI.toFloat()) * 46f) / 1080f
-            val tw = 0.5f + 0.5f * sin(t * (0.7f + rnd(k, 4)) + k * 1.3f)
-            softLight(at(x, y), 22f * unit, if (k % 3 == 0) Color(0xFFFF9A7A) else Color(0xFFFFC874), 0.35f * tw)
-            k++
+        for (i in 0 until 14) {
+            val period = 5f + 6f * rnd(i, 1)
+            val cycle = floor(t / period + rnd(i, 2))
+            val p = fract(t / period + rnd(i, 2))
+            val seed = i * 17 + cycle.toInt()
+            val run = if (p < 0.35f) p * 0.15f else 0.0525f + (p - 0.35f) / 0.65f * 0.9475f
+            val x = glass.x + (rnd(seed, 3) - 0.5f) * radius * 1.7f
+            val y = glass.y - radius + radius * 2f * run
+            val c = Offset(x, y)
+            drawLine(Color(0xFFD8CCFF), Offset(x, y - h * 0.06f), c, strokeWidth = 2f * unit, alpha = 0.12f, cap = StrokeCap.Round)
+            drawOval(Color(0xFFEFE8FF), topLeft = c - Offset(2.5f * unit, 3f * unit), size = Size(5f * unit, 6.5f * unit), alpha = 0.45f)
         }
     }
+    // The fairy lights, twinkling one by one
+    for (k in 0 until LoFiBulbs.size / 2) {
+        val tw = 0.5f + 0.5f * sin(t * (0.7f + rnd(k, 4)) + k * 1.3f)
+        softLight(at(LoFiBulbs[k * 2], LoFiBulbs[k * 2 + 1]), 22f * unit, if (k % 3 == 0) Color(0xFFFF8FA8) else Color(0xFFFFC874), 0.35f * tw)
+    }
+    // The paper lantern breathing warm
+    val lantern = at(0.5208f, 0.1981f)
+    softLight(lantern, w * 0.12f, Color(0xFFFFA060), 0.1f + 0.04f * sin(t * 0.8f) + 0.02f * sin(t * 2.3f))
     // Steam curling up off the mug
     for (i in 0 until 4) {
         val p = fract(t / 4.5f + i / 4f)
-        val c = at(1330f / 1920f + 0.008f * sin(p * 6f + i), 450f / 1080f - p * 0.11f)
+        val c = at(1198f / 1920f + 0.008f * sin(p * 6f + i), 466f / 1080f - p * 0.11f)
         softLight(c, (8f + 14f * p) * unit, Color(0xFFFFF4EA), 0.22f * sin(p * PI.toFloat()))
+    }
+    // The cassette turning: spokes going round in both reels
+    for (reel in listOf(Offset(1500.4f, 890.5f), Offset(1560.4f, 893.5f))) {
+        val c = Offset(reel.x * px, reel.y * h / 1080f)
+        for (s in 0 until 3) {
+            val a = t * 2.4f + s * 2.094f
+            val dir = Offset(cos(a), sin(a))
+            drawLine(Color(0xFF2A2436), c + dir * (5f * px), c + dir * (12f * px), strokeWidth = 2.2f * px, cap = StrokeCap.Round)
+        }
     }
 }
 
