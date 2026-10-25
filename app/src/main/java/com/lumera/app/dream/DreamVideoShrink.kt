@@ -99,7 +99,9 @@ object DreamVideoShrink {
             }
         }
         if (!done || output.length() == 0L) output.delete()
-        return done && output.exists()
+        val ok = done && output.exists()
+        if (ok) android.util.Log.i("DreamVideoShrink", "shrunk ${shape.width}x${shape.height} from ${input.length() / 1024} kB to ${output.length() / 1024} kB")
+        return ok
     }
 
     private class Shape(val width: Int, val height: Int, val bitrate: Long, val sound: Boolean) {
