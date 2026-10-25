@@ -171,7 +171,10 @@ body.round .wide-only { display: none; }
   var WIDE = document.body.className === "wide";
   // The picture the TV gets: a square photo, or a full HD screen
   var OUT_W = WIDE ? 1920 : 640, OUT_H = WIDE ? 1080 : 640;
-  if (WIDE) document.getElementById("libraryBtn").className = "btn primary";
+  if (WIDE) {
+    document.getElementById("libraryBtn").className = "btn primary";
+    document.title = "Neon Tokyo · Home screen background";
+  }
   var views = ["pick", "crop", "sent", "done", "closed"];
   var current = "pick";
   function show(name) {

@@ -181,7 +181,7 @@ photo_from_phone() {
   base="http://127.0.0.1:18080/$token"
   if ! curl -fsS -m 10 "$base" -o "$OUT/photo-page.html"; then fail "the photo page did not open"; return 1; fi
   if grep -q "{{" "$OUT/photo-page.html"; then fail "the photo page kept its placeholders"; fi
-  grep -q "Photo for" "$OUT/photo-page.html" || fail "the photo page has no title"
+  grep -q 'id="title"><span class="round-only">Photo</span>' "$OUT/photo-page.html" || fail "the photo page has no title"
   for asset in skyline.webp kanit-medium.ttf kanit-semibold-italic.ttf; do
     code=$(curl -s -m 10 -o /dev/null -w "%{http_code}" "$base/$asset")
     [ "$code" = 200 ] || fail "the photo page's $asset answered $code"
@@ -729,10 +729,16 @@ for style in google_tv nature anime clean city faith car car_night lofi cottage 
     shot "style-$style-apps"
     key DPAD_RIGHT; sleep 2
     shot "style-$style-sources"
-    # The profile pill is the first of the pills at the top
-    key DPAD_UP DPAD_LEFT DPAD_LEFT DPAD_LEFT; sleep 1
+    # Up from the tabs reaches the pills at the top; the profile pill is the first of them
+    key DPAD_UP; sleep 1
     label=$(focused_label)
-    [ "$label" = "Neon" ] || fail "Up from the tabs in the $style style is $label, not the profile pill"
+    case "$label" in Neon|Search|Inputs|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3; do
+      [ "$label" = "Neon" ] && break
+      key DPAD_LEFT; sleep 1
+      label=$(focused_label)
+    done
+    [ "$label" = "Neon" ] || fail "Left along the pills in the $style style ends on $label, not the profile pill"
     key DPAD_CENTER; sleep 2
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
