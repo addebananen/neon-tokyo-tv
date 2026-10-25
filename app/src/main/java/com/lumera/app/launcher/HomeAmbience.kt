@@ -65,7 +65,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom -> 24
+        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom, Ambience.Atomic -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor -> 30
     }
     val time = rememberAmbientTime(fps)
@@ -98,6 +98,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Library -> library(t, lightImage)
                     Ambience.Sunroom -> sunroom(t, lightImage)
                     Ambience.Vapor -> vapor(t)
+                    Ambience.Atomic -> atomic(t)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -948,4 +949,64 @@ private fun DrawScope.vapor(t: Float) {
         Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color(0x14FFFFFF), 1f to Color.Transparent, startY = band - unit * 30f, endY = band + unit * 30f),
         topLeft = Offset(0f, band - unit * 30f), size = Size(w, unit * 60f)
     )
+}
+
+/**
+ * Retro-futurism: atomic starbursts turn and pulse in the dusk sky, a glint runs round the planet's
+ * ring, steam vents from the rocket's pad, the spaceport's beacon glows and now and then a flying
+ * saucer bobs across.
+ */
+private fun DrawScope.atomic(t: Float) {
+    val unit = 1.dp.toPx()
+    val bursts = listOf(Triple(0.36f, 0.12f, 1f), Triple(0.72f, 0.08f, 0.8f), Triple(0.27f, 0.3f, 0.6f), Triple(0.95f, 0.26f, 0.7f), Triple(0.47f, 0.4f, 0.5f))
+    bursts.forEachIndexed { i, (bx, by, k) ->
+        val c = at(bx, by)
+        val pulse = 0.6f + 0.4f * sin(t * (0.9f + 0.3f * i) + i * 1.7f)
+        val reach = unit * 16f * k * (0.8f + 0.4f * pulse)
+        softLight(c, reach * 1.6f, Color(0xFFFFF1D0), 0.25f * pulse)
+        rotate(degrees = t * (8f + 4f * i) * (if (i % 2 == 0) 1f else -1f), pivot = c) {
+            for (j in 0 until 8) {
+                val a = j * (PI.toFloat() / 4f)
+                val len = if (j % 2 == 0) reach else reach * 0.45f
+                drawLine(Color(0xFFFFF1D0), c, c + Offset(cos(a), sin(a)) * len, strokeWidth = unit * (if (j % 2 == 0) 1.6f else 1f), cap = StrokeCap.Round, alpha = 0.85f * pulse)
+            }
+        }
+    }
+    // A glint running round the front of the ring
+    val planet = at(1060f / 1920f, 250f / 1080f)
+    val pr = size.height * (120f / 1080f)
+    val g = fract(t / 9f) * PI.toFloat()
+    val ex = cos(g) * pr * 2.05f
+    val ey = sin(g) * pr * 0.48f
+    val tilt = -0.32f
+    val glint = planet + Offset(ex * cos(tilt) - ey * sin(tilt), ex * sin(tilt) + ey * cos(tilt))
+    softLight(glint, unit * 10f, Color(0xFFFFF4DA), 0.7f * sin(g))
+    // Steam from the pad
+    for (i in 0 until 8) {
+        val p = fract(t / 4f + i / 8f)
+        val side = if (i % 2 == 0) -1f else 1f
+        val c = at(0.8385f + side * (0.04f + p * 0.05f), 0.528f - p * 0.05f)
+        softLight(c, unit * (8f + 26f * p), Color(0xFFF6F1E8), 0.35f * sin(p * PI.toFloat()))
+    }
+    // The spaceport's beacon
+    softLight(at(0.193f, 0.528f), unit * 22f, Color(0xFF7FF0E4), 0.35f + 0.3f * sin(t * 2.2f).coerceAtLeast(0f))
+    // A saucer, every 40 seconds
+    val pass = fract(t / 40f)
+    if (pass < 0.5f) {
+        val q = pass / 0.5f
+        val c = at(-0.05f + q * 1.1f, 0.2f + 0.02f * sin(t * 1.6f))
+        val s = unit * 22f
+        rotate(degrees = 6f * sin(t * 1.6f + 1f), pivot = c) {
+            drawOval(Color(0xFF7FE6DA), topLeft = c - Offset(s * 0.38f, s * 0.42f), size = Size(s * 0.76f, s * 0.6f), alpha = 0.9f)
+            drawOval(
+                Brush.verticalGradient(0f to Color(0xFFF2F2F0), 1f to Color(0xFF7D8590), startY = c.y - s * 0.16f, endY = c.y + s * 0.16f),
+                topLeft = c - Offset(s, s * 0.16f), size = Size(s * 2f, s * 0.32f)
+            )
+            for (j in 0 until 5) {
+                val on = fract(t * 1.5f - j / 5f) < 0.3f
+                drawCircle(if (on) Color(0xFFFFE08A) else Color(0xFF8A6A3A), radius = unit * 1.6f, center = c + Offset(-s * 0.7f + j * s * 0.35f, s * 0.05f))
+            }
+            if (fract(t / 3f) < 0.5f) softLight(c + Offset(0f, s * 0.6f), s * 0.9f, Color(0xFFBFFFF4), 0.18f)
+        }
+    }
 }

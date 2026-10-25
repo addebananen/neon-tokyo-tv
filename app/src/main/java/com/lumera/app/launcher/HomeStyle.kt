@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom, Vapor, Atomic }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -345,6 +345,19 @@ enum class HomeStyle(
             clockSize = 66.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color(0xCCFF71CE), clockBlur = 16f,
             shade = null, corner = 0.dp, glow = 16.dp, toward = Color(0xFFFF9BE0), pull = 0.35f,
             letterSpacing = 6.sp, glowingText = true
+        )
+    ),
+    Retro(
+        "retro", "Retro-futurism", "A silver rocket on its pad at dusk, a ringed planet rising",
+        R.drawable.home_style_retro, Ambience.Atomic,
+        HomeLook(
+            accent = Color(0xFFF2B134), accent2 = Color(0xFF5EC2B7), text = Color(0xFFFFF1D0), dim = Color(0xFFCFC2A2),
+            pane = Color(0xCC14303A), pill = Color(0x9914303A), pillFocused = Color(0xE0245563),
+            tileTop = Color(0xD91C4250), tileBottom = Color(0xD90B2029),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = true,
+            clockSize = 70.sp, clockColor = Color(0xFFFFF1D0), clockGlow = Color(0x99F2B134), clockBlur = 16f,
+            shade = Color(0x990A1A20), corner = 22.dp, glow = 12.dp, toward = Color(0xFFF2C77B), pull = 0.4f,
+            letterSpacing = 2.sp
         )
     );
 
