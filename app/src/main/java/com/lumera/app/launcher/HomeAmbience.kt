@@ -68,7 +68,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
         Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Teahouse, Ambience.Atomic -> 24
-        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch, Ambience.Canopy -> 30
+        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch, Ambience.Canopy, Ambience.Dusk -> 30
     }
     val time = rememberAmbientTime(fps)
     val context = LocalContext.current
@@ -103,6 +103,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Atomic -> atomic(t)
                     Ambience.Glitch -> glitch(t, lightImage)
                     Ambience.Canopy -> canopy(t, lightImage)
+                    Ambience.Dusk -> dusk(t, lightImage)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -1283,5 +1284,93 @@ private fun DrawScope.canopy(t: Float, light: ImageBitmap?) {
             Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color(0x55FFFFFF), 1f to Color.Transparent, startX = gx - w * 0.02f, endX = gx + w * 0.02f),
             topLeft = Offset(gx - w * 0.02f, 0.81f * h), size = Size(w * 0.04f, 0.04f * h), blendMode = BlendMode.Plus
         )
+    }
+}
+
+/** Golden Dusk: the violet bulbs of the street lamps in the painting, near to far, and their size. */
+private val DuskLamps = floatArrayOf(0.594f, 0.287f, 1f, 0.752f, 0.491f, 0.55f, 0.844f, 0.606f, 0.35f)
+
+/**
+ * Golden Dusk, Angel Ganev's painting of a path under burning evening clouds: a slow wave of light
+ * rolls across the cloud tops, the violet street lamps hum and flare, stars twinkle in the dark
+ * corner of the sky, now and then one falls, and fireflies drift over the field.
+ */
+private fun DrawScope.dusk(t: Float, light: ImageBitmap?) {
+    val w = size.width
+    val h = size.height
+    val unit = 1.dp.toPx()
+    if (light != null) {
+        val dst = IntSize(w.roundToInt(), h.roundToInt())
+        drawImage(light, dstSize = dst, alpha = 0.06f + 0.05f * sin(t * 0.3f), blendMode = BlendMode.Plus)
+        // The last of the sun rolling across the cloud tops every 20 seconds
+        val run = fract(t / 20f) * 1.6f - 0.3f
+        val half = 0.12f
+        val strips = 16
+        var edge = ((run - half).coerceIn(0f, 1f) * light.width).roundToInt()
+        for (k in 1..strips) {
+            val next = ((run - half + 2 * half * k / strips).coerceIn(0f, 1f) * light.width).roundToInt()
+            if (next > edge) {
+                val mid = (edge + next) / 2f / light.width
+                val strength = exp(-((mid - run) / (half * 0.5f)).pow(2))
+                val x0 = (edge.toFloat() / light.width * w).roundToInt()
+                val x1 = (next.toFloat() / light.width * w).roundToInt()
+                drawImage(
+                    light, srcOffset = IntOffset(edge, 0), srcSize = IntSize(next - edge, light.height),
+                    dstOffset = IntOffset(x0, 0), dstSize = IntSize(x1 - x0, dst.height),
+                    alpha = 0.3f * strength, blendMode = BlendMode.Plus
+                )
+            }
+            edge = next
+        }
+    }
+    // Stars twinkling in the dark sky at the top left and along the top
+    for (i in 0 until 30) {
+        val left = i < 18
+        val x = if (left) rnd(i, 1) * 0.3f else 0.3f + rnd(i, 1) * 0.45f
+        val y = if (left) rnd(i, 2) * 0.3f else rnd(i, 2) * 0.1f
+        val tw = sin(t * (0.8f + 1.4f * rnd(i, 3)) + rnd(i, 4) * 6.28f).coerceAtLeast(0f).pow(3)
+        if (tw < 0.05f) continue
+        val c = at(x, y)
+        val s = unit * (1f + 2.5f * rnd(i, 5)) * tw
+        drawLine(Color(0xFFFFE8D8), c - Offset(s * 2f, 0f), c + Offset(s * 2f, 0f), strokeWidth = unit * 0.8f, alpha = 0.7f * tw)
+        drawLine(Color(0xFFFFE8D8), c - Offset(0f, s * 2f), c + Offset(0f, s * 2f), strokeWidth = unit * 0.8f, alpha = 0.7f * tw)
+        softLight(c, s * 3f, Color(0xFFFFD8C0), 0.5f * tw)
+    }
+    // Now and then a star falls across the dark corner
+    val fall = fract(t / 23f)
+    if (fall < 0.06f) {
+        val q = fall / 0.06f
+        val head = at(0.08f + q * 0.18f, 0.04f + q * 0.1f)
+        val tail = head - Offset(w * 0.06f, h * 0.035f) * (0.4f + q * 0.6f)
+        drawLine(
+            Brush.linearGradient(listOf(Color.Transparent, Color(0xFFFFF0E0)), start = tail, end = head),
+            tail, head, strokeWidth = unit * 1.6f, cap = StrokeCap.Round, alpha = sin(q * PI.toFloat())
+        )
+    }
+    // The violet lamps humming, with a slow flare breathing out of the nearest one
+    for (k in 0 until DuskLamps.size / 3) {
+        val c = at(DuskLamps[k * 3], DuskLamps[k * 3 + 1])
+        val s = DuskLamps[k * 3 + 2]
+        val hum = 0.75f + 0.25f * sin(t * (1.1f + k * 0.4f) + k) + 0.06f * sin(t * 13f + k * 2f)
+        softLight(c, w * 0.05f * s, Color(0xFFB48CFF), 0.35f * hum)
+        softLight(c, w * 0.012f * s, Color(0xFFF4EEFF), 0.55f * hum)
+    }
+    val lamp = at(DuskLamps[0], DuskLamps[1])
+    val flare = 0.5f + 0.5f * sin(t * 0.4f)
+    drawLine(Color(0xFFD8C4FF), lamp - Offset(w * 0.07f, 0f), lamp + Offset(w * 0.07f, 0f), strokeWidth = unit * 1.2f, cap = StrokeCap.Round, alpha = 0.18f * flare)
+    for (k in 1..3) {
+        val c = lamp + (at(0.5f, 0.5f) - lamp) * (k * 0.45f)
+        drawCircle(Color(0xFFC8A8FF), radius = w * (0.012f + 0.01f * k), center = c, alpha = 0.05f * flare, style = Stroke(unit * 1.4f))
+    }
+    // Fireflies drifting low over the field
+    for (i in 0 until 16) {
+        val p = fract(t / (14f + 10f * rnd(i, 6)) + rnd(i, 7))
+        val x = fract(rnd(i, 8) + p * 0.08f) * 0.9f + 0.02f + 0.01f * sin(t * 0.9f + i)
+        val y = 0.72f + 0.24f * rnd(i, 9) + 0.015f * sin(t * 1.3f + i * 2f)
+        val blink = sin(t * (1.2f + rnd(i, 10)) + i * 1.7f).coerceAtLeast(0f).pow(2)
+        if (blink < 0.05f) continue
+        val c = at(x, y)
+        softLight(c, unit * 10f, Color(0xFFFFD27A), 0.45f * blink)
+        drawCircle(Color(0xFFFFF2C8), unit * 1.6f, c, alpha = 0.85f * blink)
     }
 }

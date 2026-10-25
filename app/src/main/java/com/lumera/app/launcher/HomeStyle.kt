@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Teahouse, Vapor, Atomic, Glitch, Canopy }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Teahouse, Vapor, Atomic, Glitch, Canopy, Dusk }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -390,6 +390,21 @@ enum class HomeStyle(
         drift = true,
         driftX = 0.36f,
         driftY = 0.46f
+    ),
+    Dusk(
+        "dusk", "Golden Dusk", "A path under burning evening clouds, from a painting by Angel Ganev",
+        R.drawable.home_style_dusk, Ambience.Dusk,
+        HomeLook(
+            accent = Color(0xFFFFB36B), accent2 = Color(0xFFB78CFF), text = Color(0xFFFFF3EA), dim = Color(0xFFE2BFC8),
+            pane = Color(0xB82A1230), pill = Color(0x992A1230), pillFocused = Color(0xD0472250),
+            tileTop = Color(0xD93A1A3E), tileBottom = Color(0xD91A0A1E),
+            font = NunitoFamily, weight = FontWeight.Bold, italic = false,
+            clockSize = 74.sp, clockColor = Color(0xFFFFF3EA), clockGlow = Color(0xAAFF9A70), clockBlur = 22f,
+            shade = null, corner = 18.dp, glow = 14.dp, toward = Color(0xFFFFC08A), pull = 0.4f,
+            letterSpacing = 1.sp
+        ),
+        // No slow zoom here: it would push the artist's signature off the corner
+        light = R.drawable.home_style_dusk_glow
     );
 
     companion object {
