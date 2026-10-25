@@ -34,7 +34,7 @@ import androidx.media3.exoplayer.ExoPlayer
 
 /**
  * A style's film on a loop, without sound, over its still [poster], which shows until the first
- * frame is ready and stays if the TV can't play the film. It pauses while an app is open. The
+ * frame is ready and stays if the TV can't play the film. It stops while an app is open. The
  * film has no shade of its own, so the clock's corner and the tile band are darkened here.
  */
 @Composable
@@ -67,8 +67,12 @@ internal fun VideoBackdrop(video: Uri, poster: Int?) {
     DisposableEffect(lifecycle, player) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> player.play()
-                Lifecycle.Event.ON_STOP -> player.pause()
+                Lifecycle.Event.ON_START -> {
+                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                    player.play()
+                }
+                // Stopping, not pausing, hands the TV's video decoder back for the app being opened
+                Lifecycle.Event.ON_STOP -> player.stop()
                 else -> Unit
             }
         }
