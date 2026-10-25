@@ -1,36 +1,50 @@
 package com.lumera.app.launcher
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.floor
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * The small things that move in a style's picture: rain running down the window, petals on the
@@ -40,14 +54,20 @@ import kotlin.math.sin
  * Places are fractions of the screen and match the paintings in res/drawable-nodpi.
  */
 @Composable
-fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier) {
+fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int? = null) {
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Mist, Ambience.Candles, Ambience.LoFi, Ambience.Meadow -> 24
+        Ambience.Lake, Ambience.Candles, Ambience.LoFi, Ambience.Meadow -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain -> 30
     }
     val time = rememberAmbientTime(fps)
+    val context = LocalContext.current
+    val lightImage by produceState<ImageBitmap?>(null, light) {
+        value = light?.let { id ->
+            withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeResource(context.resources, id)?.asImageBitmap() }.getOrNull() }
+        }
+    }
     Spacer(
         modifier
             .fillMaxSize()
@@ -56,7 +76,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier) {
                 val t = time.value
                 when (ambience) {
                     Ambience.GoogleGlow -> googleGlow(t)
-                    Ambience.Mist -> mist(t)
+                    Ambience.Lake -> lake(t, lightImage)
                     Ambience.Petals -> petals(t)
                     Ambience.Calm -> calm(t)
                     Ambience.CityLights -> cityLights(t)
@@ -128,27 +148,101 @@ private fun DrawScope.googleGlow(t: Float) {
     }
 }
 
-/** Nature: mist drifting on the far shore and the sun glinting on the lake. */
-private fun DrawScope.mist(t: Float) {
+/**
+ * Nature, a photo of Moraine Lake: the first sun breathing on the peaks and in their reflection,
+ * now and then a brighter light running along the ridge, mist rising out of the valley, the lake
+ * shimmering below the tiles and once in a while two birds crossing the sky.
+ */
+private fun DrawScope.lake(t: Float, light: ImageBitmap?) {
     val w = size.width
-    for (i in 0 until 4) {
-        val x = fract(rnd(i, 1) + t * (0.004f + 0.003f * rnd(i, 2))) * 1.6f - 0.3f
-        val y = 0.565f + 0.03f * rnd(i, 3)
-        val c = at(x, y)
-        scale(scaleX = 1f, scaleY = 0.12f, pivot = c) {
-            softLight(c, w * (0.18f + 0.1f * rnd(i, 4)), Color(0xFFF0DEDA), 0.16f)
+    val h = size.height
+    if (light != null) {
+        val dst = IntSize(w.roundToInt(), h.roundToInt())
+        drawImage(light, dstSize = dst, alpha = 0.14f + 0.12f * sin(t * 0.33f), blendMode = BlendMode.Plus)
+        // The ridge catches the sun: a soft band of light crossing the peaks every 18 seconds
+        val run = fract(t / 18f) * 1.8f - 0.2f
+        if (run in 0.25f..1.05f) {
+            val half = 0.07f
+            val strips = 16
+            var edge = ((run - half).coerceIn(0f, 1f) * light.width).roundToInt()
+            for (k in 1..strips) {
+                val next = ((run - half + 2 * half * k / strips).coerceIn(0f, 1f) * light.width).roundToInt()
+                if (next > edge) {
+                    val mid = (edge + next) / 2f / light.width
+                    val strength = exp(-((mid - run) / (half * 0.5f)).pow(2))
+                    val x0 = (edge.toFloat() / light.width * w).roundToInt()
+                    val x1 = (next.toFloat() / light.width * w).roundToInt()
+                    drawImage(
+                        light,
+                        srcOffset = IntOffset(edge, 0),
+                        srcSize = IntSize(next - edge, light.height),
+                        dstOffset = IntOffset(x0, 0),
+                        dstSize = IntSize(x1 - x0, dst.height),
+                        alpha = 0.5f * strength,
+                        blendMode = BlendMode.Plus
+                    )
+                }
+                edge = next
+            }
         }
     }
-    // Glints: short warm streaks under the sun that flash and fade
-    for (i in 0 until 26) {
-        val depth = rnd(i, 5).pow(1.4f)
-        val y = 0.605f + depth * 0.3f
-        val x = 0.78f + (rnd(i, 6) - 0.5f) * (0.06f + depth * 0.35f)
-        val flash = sin(t * (0.9f + rnd(i, 7)) + rnd(i, 8) * 6.28f).coerceAtLeast(0f).pow(6)
-        if (flash < 0.02f) continue
-        val len = w * (0.004f + 0.012f * rnd(i, 9)) * (1f + depth * 2f)
+    // Mist rising out of the valley where it meets the lake, and lying low on the water
+    for (i in 0 until 6) {
+        val p = fract(rnd(i, 1) + t * (0.007f + 0.005f * rnd(i, 2)))
+        val low = i >= 4
+        val x = if (low) p * 1.3f - 0.15f else 0.16f + p * 0.56f
+        val y = if (low) 0.715f + 0.02f * rnd(i, 3) else 0.455f + 0.055f * rnd(i, 3) - p * 0.025f
         val c = at(x, y)
-        drawLine(Color(0xFFFFE2B8), c - Offset(len / 2, 0f), c + Offset(len / 2, 0f), strokeWidth = 1.5.dp.toPx(), alpha = 0.7f * flash)
+        val fade = sin(p * PI.toFloat())
+        scale(scaleX = 1f, scaleY = if (low) 0.1f else 0.2f, pivot = c) {
+            softLight(c, w * (0.13f + 0.08f * rnd(i, 4)), Color(0xFFE2ECF2), (if (low) 0.11f else 0.17f) * fade)
+        }
+    }
+    // Slow swells coming in across the lake
+    for (i in 0 until 3) {
+        val y = 0.69f + fract(t / 15f + i / 3f) * 0.33f
+        val band = h * 0.035f
+        drawRect(
+            Brush.verticalGradient(0f to Color.Transparent, 0.5f to Color(0x10D8F6FF), 1f to Color.Transparent, startY = y * h - band, endY = y * h + band),
+            topLeft = Offset(0f, y * h - band),
+            size = Size(w, band * 2)
+        )
+    }
+    // Glints on the water: cool on the open lake, warm in the reflection of the peaks
+    val unit = 1.dp.toPx()
+    for (i in 0 until 44) {
+        val depth = rnd(i, 5).pow(1.3f)
+        val y = 0.705f + depth * 0.29f
+        val x = fract(rnd(i, 6) + t * 0.003f * (0.5f + depth))
+        val flash = sin(t * (0.6f + 0.8f * rnd(i, 7)) + rnd(i, 8) * 6.28f).coerceAtLeast(0f).pow(4)
+        if (flash < 0.03f) continue
+        val len = w * (0.008f + 0.026f * rnd(i, 9)) * (0.6f + depth * 1.6f)
+        val warm = x in 0.45f..0.78f && y < 0.87f
+        val c = at(x, y)
+        drawLine(
+            if (warm) Color(0xFFFFCFA6) else Color(0xFFD4F6FF),
+            c - Offset(len / 2, 0f), c + Offset(len / 2, 0f),
+            strokeWidth = unit * (0.8f + depth), cap = StrokeCap.Round, alpha = 0.38f * flash
+        )
+    }
+    // Two birds, every 40 seconds, gliding from the right towards the far peaks
+    val flight = fract(t / 40f)
+    if (flight < 0.45f) {
+        val q = flight / 0.45f
+        for (b in 0 until 2) {
+            val x = 1.04f - q * 0.78f - b * 0.03f
+            val y = 0.085f + b * 0.018f + 0.012f * sin(q * 7f + b)
+            val span = unit * (13f - 6f * q) * (1f - 0.12f * b)
+            val flap = sin(t * 8.5f + b * 1.9f)
+            val c = at(x, y)
+            val alpha = 0.85f * sin(q * PI.toFloat()).coerceIn(0f, 1f).pow(0.4f)
+            val wing = Path().apply {
+                moveTo(c.x - span, c.y - flap * span * 0.45f)
+                quadraticTo(c.x - span * 0.45f, c.y - span * 0.35f, c.x, c.y)
+                quadraticTo(c.x + span * 0.45f, c.y - span * 0.35f, c.x + span, c.y - flap * span * 0.45f)
+            }
+            drawPath(wing, Color(0xFF141C26), alpha = alpha, style = Stroke(width = unit * 1.6f, cap = StrokeCap.Round))
+        }
     }
 }
 

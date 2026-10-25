@@ -115,6 +115,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
@@ -1947,13 +1948,36 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
             when {
                 shownPicture != null -> PictureBackdrop(shownPicture)
                 shown.backdrop == null -> SkylineBackdrop(wallpaper)
+                shown.drift -> DriftingBox {
+                    PaintingBackdrop(shown.backdrop)
+                    StyleAmbience(shown.ambience, light = shown.light)
+                }
                 else -> {
                     PaintingBackdrop(shown.backdrop)
-                    StyleAmbience(shown.ambience)
+                    StyleAmbience(shown.ambience, light = shown.light)
                 }
             }
         }
     }
+}
+
+/** A photo and what moves in it, drifting slowly closer and back together so nothing slips. */
+@Composable
+private fun DriftingBox(content: @Composable () -> Unit) {
+    val drift = rememberInfiniteTransition(label = "StyleDrift")
+    val zoom by drift.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.045f,
+        animationSpec = infiniteRepeatable(tween(48_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "StyleZoom"
+    )
+    Box(
+        Modifier.fillMaxSize().graphicsLayer {
+            scaleX = zoom
+            scaleY = zoom
+            transformOrigin = TransformOrigin(0.62f, 0.3f)
+        }
+    ) { content() }
 }
 
 /** A style's painting, decoded once off the main thread and faded in. */

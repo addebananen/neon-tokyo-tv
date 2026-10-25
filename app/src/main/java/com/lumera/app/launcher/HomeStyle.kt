@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Mist, Petals, Calm, CityLights, Candles, Speed, NightRain, LoFi, Meadow }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Candles, Speed, NightRain, LoFi, Meadow }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -89,7 +89,11 @@ enum class HomeStyle(
     val blurb: String,
     val backdrop: Int?,
     val ambience: Ambience,
-    val look: HomeLook
+    val look: HomeLook,
+    /** Where the light falls in a photo, so the ambience can make it breathe. */
+    val light: Int? = null,
+    /** A photo drifts slowly closer and back, as a painting would not. */
+    val drift: Boolean = false
 ) {
     Neon(
         "neon", "Neon", "Tokyo at night, lit in the colour of what you point at",
@@ -117,17 +121,19 @@ enum class HomeStyle(
         )
     ),
     Nature(
-        "nature", "Nature", "An alpine lake at first light",
-        R.drawable.home_style_nature, Ambience.Mist,
+        "nature", "Nature", "Moraine Lake as the first sun reaches the peaks",
+        R.drawable.home_style_nature, Ambience.Lake,
         HomeLook(
-            accent = Color(0xFFFFD2A0), accent2 = Color(0xFFA9C8F0), text = Color(0xFFFFF6EC), dim = Color(0xFFCDBCCB),
-            pane = Color(0xB3141D33), pill = Color(0x99141D33), pillFocused = Color(0xCC27345A),
-            tileTop = Color(0xD91E2A4A), tileBottom = Color(0xD90B1226),
+            accent = Color(0xFFFFC897), accent2 = Color(0xFF9FE3EC), text = Color(0xFFFFF7EE), dim = Color(0xFFC4D3D6),
+            pane = Color(0xB30E1C24), pill = Color(0x990E1C24), pillFocused = Color(0xCC1F3A48),
+            tileTop = Color(0xD91A2E3A), tileBottom = Color(0xD90A161E),
             font = OutfitFamily, weight = FontWeight.Medium, italic = false,
             clockSize = 60.sp, clockColor = Color(0xFFFFF8F0), clockGlow = Color(0x99FFB98A), clockBlur = 22f,
             shade = Color(0x660A1020), corner = 12.dp, glow = 12.dp, toward = Color(0xFFFFD2A0), pull = 0.3f,
             letterSpacing = 2.sp
-        )
+        ),
+        light = R.drawable.home_style_nature_glow,
+        drift = true
     ),
     Anime(
         "anime", "Anime", "A summer afternoon under towering clouds",

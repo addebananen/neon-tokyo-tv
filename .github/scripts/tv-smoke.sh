@@ -717,6 +717,13 @@ for style in google_tv nature anime clean city faith car car_night lofi cottage;
   shot "style-$style"
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
+  # The style under review is filmed too, for its motion
+  if [ "$style" = nature ]; then
+    adb shell settings put global animator_duration_scale 1
+    adb shell screenrecord --time-limit 16 --size 1280x720 --bit-rate 6000000 "/sdcard/style-$style.mp4" > "$OUT/style-record.txt" 2>&1
+    adb shell settings put global animator_duration_scale 0
+    adb pull "/sdcard/style-$style.mp4" "$OUT/style-$style.mp4" > /dev/null 2>&1 || true
+  fi
   if [ "$style" = google_tv ]; then
     key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
     shot "style-$style-apps"
