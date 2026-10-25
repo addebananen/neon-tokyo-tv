@@ -248,7 +248,11 @@ video_from_phone() {
   code=$(curl -s -m 60 -H "Expect:" -H "Content-Type: application/octet-stream" -o "$OUT/video-post.txt" -w "%{http_code}" --data-binary "@.github/scripts/video-fixture-sound.mp4" "$base/video")
   if [ "$code" != 200 ]; then fail "sending the video answered $code: $(cat "$OUT/video-post.txt")"; return 1; fi
   if ! wait_for "Your video is on" 90; then fail "the TV never took the video"; return 1; fi
-  adb logcat -d -s DreamVideoShrink:I | grep -q "shrunk" || fail "the TV kept the video with sound as it came instead of making it lighter"
+  # Its picture is light already, so what comes out without the sound must be smaller still
+  shrunk=$(adb logcat -d -s DreamVideoShrink:I | grep -o "from [0-9]* kB to [0-9]* kB" | tail -n 1)
+  echo "video shrink: ${shrunk:-none}"
+  read -r _ before _ _ after _ <<< "${shrunk:-from 0 kB to 0 kB}"
+  [ "${after:-0}" -gt 0 ] && [ "$after" -lt "$before" ] || fail "the TV did not make the video with sound lighter (${shrunk:-not shrunk})"
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"done"' || fail "the phone was told $state instead of done"
   adb forward --remove tcp:18081 >/dev/null 2>&1

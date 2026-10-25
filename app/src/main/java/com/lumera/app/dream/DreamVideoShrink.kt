@@ -47,6 +47,7 @@ object DreamVideoShrink {
      */
     suspend fun shrink(context: Context, input: File, output: File, onProgress: (Float) -> Unit): Boolean {
         val shape = probe(input) ?: return false
+        val rate = if (shape.bitrate > 0) shape.bitrate.coerceIn(1_000_000L, BITRATE.toLong()).toInt() else BITRATE
         output.delete()
         // Transformer wants a thread with a looper, and reports on it
         val done = withContext(Dispatchers.Main) {
@@ -64,7 +65,8 @@ object DreamVideoShrink {
                     .setVideoMimeType(MimeTypes.VIDEO_H264)
                     .setEncoderFactory(
                         DefaultEncoderFactory.Builder(context)
-                            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(BITRATE).build())
+                            // Never more than the video had: a light one stays light
+                            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(rate).build())
                             .build()
                     )
                     .addListener(object : Transformer.Listener {
@@ -98,7 +100,8 @@ object DreamVideoShrink {
                 }
             }
         }
-        if (!done || output.length() == 0L) output.delete()
+        // Kept only when it came out smaller, which a video that was light already may not
+        if (!done || output.length() == 0L || output.length() >= input.length()) output.delete()
         val ok = done && output.exists()
         if (ok) android.util.Log.i("DreamVideoShrink", "shrunk ${shape.width}x${shape.height} from ${input.length() / 1024} kB to ${output.length() / 1024} kB")
         return ok
