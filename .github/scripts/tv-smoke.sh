@@ -718,10 +718,18 @@ for style in google_tv nature anime clean city faith car car_night lofi cottage;
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
   if [ "$style" = google_tv ]; then
-    key UP; sleep 1; key RIGHT; sleep 2
+    key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
     shot "style-$style-apps"
-    key RIGHT; sleep 2
+    key DPAD_RIGHT; sleep 2
     shot "style-$style-sources"
+    # The profile pill is the first of the pills at the top
+    key DPAD_UP DPAD_LEFT DPAD_LEFT DPAD_LEFT; sleep 1
+    label=$(focused_label)
+    [ "$label" = "Neon" ] || fail "Up from the tabs in the $style style is $label, not the profile pill"
+    key DPAD_CENTER; sleep 2
+    shot "style-$style-profiles"
+    screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
+    key BACK; sleep 2
     key BACK; sleep 2
   fi
   key BACK
