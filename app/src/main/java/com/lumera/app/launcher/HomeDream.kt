@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
@@ -25,6 +26,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -155,7 +159,15 @@ internal fun StyleDream(profile: HomeProfile) {
                     StyleAmbience(style.ambience, light = style.light)
                 }
             }
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.16f)))
+            // A little darker overall, and a soft shadow pooled under the clock so it reads on busy art
+            Spacer(Modifier.fillMaxSize().drawBehind {
+                drawRect(Color.Black.copy(alpha = 0.12f))
+                drawRect(Brush.radialGradient(
+                    listOf(Color.Black.copy(alpha = 0.42f), Color.Transparent),
+                    center = Offset(size.width * 0.14f, size.height * 0.2f),
+                    radius = size.width * 0.3f
+                ))
+            })
             DreamClock(look)
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = curtain.value }.background(Color.Black))
         }
