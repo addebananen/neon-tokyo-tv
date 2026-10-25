@@ -262,7 +262,8 @@ private fun rememberPicture(path: String?, size: Int): ImageBitmap? {
     return image
 }
 
-private fun decodeSampled(file: File, size: Int): ImageBitmap? = runCatching {
+/** [file] decoded at a power of two smaller, while its short side stays at least [size] pixels. */
+internal fun decodeSampled(file: File, size: Int): ImageBitmap? = runCatching {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.path, bounds)
     var sample = 1
@@ -292,7 +293,7 @@ private fun ProfileEditor(
     }
     fun saveName() {
         val clean = name.trim()
-        if (clean.isNotEmpty() && clean != profile.name) profiles.update(profile.copy(name = clean))
+        if (clean.isNotEmpty() && clean != profile.name) profiles.edit(profile.id) { it.copy(name = clean) }
     }
     Column(
         modifier = Modifier
@@ -310,7 +311,7 @@ private fun ProfileEditor(
             PanelButton("Photo", look) { takingPhoto = true }
             PanelButton("Own picture", look) { takingBackground = true }
             PanelButton("Own video", look) { takingVideo = true }
-            if (profile.background != null) PanelButton("Use the painting", look) { profiles.update(profile.copy(background = null)) }
+            if (profile.background != null) PanelButton("Use the painting", look) { profiles.edit(profile.id) { it.copy(background = null) } }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelNote("STYLE", look)
@@ -319,7 +320,7 @@ private fun ProfileEditor(
         }
         StylePicker(profile.style, look, styleList) { style ->
             saveName()
-            profiles.update(profile.copy(name = name.trim().ifEmpty { profile.name }, style = style))
+            profiles.edit(profile.id) { it.copy(style = style) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             PanelButton("Done", look, primary = true) {
@@ -327,7 +328,7 @@ private fun ProfileEditor(
                 onDone()
             }
             PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
-            if (profile.dreamVideo != null) PanelButton("Style's screensaver", look) { profiles.update(profile.copy(dreamVideo = null)) }
+            if (profile.dreamVideo != null) PanelButton("Style's screensaver", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
             if (canDelete) PanelButton("Remove profile", look, onClick = onDelete)
         }
     }
@@ -338,7 +339,7 @@ private fun ProfileEditor(
             onPhotoChosen = { ref ->
                 takingPhoto = false
                 val saved = keepFile(context, profiles, ref)
-                if (saved != null) profiles.update(profile.copy(photo = saved))
+                if (saved != null) profiles.edit(profile.id) { it.copy(photo = saved) }
             }
         )
     }
@@ -346,7 +347,7 @@ private fun ProfileEditor(
         val target = remember { profiles.newFile("background", "mp4") }
         DreamVideoDialog(
             onDismissRequest = { takingVideo = false },
-            onVideoSet = { profiles.update(profile.copy(background = target.absolutePath)) },
+            onVideoSet = { profiles.edit(profile.id) { it.copy(background = target.absolutePath) } },
             target = target,
             background = true
         )
@@ -355,7 +356,7 @@ private fun ProfileEditor(
         val target = remember { profiles.newFile("dream", "mp4") }
         DreamVideoDialog(
             onDismissRequest = { takingDreamVideo = false },
-            onVideoSet = { profiles.update(profile.copy(dreamVideo = target.absolutePath)) },
+            onVideoSet = { profiles.edit(profile.id) { it.copy(dreamVideo = target.absolutePath) } },
             target = target
         )
     }
@@ -366,7 +367,7 @@ private fun ProfileEditor(
             onDismiss = { takingBackground = false },
             onChosen = { path ->
                 takingBackground = false
-                profiles.update(profile.copy(background = path))
+                profiles.edit(profile.id) { it.copy(background = path) }
             }
         )
     }

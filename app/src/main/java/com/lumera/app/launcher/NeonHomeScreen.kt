@@ -2097,7 +2097,8 @@ internal fun PictureBackdrop(path: String) {
     var image by remember(path) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(path) {
         image = withContext(Dispatchers.IO) {
-            runCatching { android.graphics.BitmapFactory.decodeFile(path) }.getOrNull()?.asImageBitmap()
+            // The phone page sends 1920 by 1080, but a bigger file must not fill the TV's memory
+            decodeSampled(java.io.File(path), 1080)
         }
     }
     val drift = rememberInfiniteTransition(label = "PictureDrift")

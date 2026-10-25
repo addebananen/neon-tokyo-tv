@@ -35,6 +35,13 @@ class HomeProfiles private constructor(private val context: Context) {
     private val _profiles = MutableStateFlow(load())
     private val _activeId = MutableStateFlow(prefs.getString(KEY_ACTIVE, null))
 
+    init {
+        // A video that stopped arriving halfway, or a file a removed profile left: nothing points at
+        // it, and a phone video can be large on a TV's small storage
+        val kept = _profiles.value.flatMap { listOf(it.photo, it.background, it.dreamVideo) }.filterNotNull().toSet()
+        File(context.filesDir, DIR).listFiles()?.filter { it.absolutePath !in kept }?.forEach { it.delete() }
+    }
+
     val profiles: StateFlow<List<HomeProfile>> = _profiles.asStateFlow()
     val activeId: StateFlow<String?> = _activeId.asStateFlow()
 
@@ -52,6 +59,11 @@ class HomeProfiles private constructor(private val context: Context) {
         store(_profiles.value + profile)
         select(profile.id)
         return profile
+    }
+
+    /** Changes a profile as it is now, so a screen holding an older copy can't undo a newer change. */
+    fun edit(id: String, change: (HomeProfile) -> HomeProfile) {
+        _profiles.value.firstOrNull { it.id == id }?.let { update(change(it)) }
     }
 
     fun update(profile: HomeProfile) {
