@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos, Bubbles, Library, Sunroom }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -299,6 +299,40 @@ enum class HomeStyle(
         drift = true,
         driftX = 0.5f,
         driftY = 0.3f
+    ),
+    Academia(
+        "academia", "Dark Academia", "An old library of carved wood under a skylight",
+        R.drawable.home_style_academia, Ambience.Library,
+        HomeLook(
+            accent = Color(0xFFD9B06A), accent2 = Color(0xFFB5523B), text = Color(0xFFF3E7D0), dim = Color(0xFFB9A585),
+            pane = Color(0xC0170E08), pill = Color(0xA0170E08), pillFocused = Color(0xD93A2414),
+            tileTop = Color(0xE0261810), tileBottom = Color(0xE00E0805),
+            font = CormorantFamily, weight = FontWeight.SemiBold, italic = true,
+            clockSize = 76.sp, clockColor = Color(0xFFF6E9CF), clockGlow = Color(0x99D9A050), clockBlur = 18f,
+            shade = Color(0xAA0A0503), corner = 3.dp, glow = 10.dp, toward = Color(0xFFD9B06A), pull = 0.6f,
+            letterSpacing = 2.sp
+        ),
+        light = R.drawable.home_style_academia_glow,
+        drift = true,
+        driftX = 0.5f,
+        driftY = 0.35f
+    ),
+    Japandi(
+        "japandi", "Japandi", "A quiet room, a leather sofa, the sun on the wall",
+        R.drawable.home_style_japandi, Ambience.Sunroom,
+        HomeLook(
+            accent = Color(0xFFB8653A), accent2 = Color(0xFF7D8A6A), text = Color(0xFF2E2620), dim = Color(0xFF7A6D60),
+            pane = Color(0xD9F4EEE6), pill = Color(0xC0F4EEE6), pillFocused = Color(0xFFFFFBF6),
+            tileTop = Color(0xE6FBF7F1), tileBottom = Color(0xE6EDE5DA),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 66.sp, clockColor = Color(0xFF2E2620), clockGlow = Color(0x66FFFFFF), clockBlur = 16f,
+            shade = Color(0x99FFFFFF), corner = 6.dp, glow = 8.dp, toward = Color(0xFF8A5A3A), pull = 0.5f,
+            letterSpacing = 3.sp
+        ),
+        light = R.drawable.home_style_japandi_glow,
+        drift = true,
+        driftX = 0.5f,
+        driftY = 0.4f
     );
 
     companion object {

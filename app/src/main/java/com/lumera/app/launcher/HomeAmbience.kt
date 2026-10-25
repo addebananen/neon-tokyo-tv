@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
@@ -61,7 +62,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
     val fps = when (ambience) {
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles -> 24
+        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Sunroom -> 24
         Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos -> 30
     }
     val time = rememberAmbientTime(fps)
@@ -91,6 +92,8 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.Forest -> forest(t)
                     Ambience.Cosmos -> cosmos(t, lightImage)
                     Ambience.Bubbles -> bubbles(t)
+                    Ambience.Library -> library(t, lightImage)
+                    Ambience.Sunroom -> sunroom(t, lightImage)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -815,5 +818,63 @@ private fun DrawScope.bubbles(t: Float) {
             )
             drawCircle(Color(0xCCFFFFFF), radius = r * 0.09f, center = c + Offset(r * 0.38f, r * 0.42f))
         }
+    }
+}
+
+/**
+ * Dark Academia, a photo of an old library of carved wood: the light from the skylight swells and
+ * settles like a lamp turned up and down, and dust drifts down through it to the reading tables.
+ */
+private fun DrawScope.library(t: Float, light: ImageBitmap?) {
+    val w = size.width
+    val unit = 1.dp.toPx()
+    if (light != null) {
+        val flicker = 0.12f + 0.07f * sin(t * 0.45f) + 0.02f * sin(t * 3.1f) * sin(t * 1.7f)
+        drawImage(light, dstSize = IntSize(w.roundToInt(), size.height.roundToInt()), alpha = flicker, blendMode = BlendMode.Plus)
+    }
+    // A soft cone of light from the skylight
+    val top = at(0.5f, 0.2f)
+    val beam = Path().apply {
+        moveTo(top.x - w * 0.08f, top.y)
+        lineTo(top.x + w * 0.08f, top.y)
+        lineTo(top.x + w * 0.2f, size.height)
+        lineTo(top.x - w * 0.2f, size.height)
+        close()
+    }
+    drawPath(
+        beam,
+        Brush.verticalGradient(0f to Color(0xFFFFE2B0).copy(alpha = 0.07f + 0.03f * sin(t * 0.45f)), 1f to Color.Transparent, startY = top.y, endY = size.height),
+        blendMode = BlendMode.Plus
+    )
+    // Dust drifting down through the light
+    for (i in 0 until 36) {
+        val p = fract(rnd(i, 1) + t * (0.008f + 0.008f * rnd(i, 2)))
+        val spread = 0.06f + p * 0.13f
+        val x = 0.5f + (rnd(i, 3) - 0.5f) * 2f * spread + 0.01f * sin(t * 0.6f + i * 1.3f)
+        val c = at(x, 0.22f + p * 0.7f)
+        val twinkle = 0.5f + 0.5f * sin(t * (1.2f + rnd(i, 4)) + i)
+        drawCircle(Color(0xFFFFEBC4), radius = unit * (0.8f + 1.2f * rnd(i, 5)), center = c, alpha = 0.55f * twinkle * sin(p * PI.toFloat()), blendMode = BlendMode.Plus)
+    }
+}
+
+/**
+ * Japandi, a photo of a quiet room with the sun falling through the window onto the wall: clouds
+ * pass now and then and the light on the wall dims and comes back, and a few motes float in it.
+ */
+private fun DrawScope.sunroom(t: Float, light: ImageBitmap?) {
+    val w = size.width
+    val unit = 1.dp.toPx()
+    if (light != null) {
+        val dst = IntSize(w.roundToInt(), size.height.roundToInt())
+        // Two slow waves make the clouds come irregularly: mostly sun, sometimes shade
+        val cloud = ((sin(t * 0.11f) + sin(t * 0.047f + 1.3f)) * 0.5f).coerceAtLeast(0f)
+        drawImage(light, dstSize = dst, alpha = 0.18f * (1f - cloud), blendMode = BlendMode.Plus)
+        drawImage(light, dstSize = dst, alpha = 0.45f * cloud, colorFilter = ColorFilter.tint(Color(0xFF8E8070)), blendMode = BlendMode.Multiply)
+    }
+    for (i in 0 until 22) {
+        val x = fract(rnd(i, 1) + t * 0.003f * (rnd(i, 2) - 0.3f)) + 0.008f * sin(t * 0.4f + i)
+        val y = 0.05f + 0.38f * fract(rnd(i, 3) + t * 0.002f * (rnd(i, 4) - 0.5f) + 0.01f * sin(t * 0.3f + i))
+        val twinkle = 0.5f + 0.5f * sin(t * (0.8f + rnd(i, 5)) + i * 2f)
+        drawCircle(Color(0xFFFFF4E0), radius = unit * (0.8f + rnd(i, 6)), center = at(x, y), alpha = 0.6f * twinkle)
     }
 }
