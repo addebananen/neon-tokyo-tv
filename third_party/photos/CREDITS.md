@@ -11,3 +11,4 @@ screen; the glow masks next to them are drawn from the same photo.
 | `app/src/main/res/drawable-nodpi/home_style_car_night.webp` | A dark sports car on a wet road. [Pexels photo 3136673](https://www.pexels.com/photo/3136673/) | [Pexels License](https://www.pexels.com/license/) |
 | `app/src/main/res/drawable-nodpi/home_style_cottage.webp` | A turf-roofed cottage above the sea. [Pexels photo 2581922](https://www.pexels.com/photo/2581922/) | [Pexels License](https://www.pexels.com/license/) |
 | `app/src/main/res/drawable-nodpi/home_style_naturecore.webp` | Sun through an old forest of ferns and moss. [Pexels photo 1757363](https://www.pexels.com/photo/1757363/) | [Pexels License](https://www.pexels.com/license/) |
+| `app/src/main/res/drawable-nodpi/home_style_space.webp`, `home_style_space_glow.webp` | The Milky Way. [Pexels photo 1257860](https://www.pexels.com/photo/1257860/) | [Pexels License](https://www.pexels.com/license/) |

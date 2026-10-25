@@ -77,7 +77,7 @@ data class HomeLook(
  * What moves in a style's picture. Each is a few lights or specks drawn on one layer, and only
  * while the home screen shows.
  */
-enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest }
+enum class Ambience { NeonSky, GoogleGlow, Lake, Petals, Calm, CityLights, Glory, Speed, NightRain, LoFi, Meadow, Forest, Cosmos }
 
 /**
  * The looks a home profile can wear. Neon is the original: the skyline that takes the colour of
@@ -266,6 +266,23 @@ enum class HomeStyle(
         drift = true,
         driftX = 0.45f,
         driftY = 0.38f
+    ),
+    Space(
+        "space", "Space Infinitum", "The Milky Way, nothing else",
+        R.drawable.home_style_space, Ambience.Cosmos,
+        HomeLook(
+            accent = Color(0xFFDCE4FF), accent2 = Color(0xFFE9C9A8), text = Color(0xFFF4F6FF), dim = Color(0xFF9AA3BF),
+            pane = Color(0xB3060A14), pill = Color(0x80060A14), pillFocused = Color(0xCC1A2238),
+            tileTop = Color(0xC0101626), tileBottom = Color(0xC005070E),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 64.sp, clockColor = Color(0xFFF4F6FF), clockGlow = Color(0x668FA8FF), clockBlur = 26f,
+            shade = null, corner = 18.dp, glow = 14.dp, toward = Color(0xFFDCE4FF), pull = 0.55f,
+            letterSpacing = 4.sp
+        ),
+        light = R.drawable.home_style_space_glow,
+        drift = true,
+        driftX = 0.7f,
+        driftY = 0.2f
     );
 
     companion object {

@@ -62,7 +62,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
         Ambience.NeonSky -> return
         Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
         Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest -> 24
-        Ambience.Petals, Ambience.Speed, Ambience.NightRain -> 30
+        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos -> 30
     }
     val time = rememberAmbientTime(fps)
     val context = LocalContext.current
@@ -89,6 +89,7 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
                     Ambience.LoFi -> loFi(t)
                     Ambience.Meadow -> meadow(t)
                     Ambience.Forest -> forest(t)
+                    Ambience.Cosmos -> cosmos(t, lightImage)
                     Ambience.NeonSky -> Unit
                 }
             }
@@ -694,5 +695,52 @@ private fun DrawScope.forest(t: Float) {
                 drawOval(Color(0xFFC9B24E), topLeft = c - Offset(s * 0.5f, s), size = Size(s, s * 2f), alpha = 0.8f)
             }
         }
+    }
+}
+
+/**
+ * Space Infinitum, a photo of the Milky Way: its core glows and fades like breath, the bright
+ * stars twinkle, a satellite crawls across now and then and once in a while a star falls.
+ */
+private fun DrawScope.cosmos(t: Float, core: ImageBitmap?) {
+    val w = size.width
+    val unit = 1.dp.toPx()
+    if (core != null) {
+        drawImage(core, dstSize = IntSize(w.roundToInt(), size.height.roundToInt()), alpha = 0.08f + 0.08f * sin(t * 0.25f), blendMode = BlendMode.Plus)
+    }
+    val stars = PhotoSpots.stars
+    for (i in 0 until stars.size / 2) {
+        val twinkle = sin(t * (1.2f + 2.2f * rnd(i, 1)) + rnd(i, 2) * 6.28f)
+        if (twinkle < 0.2f) continue
+        val c = at(stars[i * 2], stars[i * 2 + 1])
+        val a = (twinkle - 0.2f) / 0.8f
+        softLight(c, unit * (3f + 3f * rnd(i, 3)), Color(0xFFF2F5FF), 0.6f * a)
+        if (rnd(i, 4) > 0.75f) {
+            val ray = unit * (4f + 5f * a)
+            drawLine(Color(0xFFF2F5FF), c - Offset(ray, 0f), c + Offset(ray, 0f), strokeWidth = unit * 0.7f, alpha = 0.5f * a)
+            drawLine(Color(0xFFF2F5FF), c - Offset(0f, ray), c + Offset(0f, ray), strokeWidth = unit * 0.7f, alpha = 0.5f * a)
+        }
+    }
+    // A satellite, steady and slow, every 70 seconds
+    val pass = fract(t / 70f)
+    if (pass < 0.5f) {
+        val q = pass / 0.5f
+        val c = at(0.12f + q * 0.8f, 0.04f + q * 0.36f)
+        val glint = 0.5f + 0.5f * sin(t * 0.7f)
+        drawCircle(Color(0xFFEFF3FF), radius = unit * 1.2f, center = c, alpha = (0.35f + 0.4f * glint) * sin(q * PI.toFloat()))
+    }
+    // A falling star every 23 seconds, somewhere new each time
+    val cycle = floor(t / 23f).toInt()
+    val fall = fract(t / 23f)
+    if (fall < 0.06f) {
+        val q = fall / 0.06f
+        val start = at(0.25f + 0.6f * rnd(cycle, 5), 0.04f + 0.25f * rnd(cycle, 6))
+        val dir = Offset(-0.85f, 0.5f)
+        val head = start + dir * (w * 0.22f * q)
+        val tail = head - dir * (w * 0.07f * (1f - q * 0.5f))
+        drawLine(
+            Brush.linearGradient(0f to Color.Transparent, 1f to Color(0xFFFFFFFF), start = tail, end = head),
+            tail, head, strokeWidth = unit * 1.6f, cap = StrokeCap.Round, alpha = sin(q * PI.toFloat())
+        )
     }
 }
