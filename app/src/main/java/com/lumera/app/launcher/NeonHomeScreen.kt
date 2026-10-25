@@ -119,6 +119,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -1596,6 +1597,8 @@ private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, sh
         HomeCatalog.NeonTokyo, HomeCatalog.Stremio -> Scene.Film
         else -> return
     }
+    // On a pale tile the names are dark, so the film strip they run into is pale too
+    val paper = LocalHomeLook.current.text.luminance() < 0.4f
     val clock = rememberFocusClock(focused)
     val lit = animateFloatAsState(if (focused) 1f else 0f, tween(320, easing = FastOutSlowInEasing), label = "SceneLight")
     val time = { clock.value }
@@ -1609,7 +1612,7 @@ private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, sh
                     Scene.Video -> videoScene(color, time, light)
                     Scene.Record -> recordScene(color, time, light)
                     Scene.Equalizer -> equalizerScene(color, time, light)
-                    Scene.Film -> filmScene(color, time, light)
+                    Scene.Film -> filmScene(color, time, light, paper)
                 }
             }
     )
@@ -1729,7 +1732,7 @@ private fun CacheDrawScope.equalizerScene(color: Color, time: () -> Float, lit: 
 }
 
 /** A film strip running up through a projector's beam. */
-private fun CacheDrawScope.filmScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {
+private fun CacheDrawScope.filmScene(color: Color, time: () -> Float, lit: () -> Float, paper: Boolean): DrawResult {
     val w = size.width
     val h = size.height
     val band = 24.dp.toPx()
@@ -1738,7 +1741,8 @@ private fun CacheDrawScope.filmScene(color: Color, time: () -> Float, lit: () ->
     val to = w * 1.25f
     val top = pivot.y - band / 2f
     val beam = Brush.radialGradient(0f to color.copy(alpha = 0.3f), 1f to Color.Transparent, center = Offset(w, 0f), radius = h * 1.1f)
-    val strip = Brush.horizontalGradient(0f to Color.Transparent, 0.22f to Color(0xF20E0619), startX = from, endX = to)
+    val stock = if (paper) lerp(Color.White, color, 0.1f).copy(alpha = 0.85f) else Color(0xF20E0619)
+    val strip = Brush.horizontalGradient(0f to Color.Transparent, 0.22f to stock, startX = from, endX = to)
     val edge = Brush.horizontalGradient(0f to Color.Transparent, 0.3f to color.copy(alpha = 0.6f), startX = from, endX = to)
     val hole = Size(2.6.dp.toPx(), 3.2.dp.toPx())
     val holeStep = 6.5.dp.toPx()
