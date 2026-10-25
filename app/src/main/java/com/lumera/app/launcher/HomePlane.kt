@@ -84,6 +84,7 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 plane.shown = player.currentMediaItem?.localConfiguration?.uri
+                android.util.Log.i("PlaneSurface", "showing ${plane.shown?.lastPathSegment}")
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
