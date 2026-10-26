@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -117,6 +118,7 @@ fun GlassSidebarScaffold(
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun GlassSidebar(
     state: SidebarState,
@@ -184,12 +186,10 @@ fun GlassSidebar(
         onDismiss = onDismiss,
         panelWidth = 620.dp
     ) {
-        Crossfade(
-            targetState = state,
-            // A list that fills in stays the same list, rather than fading into a copy of itself
-            contentKey = { it::class },
+        // A list that fills in stays the same list, rather than fading into a copy of itself
+        updateTransition(state, label = "Sidebar").Crossfade(
             modifier = Modifier.onFocusChanged { panelHasFocus = it.hasFocus },
-            label = "Sidebar"
+            contentKey = { it::class }
         ) { current ->
             when (current) {
                 is SidebarState.Episodes -> EpisodesContent(
