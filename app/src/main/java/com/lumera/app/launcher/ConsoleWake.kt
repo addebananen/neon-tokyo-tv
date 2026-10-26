@@ -214,7 +214,7 @@ private fun BootRing(color: Color, progress: () -> Float, breath: () -> Float) {
                 val soft = Brush.radialGradient(
                     0f to color.copy(alpha = 0.35f),
                     1f to Color.Transparent,
-                    center = center,
+                    center = Offset(size.width / 2, size.height / 2),
                     radius = size.minDimension / 2
                 )
                 onDrawBehind {
