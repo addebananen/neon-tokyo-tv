@@ -65,6 +65,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
 
 .msg { min-height: 20px; margin-top: 12px; font-size: 14px; color: var(--sun); }
 .msg.error { color: #ff8aa8; }
+.tip { margin-top: 14px; font-size: 13px; line-height: 1.45; color: var(--lilac); opacity: 0.85; }
 
 .screen {
   position: relative; width: 100%; aspect-ratio: 16 / 9; margin-top: 4px; border-radius: 14px; overflow: hidden; background: #000;
@@ -109,6 +110,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
       Choose a video
     </label>
     <p class="msg" id="pickMsg"></p>
+    <p class="tip" id="iosTip" hidden>On an iPhone, a video picked from Photos is first squeezed down by the phone. For the full picture, open it in Photos, tap Share › Save to Files, then pick Choose File here and find it there.</p>
   </section>
 
   <section id="check" class="view" hidden>
@@ -150,6 +152,10 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     document.querySelector("#pick p").textContent = "Pick a video and it plays behind your tiles on the TV, on a loop and without sound.";
     document.querySelector("#done p").textContent = "Your video is behind the home screen now. You can close this page.";
     document.querySelector("#closed p").textContent = "Open it again on the TV: hold OK on your profile on Neon Home, then Own video.";
+  }
+  // iPhones and iPads (which say they are Macs, but with a touch screen)
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    document.getElementById("iosTip").hidden = false;
   }
   var BASE = "{{BASE}}";
   var MAX = 2 * 1024 * 1024 * 1024;

@@ -123,13 +123,17 @@ fun DreamVideoDialog(
                 scope.launch {
                     // A phone's film is made lighter first, so it doesn't fill the TV's storage
                     var upload = file
+                    var why: String? = null
                     if (withContext(Dispatchers.IO) { DreamVideoShrink.needed(file) }) {
                         shrinking = 0f
                         val small = File(file.parentFile, "shrunk.mp4")
-                        if (DreamVideoShrink.shrink(context, file, small) { shrinking = it }) {
+                        // When the TV can't make it lighter it keeps the film as it came, if it can play that
+                        val outcome = DreamVideoShrink.shrink(context, file, small) { shrinking = it }
+                        if (outcome.ok) {
                             file.delete()
                             upload = small
                         }
+                        why = outcome.reason
                         shrinking = null
                     }
                     val shown: Bitmap? = withContext(Dispatchers.IO) { DreamVideo.install(context, upload, target ?: DreamVideo.file(context)) }
@@ -137,7 +141,8 @@ fun DreamVideoDialog(
                     progress = null
                     if (shown == null) {
                         serverManager.state = DreamVideoUploadServer.STATE_ERROR
-                        note = "The TV can't play that video. Try another one."
+                        // What went wrong making it lighter, if anything did, so it can be put right
+                        note = "The TV can't play that video. Try another one." + (why?.let { "  ($it)" } ?: "")
                     } else {
                         // A profile's own video plays when the screensaver follows the home style
                         if (!background) NeonDreamStyle.set(context, if (target == null) NeonDreamStyle.VIDEO else NeonDreamStyle.HOME)
