@@ -25,6 +25,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.State
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.sin
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -136,11 +146,14 @@ internal fun BoxScope.AppArtFace(
     packages: List<String>,
     name: String,
     shape: RoundedCornerShape,
+    color: Color,
+    focused: Boolean,
     big: Boolean,
     nameSize: TextUnit,
     fallback: @Composable BoxScope.() -> Unit
 ) {
     val look = LocalHomeLook.current
+    val shine = rememberShine(focused, pack != IconPack.Neon)
     when (pack) {
         IconPack.Neon -> fallback()
         IconPack.Banner -> {
@@ -150,13 +163,13 @@ internal fun BoxScope.AppArtFace(
                     bitmap = banner.image,
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(shape)
+                    modifier = Modifier.fillMaxSize().clip(shape).shine(shine)
                 )
                 // Not every app has a TV banner: its icon, as Original shows it
-                banner.done -> OriginalFace(packages, name, big, nameSize, fallback)
+                banner.done -> OriginalFace(packages, name, big, nameSize, color, shine, fallback)
             }
         }
-        IconPack.Original -> OriginalFace(packages, name, big, nameSize, fallback)
+        IconPack.Original -> OriginalFace(packages, name, big, nameSize, color, shine, fallback)
         IconPack.Glass -> {
             val icon = rememberAppArt(packages, banner = false)
             Box(
@@ -171,7 +184,7 @@ internal fun BoxScope.AppArtFace(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    AppIcon(icon.image, name, if (big) 44.dp else 34.dp)
+                    AppIcon(icon.image, name, if (big) 44.dp else 34.dp, color, shine)
                     if (big) {
                         Spacer(Modifier.size(5.dp))
                         Name(name, nameSize, look.text.copy(alpha = 0.9f))
@@ -189,6 +202,8 @@ private fun BoxScope.OriginalFace(
     name: String,
     big: Boolean,
     nameSize: TextUnit,
+    color: Color,
+    shine: Shine,
     fallback: @Composable BoxScope.() -> Unit
 ) {
     val look = LocalHomeLook.current
@@ -203,26 +218,86 @@ private fun BoxScope.OriginalFace(
             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AppIcon(icon, name, 44.dp)
+            AppIcon(icon, name, 44.dp, color, shine)
             Spacer(Modifier.width(11.dp))
             Name(name, nameSize, look.text)
         }
     } else {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
-            AppIcon(icon, name, 28.dp)
+            AppIcon(icon, name, 28.dp, color, shine)
             Spacer(Modifier.weight(1f))
             Name(name, nameSize, look.text)
         }
     }
 }
 
+/**
+ * The light on an app's own icon or banner in focus: it glows in the app's colour, breathing a
+ * little, and every few seconds a gleam runs across it as over glass. Only the drawing reads it.
+ */
+internal class Shine(val time: State<Float>, val lit: State<Float>)
+
 @Composable
-private fun AppIcon(icon: ImageBitmap, name: String, size: Dp) {
+private fun rememberShine(focused: Boolean, wanted: Boolean): Shine {
+    val time = rememberFocusClock(focused && wanted)
+    val lit = animateFloatAsState(if (focused) 1f else 0f, tween(320, easing = FastOutSlowInEasing), label = "IconShine")
+    return remember(time, lit) { Shine(time, lit) }
+}
+
+/** The glow around an icon, drawn behind it and past its edges. */
+private fun Modifier.halo(shine: Shine, color: Color): Modifier = drawBehind {
+    val lit = shine.lit.value
+    if (lit <= 0f) return@drawBehind
+    val breathe = 0.85f + 0.15f * sin(shine.time.value * 2.2f)
+    val radius = size.maxDimension * 0.95f
+    drawCircle(
+        Brush.radialGradient(0f to color.copy(alpha = 0.55f), 1f to Color.Transparent, center = center, radius = radius),
+        radius = radius,
+        alpha = lit * breathe
+    )
+}
+
+/** The gleam running across an icon or banner, over what it shows. */
+private fun Modifier.shine(shine: Shine): Modifier = drawWithContent {
+    drawContent()
+    val lit = shine.lit.value
+    if (lit <= 0f) return@drawWithContent
+    // Across in 0.7 s, then a rest, once on landing and every 3.2 s after
+    val run = (shine.time.value % 3.2f) / 0.7f
+    if (run < 1f) {
+        val band = size.width * 0.35f
+        val x = -band + (size.width + band * 2f) * run
+        drawRect(
+            Brush.linearGradient(
+                0f to Color.Transparent,
+                0.5f to Color.White.copy(alpha = 0.42f),
+                1f to Color.Transparent,
+                start = Offset(x - band, 0f),
+                end = Offset(x + band * 0.4f, size.height)
+            ),
+            alpha = lit
+        )
+    }
+}
+
+@Composable
+private fun AppIcon(icon: ImageBitmap, name: String, size: Dp, color: Color, shine: Shine) {
+    val corner = RoundedCornerShape(size * 0.22f)
     Image(
         bitmap = icon,
         contentDescription = name,
         contentScale = ContentScale.Fit,
-        modifier = Modifier.size(size).clip(RoundedCornerShape(size * 0.22f))
+        modifier = Modifier
+            .size(size)
+            .halo(shine, color)
+            .graphicsLayer {
+                // It rises a touch towards the viewer in focus
+                val s = 1f + 0.08f * shine.lit.value
+                scaleX = s
+                scaleY = s
+            }
+            .clip(corner)
+            .shine(shine)
     )
 }
 

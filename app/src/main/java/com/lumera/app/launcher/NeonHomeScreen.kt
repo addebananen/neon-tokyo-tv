@@ -838,8 +838,8 @@ private fun HomeRows(
                         dimmed = !isInstalled(slot),
                         onFocusRect = { onSpot(Spot(it, slot.color)) }
                     ) { focused ->
-                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, big = true, nameSize = 15.sp) {
-                            if (known != null) TileScene(known, color, focused, tileShape)
+                        if (known != null && pack != IconPack.Banner) TileScene(known, color, focused, tileShape)
+                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1115,8 +1115,8 @@ private fun AllApps(
                     app.packageName -> Lift.Lifted
                     else -> Lift.Other
                 }
-            ) {
-                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, big = false, nameSize = 11.5.sp) {
+            ) { focused ->
+                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp) {
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
                         if (known != null) {
                             NeonGlyph(known.glyph, color, Modifier.size(26.dp))
@@ -1810,7 +1810,7 @@ private fun starPath(size: Size): Path {
 
 /** How long a tile has been in focus, in seconds, counting on from where it stopped last time. */
 @Composable
-private fun rememberFocusClock(focused: Boolean): State<Float> {
+internal fun rememberFocusClock(focused: Boolean): State<Float> {
     val seconds = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(focused) {
         if (!focused) return@LaunchedEffect
@@ -1825,12 +1825,12 @@ private fun rememberFocusClock(focused: Boolean): State<Float> {
     return seconds
 }
 
-private enum class Scene { Video, Record, Equalizer, Film }
+private enum class Scene { Video, Record, Equalizer, Film, Broadcast, Waves, Orbit, Spotlight, Ribbons, Stardust }
 
 /**
  * A little scene behind a big tile's name about what the app is for: a video playing for
- * YouTube, a record turning for YT Music, an equalizer for Spotify and a film strip for Neon Tokyo.
- * It holds still while the tile rests and plays while it is in focus. Only the drawing changes,
+ * YouTube, a record turning for YT Music, an equalizer for Spotify, a film strip for Neon Tokyo,
+ * and one each for the streaming apps people open most (TileScenes.kt). It holds still while the tile rests and plays while it is in focus. Only the drawing changes,
  * so it never recomposes or lays anything out again.
  */
 @Composable
@@ -1840,7 +1840,16 @@ private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, sh
         HomeCatalog.YtMusic -> Scene.Record
         HomeCatalog.Spotify -> Scene.Equalizer
         HomeCatalog.NeonTokyo, HomeCatalog.Stremio -> Scene.Film
-        else -> return
+        else -> when (app.name) {
+            "TV4 Play" -> Scene.Broadcast
+            "SVT Play", "HBO Max", "Apple TV" -> Scene.Waves
+            "Allente", "Plex" -> Scene.Orbit
+            "Viaplay", "Prime Video" -> Scene.Spotlight
+            "Netflix" -> Scene.Ribbons
+            "Disney+", "SkyShowtime" -> Scene.Stardust
+            "SmartTube", "YouTube Kids" -> Scene.Video
+            else -> return
+        }
     }
     // On a pale tile the names are dark, so the film strip they run into is pale too
     val paper = LocalHomeLook.current.text.luminance() < 0.4f
@@ -1858,13 +1867,16 @@ private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, sh
                     Scene.Record -> recordScene(color, time, light)
                     Scene.Equalizer -> equalizerScene(color, time, light)
                     Scene.Film -> filmScene(color, time, light, paper)
+                    Scene.Broadcast -> broadcastScene(color, time, light)
+                    Scene.Waves -> wavesScene(color, time, light)
+                    Scene.Orbit -> orbitScene(color, time, light)
+                    Scene.Spotlight -> spotlightScene(color, time, light)
+                    Scene.Ribbons -> ribbonsScene(color, time, light)
+                    Scene.Stardust -> stardustScene(color, time, light)
                 }
             }
     )
 }
-
-/** How strongly a scene shows: half lit while its tile rests, fully lit in focus. */
-private fun sceneStrength(lit: Float) = 0.55f + 0.45f * lit
 
 /** A screen's glow with scanlines drifting down it, and the progress bar of the video playing. */
 private fun CacheDrawScope.videoScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {
