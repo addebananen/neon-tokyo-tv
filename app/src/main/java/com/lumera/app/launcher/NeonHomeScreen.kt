@@ -215,7 +215,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewWake: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewWake: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -486,7 +486,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    CompositionLocalProvider(LocalHomeLook provides look) {
+    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons)) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -810,6 +810,7 @@ private fun HomeRows(
     onOpenWatching: (Int, ContinueEntry) -> Unit
 ) {
     val look = LocalHomeLook.current
+    val pack = LocalIconPack.current
     val tileShape = RoundedCornerShape(look.corner)
     Column(modifier = Modifier.padding(start = Side), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         RowTitle("Watch & listen")
@@ -837,14 +838,16 @@ private fun HomeRows(
                         dimmed = !isInstalled(slot),
                         onFocusRect = { onSpot(Spot(it, slot.color)) }
                     ) { focused ->
-                        if (known != null) TileScene(known, color, focused, tileShape)
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (known != null) NeonGlyph(known.glyph, color, Modifier.size(42.dp)) else Monogram(slot.label, color, Modifier.size(42.dp))
-                            Spacer(Modifier.width(11.dp))
-                            TileName(slot.name, 15.sp)
+                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, big = true, nameSize = 15.sp) {
+                            if (known != null) TileScene(known, color, focused, tileShape)
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (known != null) NeonGlyph(known.glyph, color, Modifier.size(42.dp)) else Monogram(slot.label, color, Modifier.size(42.dp))
+                                Spacer(Modifier.width(11.dp))
+                                TileName(slot.name, 15.sp)
+                            }
                         }
                     }
                 }
@@ -1065,6 +1068,7 @@ private fun AllApps(
     // tiles themselves in line with the rest of the screen
     val room = 12.dp
     val look = LocalHomeLook.current
+    val pack = LocalIconPack.current
     val tileShape = RoundedCornerShape(look.corner * 0.8f)
     val grid = rememberLazyGridState()
     // A lifted app moved past the top or bottom of the screen brings its row into view
@@ -1112,14 +1116,16 @@ private fun AllApps(
                     else -> Lift.Other
                 }
             ) {
-                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
-                    if (known != null) {
-                        NeonGlyph(known.glyph, color, Modifier.size(26.dp))
-                    } else {
-                        Monogram(app.label, color, Modifier.size(26.dp))
+                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, big = false, nameSize = 11.5.sp) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
+                        if (known != null) {
+                            NeonGlyph(known.glyph, color, Modifier.size(26.dp))
+                        } else {
+                            Monogram(app.label, color, Modifier.size(26.dp))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TileName(app.name, 11.5.sp)
                     }
-                    Spacer(Modifier.weight(1f))
-                    TileName(app.name, 11.5.sp)
                 }
             }
         }

@@ -839,6 +839,26 @@ for style in "${styles[@]}"; do
   sleep 2
 done
 
+# The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
+# on the All apps tab. Apps the emulator lacks keep their neon face
+for pack in original banner glass; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons "$pack" >/dev/null 2>&1
+  sleep 6
+  shot "icons-$pack"
+  # A banner is all picture, the app's name only in its description
+  if [ "$pack" = banner ]; then
+    screen_has 'content-desc="YouTube"' || fail "Neon Home with the banner icons shows no YouTube banner"
+  else
+    label=$(focused_label)
+    [ "$label" = "YouTube" ] || fail "Neon Home with the $pack icons does not start on YouTube ($label has the focus)"
+  fi
+  key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 3
+  shot "icons-$pack-apps"
+  screen_has "Settings" || fail "the All apps tab with the $pack icons does not show Settings"
+  key BACK; sleep 1
+  key BACK; sleep 2
+done
+
 # A console switched on while the home screen shows: its card slides in at the top, the console
 # boots in neon on it and it takes the focus, so OK switches to it; Back puts it away. The
 # emulator has no HDMI inputs, so the preview shows the card as if Switch 2 had just come on

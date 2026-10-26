@@ -323,6 +323,16 @@ private fun ProfileEditor(
             profiles.edit(profile.id) { it.copy(style = style) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            PanelNote("APP ICONS", look)
+            Spacer(Modifier.width(8.dp))
+            IconPack.values().forEach { pack ->
+                PanelButton(pack.title, look, primary = pack == profile.icons) {
+                    saveName()
+                    profiles.edit(profile.id) { it.copy(icons = pack) }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             PanelButton("Done", look, primary = true) {
                 saveName()
                 onDone()
