@@ -311,7 +311,8 @@ private fun ProfileEditor(
             PanelButton("Photo", look) { takingPhoto = true }
             PanelButton("Own picture", look) { takingBackground = true }
             PanelButton("Own video", look) { takingVideo = true }
-            if (profile.background != null) PanelButton("Use the painting", look) { profiles.edit(profile.id) { it.copy(background = null) } }
+            // Removing it deletes the file from the TV as well (HomeProfiles.update)
+            if (profile.background != null) PanelButton("Remove background", look) { profiles.edit(profile.id) { it.copy(background = null) } }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelNote("STYLE", look)
@@ -323,12 +324,22 @@ private fun ProfileEditor(
             profiles.edit(profile.id) { it.copy(style = style) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            PanelNote("APP ICONS", look)
+            Spacer(Modifier.width(8.dp))
+            IconPack.values().forEach { pack ->
+                PanelButton(pack.title, look, primary = pack == profile.icons) {
+                    saveName()
+                    profiles.edit(profile.id) { it.copy(icons = pack) }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             PanelButton("Done", look, primary = true) {
                 saveName()
                 onDone()
             }
             PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
-            if (profile.dreamVideo != null) PanelButton("Style's screensaver", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
+            if (profile.dreamVideo != null) PanelButton("Remove screensaver video", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
             if (canDelete) PanelButton("Remove profile", look, onClick = onDelete)
         }
     }

@@ -215,7 +215,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewWake: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -335,9 +335,13 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     var homeKeys by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
     var consoleOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Consoles)) }
     var appOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Apps)) }
-    val slots = remember(homeKeys, apps) { homeSlots(homeKeys, apps) }
+    var hiddenApps by remember { mutableStateOf(order.hidden()) }
+    var showHidden by remember { mutableStateOf(false) }
+    val slots = remember(homeKeys, apps, previewTiles) { homeSlots(previewTiles ?: homeKeys, apps) }
     val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
-    val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
+    // Hidden apps stay on the TV but out of the list, and out of the apps to put on Home
+    val orderedApps = remember(apps, appOrder, hiddenApps) { HomeOrder.arrange(apps.filter { it.packageName !in hiddenApps }, appOrder) { it.packageName } }
+    val hiddenList = remember(apps, hiddenApps) { apps.filter { it.packageName in hiddenApps } }
     // A console switched on while the home screen shows gets its card; those already on when
     // the inputs are first read, or still on from before an app was opened, do not
     var woke by remember { mutableStateOf<Console?>(null) }
@@ -486,7 +490,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    CompositionLocalProvider(LocalHomeLook provides look) {
+    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons)) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -691,7 +695,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             spotOn = false
                         },
                         onOpen = { HomeApps.open(context, it.packageName) },
-                        onPin = { pinning = it }
+                        onPin = { pinning = it },
+                        hiddenCount = hiddenList.size,
+                        onHidden = { showHidden = true }
                     )
                 }
             }
@@ -771,7 +777,17 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             PinToHomeDialog(app, slots, onPick = { index ->
                 placeOnHome(app.packageName, index)
                 pinning = null
+            }, onHide = {
+                hiddenApps = hiddenApps + app.packageName
+                order.setHidden(hiddenApps)
+                pinning = null
             }, onDismiss = { pinning = null })
+        }
+        if (showHidden) {
+            HiddenAppsDialog(hiddenList, onShow = { app ->
+                hiddenApps = hiddenApps - app.packageName
+                order.setHidden(hiddenApps)
+            }, onDismiss = { showHidden = false })
         }
         changing?.let { index ->
             slots.getOrNull(index)?.let { slot ->
@@ -810,6 +826,7 @@ private fun HomeRows(
     onOpenWatching: (Int, ContinueEntry) -> Unit
 ) {
     val look = LocalHomeLook.current
+    val pack = LocalIconPack.current
     val tileShape = RoundedCornerShape(look.corner)
     Column(modifier = Modifier.padding(start = Side), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         RowTitle("Watch & listen")
@@ -837,14 +854,16 @@ private fun HomeRows(
                         dimmed = !isInstalled(slot),
                         onFocusRect = { onSpot(Spot(it, slot.color)) }
                     ) { focused ->
-                        if (known != null) TileScene(known, color, focused, tileShape)
-                        Row(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (known != null) NeonGlyph(known.glyph, color, Modifier.size(42.dp)) else Monogram(slot.label, color, Modifier.size(42.dp))
-                            Spacer(Modifier.width(11.dp))
-                            TileName(slot.name, 15.sp)
+                        if (known != null && pack != IconPack.Banner) TileScene(known, color, focused, tileShape)
+                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (known != null) NeonGlyph(known.glyph, color, Modifier.size(42.dp)) else Monogram(slot.label, color, Modifier.size(42.dp))
+                                Spacer(Modifier.width(11.dp))
+                                TileName(slot.name, 15.sp)
+                            }
                         }
                     }
                 }
@@ -1059,12 +1078,15 @@ private fun AllApps(
     firstApp: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
     onOpen: (InstalledApp) -> Unit,
-    onPin: (InstalledApp) -> Unit
+    onPin: (InstalledApp) -> Unit,
+    hiddenCount: Int,
+    onHidden: () -> Unit
 ) {
     // The grid leaves room around the tiles for a focused tile's glow; the offset keeps the
     // tiles themselves in line with the rest of the screen
     val room = 12.dp
     val look = LocalHomeLook.current
+    val pack = LocalIconPack.current
     val tileShape = RoundedCornerShape(look.corner * 0.8f)
     val grid = rememberLazyGridState()
     // A lifted app moved past the top or bottom of the screen brings its row into view
@@ -1111,15 +1133,38 @@ private fun AllApps(
                     app.packageName -> Lift.Lifted
                     else -> Lift.Other
                 }
-            ) {
-                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
-                    if (known != null) {
-                        NeonGlyph(known.glyph, color, Modifier.size(26.dp))
-                    } else {
-                        Monogram(app.label, color, Modifier.size(26.dp))
+            ) { focused ->
+                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
+                        if (known != null) {
+                            NeonGlyph(known.glyph, color, Modifier.size(26.dp))
+                        } else {
+                            Monogram(app.label, color, Modifier.size(26.dp))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TileName(app.name, 11.5.sp)
                     }
-                    Spacer(Modifier.weight(1f))
-                    TileName(app.name, 11.5.sp)
+                }
+            }
+        }
+        // The way back to the apps hidden from the list
+        if (hiddenCount > 0) {
+            item(key = "hidden") {
+                val color = look.tint(look.dim)
+                NeonTile(
+                    width = SmallTile.first,
+                    height = SmallTile.second,
+                    shape = tileShape,
+                    color = color,
+                    onClick = onHidden,
+                    onFocus = { onFocusColor(null, "Hidden", look.dim) },
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                ) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
+                        NeonGlyph(Glyph.Layers, color, Modifier.size(26.dp))
+                        Spacer(Modifier.weight(1f))
+                        TileName("Hidden · $hiddenCount", 11.5.sp)
+                    }
                 }
             }
         }
@@ -1804,7 +1849,7 @@ private fun starPath(size: Size): Path {
 
 /** How long a tile has been in focus, in seconds, counting on from where it stopped last time. */
 @Composable
-private fun rememberFocusClock(focused: Boolean): State<Float> {
+internal fun rememberFocusClock(focused: Boolean): State<Float> {
     val seconds = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(focused) {
         if (!focused) return@LaunchedEffect
@@ -1819,12 +1864,12 @@ private fun rememberFocusClock(focused: Boolean): State<Float> {
     return seconds
 }
 
-private enum class Scene { Video, Record, Equalizer, Film }
+private enum class Scene { Video, Record, Equalizer, Film, Broadcast, Waves, Orbit, Spotlight, Ribbons, Stardust }
 
 /**
  * A little scene behind a big tile's name about what the app is for: a video playing for
- * YouTube, a record turning for YT Music, an equalizer for Spotify and a film strip for Neon Tokyo.
- * It holds still while the tile rests and plays while it is in focus. Only the drawing changes,
+ * YouTube, a record turning for YT Music, an equalizer for Spotify, a film strip for Neon Tokyo,
+ * and one each for the streaming apps people open most (TileScenes.kt). It holds still while the tile rests and plays while it is in focus. Only the drawing changes,
  * so it never recomposes or lays anything out again.
  */
 @Composable
@@ -1834,7 +1879,16 @@ private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, sh
         HomeCatalog.YtMusic -> Scene.Record
         HomeCatalog.Spotify -> Scene.Equalizer
         HomeCatalog.NeonTokyo, HomeCatalog.Stremio -> Scene.Film
-        else -> return
+        else -> when (app.name) {
+            "TV4 Play" -> Scene.Broadcast
+            "SVT Play", "HBO Max", "Apple TV" -> Scene.Waves
+            "Allente", "Plex" -> Scene.Orbit
+            "Viaplay", "Prime Video" -> Scene.Spotlight
+            "Netflix" -> Scene.Ribbons
+            "Disney+", "SkyShowtime" -> Scene.Stardust
+            "SmartTube", "YouTube Kids" -> Scene.Video
+            else -> return
+        }
     }
     // On a pale tile the names are dark, so the film strip they run into is pale too
     val paper = LocalHomeLook.current.text.luminance() < 0.4f
@@ -1852,13 +1906,16 @@ private fun BoxScope.TileScene(app: KnownApp, color: Color, focused: Boolean, sh
                     Scene.Record -> recordScene(color, time, light)
                     Scene.Equalizer -> equalizerScene(color, time, light)
                     Scene.Film -> filmScene(color, time, light, paper)
+                    Scene.Broadcast -> broadcastScene(color, time, light)
+                    Scene.Waves -> wavesScene(color, time, light)
+                    Scene.Orbit -> orbitScene(color, time, light)
+                    Scene.Spotlight -> spotlightScene(color, time, light)
+                    Scene.Ribbons -> ribbonsScene(color, time, light)
+                    Scene.Stardust -> stardustScene(color, time, light)
                 }
             }
     )
 }
-
-/** How strongly a scene shows: half lit while its tile rests, fully lit in focus. */
-private fun sceneStrength(lit: Float) = 0.55f + 0.45f * lit
 
 /** A screen's glow with scanlines drifting down it, and the progress bar of the video playing. */
 private fun CacheDrawScope.videoScene(color: Color, time: () -> Float, lit: () -> Float): DrawResult {

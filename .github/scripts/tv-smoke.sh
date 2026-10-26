@@ -18,6 +18,11 @@ step=0
 fail() { echo "FAIL: $*" | tee -a "$OUT/FAILURES.txt"; }
 
 alive() {
+  # The emulator itself gone: nothing after this can pass, so stop rather than wait out the job
+  if ! timeout 10 adb get-state >/dev/null 2>&1; then
+    fail "the emulator went away after step $1"
+    exit 1
+  fi
   if ! adb shell pidof "$PKG" >/dev/null 2>&1; then
     fail "app is not running after step $1"
   elif ! adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then
@@ -249,9 +254,32 @@ video_from_phone() {
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"error"' || fail "a file that is no video left the phone at $state instead of error"
   screen_has "play that video" || fail "the TV did not say it can't play a file that is no video"
-  # A phone's video with sound, which the TV makes lighter before it keeps it
-  code=$(curl -s -m 60 -H "Expect:" -H "Content-Type: application/octet-stream" -o "$OUT/video-post.txt" -w "%{http_code}" --data-binary "@.github/scripts/video-fixture-sound.mp4" "$base/video")
-  if [ "$code" != 200 ]; then fail "sending the video answered $code: $(cat "$OUT/video-post.txt")"; return 1; fi
+  # A phone's video with sound, which the TV makes lighter before it keeps it. The page sends it in
+  # pieces; one breaks off halfway, as when the phone's screen goes dark, and one goes to the wrong
+  # place, and the TV must carry on from where it really got to
+  local fixture=.github/scripts/video-fixture-sound.mp4 size half got
+  size=$(stat -c %s "$fixture")
+  half=$((size / 2))
+  piece() { # piece <offset> <length> [<claimed length>]
+    local claim=()
+    [ -n "${3:-}" ] && claim=(-H "Content-Length: $3")
+    tail -c +"$(($1 + 1))" "$fixture" | head -c "$2" > "$OUT/piece.bin"
+    curl -s -m "${4:-60}" -H "Expect:" -H "Content-Type: application/octet-stream" -H "X-Offset: $1" -H "X-Total: $size" \
+      "${claim[@]}" --data-binary "@$OUT/piece.bin" "$base/piece"
+  }
+  got=$(piece 0 "$half")
+  echo "first piece: $got"
+  echo "$got" | grep -q "\"received\":$half" || fail "the TV did not take the first piece of the video ($got)"
+  piece "$half" 1000 "$((size - half))" 3 >/dev/null 2>&1
+  sleep 1
+  got=$(curl -s -m 5 "$base/status")
+  echo "after a piece broke off: $got"
+  echo "$got" | grep -q "\"received\":$half" || fail "a piece that broke off counted towards the video ($got)"
+  got=$(piece 1234 100)
+  echo "$got" | grep -q "\"received\":$half" || fail "a piece sent to the wrong place moved the video on ($got)"
+  got=$(piece "$half" "$((size - half))")
+  echo "last piece: $got"
+  echo "$got" | grep -q "\"received\":$size" || fail "the TV did not take the rest of the video ($got)"
   if ! wait_for "Your video is on" 90; then fail "the TV never took the video"; return 1; fi
   # Its picture is light already, so what comes out without the sound must be smaller still
   shrunk=$(adb logcat -d -s DreamVideoShrink:I | grep -o "from [0-9]* kB to [0-9]* kB" | tail -n 1)
@@ -668,6 +696,9 @@ pinned=$(focused_label)
 adb shell input keyevent --longpress DPAD_CENTER
 sleep 2
 shot neon-home-pin
+# The same panel takes an app away: uninstall for one's own, hide for one that came with the TV
+screen_has "App info" || fail "the panel for $pinned has no App info"
+grep -q -e 'text="Uninstall"' -e 'text="Hide"' "$OUT"/*-neon-home-pin.xml 2>/dev/null || fail "the panel for $pinned offers neither Uninstall nor Hide"
 if screen_has "Put $pinned on Home"; then
   key DPAD_CENTER
   sleep 2
@@ -837,6 +868,41 @@ for style in "${styles[@]}"; do
   fi
   key BACK
   sleep 2
+done
+
+# The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
+# on the All apps tab. Apps the emulator lacks keep their neon face
+for pack in original banner glass; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons "$pack" >/dev/null 2>&1
+  sleep 6
+  shot "icons-$pack"
+  # A banner is all picture, the app's name only in its description
+  if [ "$pack" = banner ]; then
+    screen_has 'content-desc="YouTube"' || fail "Neon Home with the banner icons shows no YouTube banner"
+  else
+    label=$(focused_label)
+    [ "$label" = "YouTube" ] || fail "Neon Home with the $pack icons does not start on YouTube ($label has the focus)"
+  fi
+  key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 3
+  shot "icons-$pack-apps"
+  screen_has "Settings" || fail "the All apps tab with the $pack icons does not show Settings"
+  key BACK; sleep 1
+  key BACK; sleep 2
+done
+
+# The scenes the streaming apps play inside their tile in focus. The emulator has none of these
+# apps, so their tiles are dimmed, but the scene plays all the same
+n=0
+for tiles in "se.tv4.tv4play,se.svt.android.svtplay,allente.b2c.tvclient,com.viaplay.android" "com.netflix.ninja,com.disney.disneyplus,com.amazon.amazonvideo.livingroom,com.wbd.stream"; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tiles "$tiles" >/dev/null 2>&1
+  sleep 6
+  for i in 1 2 3 4; do
+    n=$((n + 1))
+    sleep 2
+    shot "scene-$n"
+    if [ "$i" -lt 4 ]; then key DPAD_RIGHT; fi
+  done
+  key BACK; sleep 2
 done
 
 # A console switched on while the home screen shows: its card slides in at the top, the console
