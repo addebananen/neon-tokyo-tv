@@ -707,6 +707,8 @@ class MainActivity : ComponentActivity() {
     private var splashOverlay: NeonIntroView? = null
     private val _splashFinished = mutableStateOf(false)
     private var poweringOff = false
+    // A title Neon Home asked to open, until the right profile is logged in and its page shows
+    private val pendingOpen = mutableStateOf<OpenRequest?>(null)
     // When the app last went out of sight, by the clock that keeps counting while the TV sleeps
     private var stoppedAt = 0L
 
@@ -817,6 +819,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         super.onCreate(safeState)
+        OpenRequest.from(intent)?.let { pendingOpen.value = it }
         window.setFormat(android.graphics.PixelFormat.RGBA_8888)
 
         // Fix sideload launch bug: pressing Home and returning re-creates the activity
@@ -872,6 +875,36 @@ class MainActivity : ComponentActivity() {
                     sessionProfileId = profileId
                     sessionRestoreAttemptedProfileId = null
                 }
+            }
+
+            // Continue watching on Neon Home: log in as the profile whose row it was, then open the title
+            val openRequest by pendingOpen
+            LaunchedEffect(openRequest, currentProfile?.id) {
+                val open = openRequest ?: return@LaunchedEffect
+                if (currentProfile?.id != open.profileId) {
+                    if (sessionProfileId != open.profileId || sessionRestoreAttemptedProfileId != open.profileId) {
+                        activeView = "menu"
+                        sessionProfileId = open.profileId
+                        sessionRestoreAttemptedProfileId = open.profileId
+                        mainViewModel.login(open.profileId)
+                    }
+                    return@LaunchedEffect
+                }
+                selectedMovieId = open.id
+                selectedMovieType = open.type
+                selectedMovieTitle = open.name
+                selectedMoviePoster = open.poster
+                selectedMovieBackground = open.background
+                selectedMovieLogo = open.logo
+                selectedAddonBaseUrl = null
+                detailsResumePlaybackHint = null
+                selectedPlaybackId = open.id
+                selectedPlaybackType = open.type
+                selectedPlaybackTitle = open.name
+                selectedPlaybackPoster = open.poster
+                previousView = "menu"
+                activeView = "details"
+                pendingOpen.value = null
             }
 
             LaunchedEffect(currentProfile, sessionProfileId, sessionRestoreAttemptedProfileId) {
@@ -2341,8 +2374,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        OpenRequest.from(intent)?.let { pendingOpen.value = it }
+    }
+
+    /** A title Neon Home asked to open: whose, and which, as its Continue watching row showed it. */
+    data class OpenRequest(
+        val profileId: Int,
+        val type: String,
+        val id: String,
+        val name: String,
+        val poster: String,
+        val background: String,
+        val logo: String
+    ) {
+        companion object {
+            fun from(intent: Intent?): OpenRequest? {
+                intent ?: return null
+                val profileId = intent.getIntExtra(EXTRA_OPEN_PROFILE, -1).takeIf { it >= 0 } ?: return null
+                val id = intent.getStringExtra(EXTRA_OPEN_ID)?.takeIf { it.isNotBlank() } ?: return null
+                // Taken once, so turning the TV or coming back later does not open it again
+                intent.removeExtra(EXTRA_OPEN_PROFILE)
+                return OpenRequest(
+                    profileId = profileId,
+                    type = intent.getStringExtra(EXTRA_OPEN_TYPE) ?: "movie",
+                    id = id,
+                    name = intent.getStringExtra(EXTRA_OPEN_NAME) ?: "",
+                    poster = intent.getStringExtra(EXTRA_OPEN_POSTER) ?: "",
+                    background = intent.getStringExtra(EXTRA_OPEN_BACKGROUND) ?: "",
+                    logo = intent.getStringExtra(EXTRA_OPEN_LOGO) ?: ""
+                )
+            }
+        }
+    }
+
     companion object {
         private const val KEY_SPLASH_SHOWN = "splash_shown"
         private const val KEY_SPLASH_SHOWN_AT = "splash_shown_at"
+
+        /** Neon Home's Continue watching: the profile to log in as and the title to open. */
+        const val EXTRA_OPEN_PROFILE = "nt_open_profile"
+        const val EXTRA_OPEN_TYPE = "nt_open_type"
+        const val EXTRA_OPEN_ID = "nt_open_id"
+        const val EXTRA_OPEN_NAME = "nt_open_name"
+        const val EXTRA_OPEN_POSTER = "nt_open_poster"
+        const val EXTRA_OPEN_BACKGROUND = "nt_open_background"
+        const val EXTRA_OPEN_LOGO = "nt_open_logo"
     }
 }
