@@ -135,7 +135,7 @@ private class DreamOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelSto
 }
 
 /**
- * A style at rest: its picture or film, drifting as on Home, a touch dimmer for the night, and
+ * A style at rest: its picture or film as on Home, a touch dimmer for the night, and
  * the time where the clock sits on Home, breathing slowly. It rises out of black.
  */
 @Composable
@@ -146,21 +146,14 @@ internal fun StyleDream(profile: HomeProfile) {
     LaunchedEffect(Unit) { curtain.animateTo(0f, tween(1600, easing = FastOutSlowInEasing)) }
     CompositionLocalProvider(LocalHomeLook provides look) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
+            val context = LocalContext.current
             val picture = profile.background
-            val backdrop = style.backdrop
-            when {
-                picture != null && isVideo(picture) -> VideoBackdrop(android.net.Uri.fromFile(File(picture)), poster = null)
-                picture != null -> PictureBackdrop(picture)
-                style.video != null -> VideoBackdrop(style.video, poster = backdrop)
-                backdrop != null && style.drift -> DriftingBox(style.driftX, style.driftY) {
-                    PaintingBackdrop(backdrop)
-                    StyleAmbience(style.ambience, light = style.light)
-                }
-                backdrop != null -> {
-                    PaintingBackdrop(backdrop)
-                    StyleAmbience(style.ambience, light = style.light)
-                }
-            }
+            val plane = remember { Plane() }
+            LaunchedEffect(picture) { if (picture != null && !isVideo(picture)) PictureStill.make(context, picture) }
+            val made = PictureStill.made
+            val media = remember(style, picture, made) { planeMedia(context, style, picture) }
+            PlaneSurface(plane, media)
+            StyleCover(plane, media, style, picture, wallpaper = null)
             // A little darker overall, and a soft shadow pooled under the clock so it reads on busy art
             Spacer(Modifier.fillMaxSize().drawBehind {
                 drawRect(Color.Black.copy(alpha = 0.12f))

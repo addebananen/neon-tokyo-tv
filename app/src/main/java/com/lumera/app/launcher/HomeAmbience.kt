@@ -52,25 +52,19 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
  * The small things that move in a style's picture: rain running down the window, petals on the
  * wind, the lights of a city. They are drawn on one layer of their own, from the time alone, so
- * nothing is laid out or recomposed while they play; they run at a few frames a second, as
+ * nothing is laid out or recomposed while they play; they keep the slow beat of [awaitBeat], as
  * slow things need no more, and stop whenever the home screen is not in front.
  * Places are fractions of the screen and match the pictures in res/drawable-nodpi.
  */
 @Composable
 fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int? = null) {
-    val fps = when (ambience) {
-        Ambience.NeonSky -> return
-        Ambience.GoogleGlow, Ambience.CityLights, Ambience.Calm -> 20
-        Ambience.Lake, Ambience.Glory, Ambience.LoFi, Ambience.Meadow, Ambience.Forest, Ambience.Bubbles, Ambience.Library, Ambience.Teahouse, Ambience.Atomic -> 24
-        Ambience.Petals, Ambience.Speed, Ambience.NightRain, Ambience.Cosmos, Ambience.Vapor, Ambience.Glitch, Ambience.Canopy, Ambience.Dusk -> 30
-    }
-    val time = rememberAmbientTime(fps)
+    if (ambience == Ambience.NeonSky) return
+    val time = rememberAmbientTime()
     val context = LocalContext.current
     val lightImage by produceState<ImageBitmap?>(null, light) {
         value = light?.let { id ->
@@ -110,26 +104,40 @@ fun StyleAmbience(ambience: Ambience, modifier: Modifier = Modifier, light: Int?
     )
 }
 
-/** Seconds the home screen has been in front, ticking [fps] times a second. */
+/** Seconds the home screen has been in front, ticking on the [awaitBeat]. */
 @Composable
-private fun rememberAmbientTime(fps: Int): State<Float> {
+private fun rememberAmbientTime(): State<Float> {
     val seconds = remember { mutableFloatStateOf(0f) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(lifecycle, fps) {
+    LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            val step = 1000L / fps
             var last = withFrameNanos { it }
             while (true) {
-                delay(step)
-                withFrameNanos { now ->
-                    // A long gap, as after the screen was away, is not a jump forward
-                    seconds.floatValue += ((now - last) / 1_000_000_000f).coerceAtMost(0.25f)
-                    last = now
-                }
+                val now = awaitBeat()
+                // A long gap, as after the screen was away, is not a jump forward
+                seconds.floatValue += ((now - last) / 1_000_000_000f).coerceAtMost(0.25f)
+                last = now
             }
         }
     }
     return seconds
+}
+
+// The beat the slow animations keep: 30 frames a second, which they need no more than
+private const val BEAT_NANOS = 1_000_000_000L / 30
+
+/**
+ * Waits for the next frame on the beat the slow animations of the home screen keep, and returns
+ * its time. All of them change on the same frames, so together they redraw the screen at most 30
+ * times a second, which a TV's graphics chip can keep up with, where each on its own beat would
+ * add up to every frame.
+ */
+internal suspend fun awaitBeat(): Long {
+    val beat = withFrameNanos { it } / BEAT_NANOS
+    while (true) {
+        val now = withFrameNanos { it }
+        if (now / BEAT_NANOS != beat) return now
+    }
 }
 
 /** A steady random number from 0 to 1 for particle [i] and property [k]. */

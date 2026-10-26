@@ -38,7 +38,8 @@ class HomeProfiles private constructor(private val context: Context) {
     init {
         // A video that stopped arriving halfway, or a file a removed profile left: nothing points at
         // it, and a phone video can be large on a TV's small storage
-        val kept = _profiles.value.flatMap { listOf(it.photo, it.background, it.dreamVideo) }.filterNotNull().toSet()
+        val kept = _profiles.value.flatMap { listOf(it.photo, it.background, it.background?.let { b -> PictureStill.still(b).absolutePath }, it.dreamVideo) }
+            .filterNotNull().toSet()
         File(context.filesDir, DIR).listFiles()?.filter { it.absolutePath !in kept }?.forEach { it.delete() }
     }
 
@@ -96,8 +97,11 @@ class HomeProfiles private constructor(private val context: Context) {
     private fun deleteFile(path: String?) {
         path ?: return
         val file = File(path)
-        // Only ever files this class made
-        if (file.parentFile?.name == DIR) file.delete()
+        // Only ever files this class made, and the still made from a picture
+        if (file.parentFile?.name == DIR) {
+            file.delete()
+            PictureStill.delete(path)
+        }
     }
 
     private fun store(list: List<HomeProfile>) {

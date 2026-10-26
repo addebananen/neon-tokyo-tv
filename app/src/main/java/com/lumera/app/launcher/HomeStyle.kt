@@ -430,3 +430,33 @@ enum class HomeStyle(
 
 /** The look of the profile whose home screen shows. */
 val LocalHomeLook = staticCompositionLocalOf { HomeStyle.Neon.look }
+
+/**
+ * The style's painting as a one frame film, so the TV's video chip shows it at the panel's own
+ * resolution (see [PlaneSurface]); the painting itself stands in until then. Neon draws its skyline
+ * and Deep Blue has its film.
+ */
+val HomeStyle.still: Int?
+    get() = when (this) {
+        HomeStyle.GoogleTv -> R.raw.home_still_googletv
+        HomeStyle.Nature -> R.raw.home_still_nature
+        HomeStyle.Anime -> R.raw.home_still_anime
+        HomeStyle.Clean -> R.raw.home_still_clean
+        HomeStyle.City -> R.raw.home_still_city
+        HomeStyle.Faith -> R.raw.home_still_faith
+        HomeStyle.Car -> R.raw.home_still_car_track
+        HomeStyle.CarNight -> R.raw.home_still_car_night
+        HomeStyle.LoFi -> R.raw.home_still_lofi
+        HomeStyle.Cottage -> R.raw.home_still_cottage
+        HomeStyle.Naturecore -> R.raw.home_still_naturecore
+        HomeStyle.Space -> R.raw.home_still_space
+        HomeStyle.Aero -> R.raw.home_still_aero
+        HomeStyle.Academia -> R.raw.home_still_academia
+        HomeStyle.Japandi -> R.raw.home_still_japandi
+        HomeStyle.Vaporwave -> R.raw.home_still_vaporwave
+        HomeStyle.Retro -> R.raw.home_still_retro
+        HomeStyle.Cyber -> R.raw.home_still_cyber
+        HomeStyle.Solarpunk -> R.raw.home_still_solarpunk
+        HomeStyle.Dusk -> R.raw.home_still_dusk
+        else -> null
+    }
