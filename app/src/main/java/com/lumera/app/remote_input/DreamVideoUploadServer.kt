@@ -114,7 +114,7 @@ class DreamVideoUploadServer(
             }
             if (received < total) throw IOException("stopped at $received of $total")
         } catch (e: Exception) {
-            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("DreamVideoUpload", "upload broke off", e)
+            android.util.Log.w("DreamVideoUpload", "upload broke off at $received of $total bytes", e)
             upload.delete()
             state = STATE_WAITING
             mainHandler.post { listener.onUploadFailed() }

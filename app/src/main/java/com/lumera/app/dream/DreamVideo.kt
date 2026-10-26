@@ -2,6 +2,13 @@ package com.lumera.app.dream
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.media.MediaCodecList
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import java.io.File
 
@@ -28,12 +35,42 @@ object DreamVideo {
      * frame of it to show; otherwise deletes it, keeps the video there was, and returns null.
      */
     fun install(context: Context, upload: File, target: File = file(context)): Bitmap? {
-        val frame = frameOf(upload)
+        // A TV can play an HDR or Dolby Vision film it can't take a still from: the card then
+        // shows a plain night sky instead of a frame
+        val frame = frameOf(upload) ?: if (decodable(upload)) nightSky() else null
         if (frame == null || !upload.renameTo(target)) {
             upload.delete()
             return null
         }
         return frame
+    }
+
+    /** Whether the TV has a decoder for the video track of [video], at its size and pace. */
+    fun decodable(video: File): Boolean {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(video.path)
+            val format = (0 until extractor.trackCount).map { extractor.getTrackFormat(it) }
+                .firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true } ?: return false
+            // The frame rate key can trip findDecoderForFormat on older TVs, so it is left out
+            format.setString(MediaFormat.KEY_FRAME_RATE, null)
+            val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+            list.findDecoderForFormat(format) != null ||
+                // Dolby Vision on a TV without its decoder still plays as the HEVC inside it
+                (format.getString(MediaFormat.KEY_MIME) == MediaFormat.MIMETYPE_VIDEO_DOLBY_VISION &&
+                    list.findDecoderForFormat(MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, format.getInteger(MediaFormat.KEY_WIDTH), format.getInteger(MediaFormat.KEY_HEIGHT))) != null)
+        } catch (e: Exception) {
+            false
+        } finally {
+            runCatching { extractor.release() }
+        }
+    }
+
+    private fun nightSky(): Bitmap {
+        val bitmap = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val paint = Paint().apply { shader = LinearGradient(0f, 0f, 0f, 360f, 0xFF2A0F4F.toInt(), 0xFF0D0721.toInt(), Shader.TileMode.CLAMP) }
+        Canvas(bitmap).drawRect(0f, 0f, 640f, 360f, paint)
+        return bitmap
     }
 
     /** A frame from a second in, scaled for a card, or null when it isn't a video at all. */

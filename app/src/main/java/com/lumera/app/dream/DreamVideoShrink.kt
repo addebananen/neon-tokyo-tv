@@ -39,6 +39,10 @@ import kotlin.math.roundToInt
  * goes. A video that needs nothing but that is only copied without its sound, untouched; one
  * that must be made again gets a bit rate to suit its size and pace, never more than it had.
  * The TV's own video chip does the work, so it takes about as long as the video plays, or less.
+ *
+ * Not every TV can do every part of that: some have no HEVC encoder, some can't turn HDR into
+ * ordinary colour on their graphics chip. So it tries the best way first and then plainer ones,
+ * and says what went wrong when none of them works.
  */
 @OptIn(UnstableApi::class)
 object DreamVideoShrink {
@@ -52,16 +56,56 @@ object DreamVideoShrink {
     /** Whether [video] needs anything done: too large, too fast, too dense, in HDR, or with sound. */
     fun needed(video: File): Boolean = probe(video)?.let { it.sound || it.reencode } ?: false
 
+    /** How it went: [ok] when [output] holds the video made right, else why not, for the log and the phone. */
+    class Outcome(val ok: Boolean, val reason: String?)
+
+    /** One way of making the video again: the codec to write and how to bring HDR down. */
+    private class Way(val mime: String, val hdrMode: Int, val name: String)
+
     /**
-     * Writes [input] made right to [output], telling [onProgress] how far it is from 0 to 1, and
-     * returns whether it worked; on a failure [output] is gone and [input] untouched.
+     * Writes [input] made right to [output], telling [onProgress] how far it is from 0 to 1, trying
+     * plainer ways when the TV can't do the best one; on a failure [output] is gone and [input]
+     * untouched.
      */
-    suspend fun shrink(context: Context, input: File, output: File, onProgress: (Float) -> Unit): Boolean {
-        val shape = probe(input) ?: return false
+    suspend fun shrink(context: Context, input: File, output: File, onProgress: (Float) -> Unit): Outcome {
+        val shape = probe(input) ?: return Outcome(false, "the TV couldn't read the video")
+        val ways = if (!shape.reencode) {
+            listOf(Way(MimeTypes.VIDEO_H265, Composition.HDR_MODE_KEEP_HDR, "copy"))
+        } else {
+            val gl = Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL
+            val codec = Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_MEDIACODEC
+            buildList {
+                add(Way(MimeTypes.VIDEO_H265, gl, "HEVC"))
+                add(Way(MimeTypes.VIDEO_H264, gl, "H.264"))
+                // Some TVs' decoders turn HDR into ordinary colour themselves, where the graphics chip can't
+                if (shape.hdr) {
+                    add(Way(MimeTypes.VIDEO_H265, codec, "HEVC, decoder tone map"))
+                    add(Way(MimeTypes.VIDEO_H264, codec, "H.264, decoder tone map"))
+                }
+            }
+        }
+        val failures = mutableListOf<String>()
+        for (way in ways) {
+            val failure = attempt(context, input, output, shape, way, onProgress) ?: break
+            failures += "${way.name}: $failure"
+        }
+        // A light video made again may come out bigger, and is then kept as it was; one in HDR is
+        // kept made again whatever its size, for its colours
+        val made = failures.size < ways.size && output.length() > 0L
+        if (!made || (output.length() >= input.length() && !shape.hdr)) output.delete()
+        val ok = output.exists()
+        val about = "${shape.width}x${shape.height} at ${shape.fps.roundToInt()} fps${if (shape.hdr) " HDR" else ""}${shape.mime?.let { " $it" } ?: ""}"
+        if (ok) android.util.Log.i("DreamVideoShrink", "shrunk $about from ${input.length() / 1024} kB to ${output.length() / 1024} kB")
+        else android.util.Log.w("DreamVideoShrink", "kept as it was: $about; ${failures.joinToString("; ").ifEmpty { "no lighter" }}")
+        return Outcome(ok, failures.lastOrNull())
+    }
+
+    /** Makes [output] from [input] one [way]; null when it worked, otherwise what went wrong. */
+    private suspend fun attempt(context: Context, input: File, output: File, shape: Shape, way: Way, onProgress: (Float) -> Unit): String? {
         output.delete()
         // Transformer wants a thread with a looper, and reports on it
-        val done = withContext(Dispatchers.Main) {
-            suspendCancellableCoroutine { cont ->
+        val failure = withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine<String?> { cont ->
                 val handler = Handler(Looper.getMainLooper())
                 val holder = ProgressHolder()
                 lateinit var transformer: Transformer
@@ -75,8 +119,8 @@ object DreamVideoShrink {
                     .apply {
                         // Without these the picture is only copied, as it was
                         if (shape.reencode) {
-                            // HEVC keeps more of the picture for the same size; a TV that can't make it falls back to H.264
-                            setVideoMimeType(MimeTypes.VIDEO_H265)
+                            // HEVC keeps more of the picture for the same size; H.264 is the next way
+                            setVideoMimeType(way.mime)
                             setEncoderFactory(
                                 DefaultEncoderFactory.Builder(context)
                                     .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(shape.rate.toInt()).build())
@@ -87,13 +131,13 @@ object DreamVideoShrink {
                     .addListener(object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                             handler.removeCallbacks(tick)
-                            if (cont.isActive) cont.resume(true)
+                            if (cont.isActive) cont.resume(null)
                         }
 
                         override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
-                            android.util.Log.w("DreamVideoShrink", "couldn't make the video right for the TV", exportException)
+                            android.util.Log.w("DreamVideoShrink", "couldn't make the video right for the TV (${way.name})", exportException)
                             handler.removeCallbacks(tick)
-                            if (cont.isActive) cont.resume(false)
+                            if (cont.isActive) cont.resume(exportException.errorCodeName)
                         }
                     })
                     .build()
@@ -110,9 +154,15 @@ object DreamVideoShrink {
                     .setEffects(Effects(emptyList(), effects))
                     .build()
                 val composition = Composition.Builder(EditedMediaItemSequence.withVideoFrom(listOf(item)))
-                    .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
+                    .setHdrMode(if (shape.hdr && shape.reencode) way.hdrMode else Composition.HDR_MODE_KEEP_HDR)
                     .build()
-                transformer.start(composition, output.path)
+                try {
+                    transformer.start(composition, output.path)
+                } catch (e: Exception) {
+                    android.util.Log.w("DreamVideoShrink", "couldn't start (${way.name})", e)
+                    if (cont.isActive) cont.resume(e.javaClass.simpleName)
+                    return@suspendCancellableCoroutine
+                }
                 handler.post(tick)
                 cont.invokeOnCancellation {
                     handler.post {
@@ -122,15 +172,11 @@ object DreamVideoShrink {
                 }
             }
         }
-        // A light video made again may come out bigger, and is then kept as it was; one in HDR is
-        // kept made again whatever its size, for its colours
-        if (!done || output.length() == 0L || (output.length() >= input.length() && !shape.hdr)) output.delete()
-        val ok = done && output.exists()
-        if (ok) android.util.Log.i("DreamVideoShrink", "shrunk ${shape.width}x${shape.height} at ${shape.fps.roundToInt()} fps${if (shape.hdr) " HDR" else ""} from ${input.length() / 1024} kB to ${output.length() / 1024} kB")
-        return ok
+        if (failure != null) output.delete()
+        return failure
     }
 
-    private class Shape(val width: Int, val height: Int, val fps: Float, val bitrate: Long, val sound: Boolean, val hdr: Boolean) {
+    private class Shape(val width: Int, val height: Int, val fps: Float, val bitrate: Long, val sound: Boolean, val hdr: Boolean, val mime: String?) {
         val shortSide get() = minOf(width, height)
         val upright get() = height > width
 
@@ -166,7 +212,8 @@ object DreamVideoShrink {
                 fps = fps,
                 bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() ?: 0L,
                 sound = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes",
-                hdr = track?.hdr ?: false
+                hdr = track?.hdr ?: false,
+                mime = track?.mime
             )
         } catch (e: Exception) {
             null
@@ -175,7 +222,7 @@ object DreamVideoShrink {
         }
     }
 
-    private class Track(val fps: Float, val hdr: Boolean)
+    private class Track(val fps: Float, val hdr: Boolean, val mime: String?)
 
     /** The frame rate and whether it is HDR (PQ or HLG), as the video's own track says. */
     private fun videoTrack(video: File): Track? {
@@ -189,7 +236,10 @@ object DreamVideoShrink {
                         runCatching { format.getInteger(MediaFormat.KEY_FRAME_RATE).toFloat() }.getOrElse { format.getFloat(MediaFormat.KEY_FRAME_RATE) }
                     } else 0f
                     val transfer = if (format.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) format.getInteger(MediaFormat.KEY_COLOR_TRANSFER) else 0
-                    Track(fps, transfer == MediaFormat.COLOR_TRANSFER_ST2084 || transfer == MediaFormat.COLOR_TRANSFER_HLG)
+                    // An iPhone's Dolby Vision is HDR whatever its track says about its colour
+                    val mime = format.getString(MediaFormat.KEY_MIME)
+                    val hdr = transfer == MediaFormat.COLOR_TRANSFER_ST2084 || transfer == MediaFormat.COLOR_TRANSFER_HLG || mime == MimeTypes.VIDEO_DOLBY_VISION
+                    Track(fps, hdr, mime)
                 }
         } catch (e: Exception) {
             null
