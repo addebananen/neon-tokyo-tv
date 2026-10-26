@@ -131,11 +131,19 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             VoidSegmentedControl(
-                options = if (dreamStyle == NeonDreamStyle.VIDEO) listOf("Preview" to 0, "Change video" to 1) else listOf("Preview" to 0),
+                options = if (dreamStyle == NeonDreamStyle.VIDEO) listOf("Preview" to 0, "Change video" to 1, "Remove video" to 2) else listOf("Preview" to 0),
                 selectedOption = -1,
                 onOptionSelected = {
-                    if (it == 1) choosingVideo = true
-                    else context.startActivity(Intent(context, NeonDreamPreviewActivity::class.java))
+                    when (it) {
+                        1 -> choosingVideo = true
+                        // Gone from the TV's storage too, and the city drive takes its place
+                        2 -> {
+                            DreamVideo.remove(context)
+                            dreamStyle = NeonDreamStyle.DRIVE
+                            NeonDreamStyle.set(context, NeonDreamStyle.DRIVE)
+                        }
+                        else -> context.startActivity(Intent(context, NeonDreamPreviewActivity::class.java))
+                    }
                 },
                 onBack = onGoBack
             )

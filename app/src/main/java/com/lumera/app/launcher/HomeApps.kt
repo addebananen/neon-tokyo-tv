@@ -38,6 +38,34 @@ object HomeApps {
         return HomeCatalog.sortForAllApps(apps.values)
     }
 
+    /** Whose an app is: one's own, or one that came with the TV, as it came or updated since. */
+    enum class Kind { Own, System, UpdatedSystem }
+
+    fun kind(context: Context, packageName: String): Kind {
+        val flags = runCatching { context.packageManager.getApplicationInfo(packageName, 0).flags }.getOrDefault(0)
+        return when {
+            flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP != 0 -> Kind.UpdatedSystem
+            flags and ApplicationInfo.FLAG_SYSTEM != 0 -> Kind.System
+            else -> Kind.Own
+        }
+    }
+
+    /**
+     * Asks the TV to uninstall [packageName], or for an app that came with the TV to take it back
+     * to how it came; the TV asks to be sure itself.
+     */
+    fun uninstall(context: Context, packageName: String) {
+        start(context, Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** The TV's own page for [packageName]: its storage, clearing its data, switching it off. */
+    fun appInfo(context: Context, packageName: String) {
+        start(
+            context,
+            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+
     fun isInstalled(context: Context, app: KnownApp): Boolean = app.packages.any { launchIntent(context, it) != null }
 
     /** Opens [app], or its Play Store page when it is not installed. */

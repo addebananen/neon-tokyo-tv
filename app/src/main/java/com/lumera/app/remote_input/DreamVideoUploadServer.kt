@@ -12,7 +12,9 @@ import java.io.IOException
 
 /**
  * Serves the page a phone opens from the QR code in Settings › Personalization › Screensaver:
- * it picks a video and sends the file here as it is, straight into the TV's storage. Every
+ * it picks a video and sends the file here as it is, straight into the TV's storage. The page
+ * sends it in pieces, each to its place in the file, so a phone whose screen goes dark or whose
+ * Wi-Fi drops halfway carries on where it was instead of starting again. Every
  * address starts with a random [token] that only the QR code carries. The page follows [state].
  */
 class DreamVideoUploadServer(
@@ -42,6 +44,13 @@ class DreamVideoUploadServer(
     @Volatile
     var state: String = STATE_WAITING
 
+    // The video arriving in pieces: how big it is and how much of it is here
+    @Volatile
+    private var expected = 0L
+
+    @Volatile
+    private var arrived = 0L
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val base = "/$token"
     private val page: String by lazy {
@@ -65,8 +74,9 @@ class DreamVideoUploadServer(
         if (uri != base && !uri.startsWith("$base/")) return notFound()
         return when (uri.removePrefix(base)) {
             "", "/" -> if (session.method == Method.GET) servePage() else notFound()
-            "/status" -> json("{\"state\":\"$state\"}")
+            "/status" -> json("{\"state\":\"$state\",\"received\":$arrived,\"room\":${DreamVideo.roomFor(context)}}")
             "/video" -> if (session.method == Method.POST) receiveVideo(session) else notFound()
+            "/piece" -> if (session.method == Method.POST) receivePiece(session) else notFound()
             "/skyline.webp" -> resource(R.drawable.nt_skyline, "image/webp")
             "/kanit-medium.ttf" -> resource(R.font.kanit_medium, "font/ttf")
             "/kanit-semibold-italic.ttf" -> resource(R.font.kanit_semibold_italic, "font/ttf")
@@ -89,7 +99,8 @@ class DreamVideoUploadServer(
             ?: return badRequest("Your phone didn't say how big the video is. Try again.")
         if (total <= 0L) return badRequest("No video arrived. Try again.")
         if (total > MAX_VIDEO_SIZE) return badRequest("That video is over 2 GB. Pick a shorter one.")
-        if (total > DreamVideo.roomFor(context)) return badRequest("The TV doesn't have room for that video. Pick a shorter one.")
+        DreamVideo.uploadFile(context).delete()
+        if (!DreamVideo.makeRoom(context, total)) return badRequest(noRoom(total))
 
         state = STATE_RECEIVING
         val upload = DreamVideo.uploadFile(context)
@@ -114,7 +125,7 @@ class DreamVideoUploadServer(
             }
             if (received < total) throw IOException("stopped at $received of $total")
         } catch (e: Exception) {
-            if (com.lumera.app.BuildConfig.DEBUG) android.util.Log.w("DreamVideoUpload", "upload broke off", e)
+            android.util.Log.w("DreamVideoUpload", "upload broke off at $received of $total bytes", e)
             upload.delete()
             state = STATE_WAITING
             mainHandler.post { listener.onUploadFailed() }
@@ -127,6 +138,75 @@ class DreamVideoUploadServer(
         }
         return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "OK")
     }
+
+    /**
+     * One piece of the video, to go at the place its "x-offset" says in a video of "x-total"
+     * bytes. A piece at 0 starts the video afresh. Answers how much of it is here, which is
+     * where the next piece goes: after a piece that broke off, the phone asks and carries on.
+     */
+    @Synchronized
+    private fun receivePiece(session: IHTTPSession): Response {
+        if (state == STATE_CHECKING) return early(conflict("The TV is still busy with the last video."))
+        val offset = session.headers["x-offset"]?.toLongOrNull() ?: return early(badRequest("Your phone didn't say where this piece goes. Try again."))
+        val total = session.headers["x-total"]?.toLongOrNull() ?: return early(badRequest("Your phone didn't say how big the video is. Try again."))
+        val length = session.headers["content-length"]?.toLongOrNull() ?: return early(badRequest("Your phone didn't say how big the piece is. Try again."))
+        val upload = DreamVideo.uploadFile(context)
+        if (offset == 0L) {
+            if (total <= 0L) return early(badRequest("No video arrived. Try again."))
+            if (total > MAX_VIDEO_SIZE) return early(badRequest("That video is over 2 GB. Pick a shorter one."))
+            upload.delete()
+            if (!DreamVideo.makeRoom(context, total)) return early(badRequest(noRoom(total)))
+            expected = total
+            arrived = 0L
+            state = STATE_RECEIVING
+        } else if (state != STATE_RECEIVING || total != expected) {
+            return early(conflict("The TV lost the start of the video. Send it again."))
+        }
+        // Not where the video has got to: say where that is, and the phone sends from there
+        if (offset != arrived || offset + length > total) return early(placed())
+        try {
+            val input = session.inputStream
+            val buffer = ByteArray(256 * 1024)
+            var lastReport = 0L
+            java.io.RandomAccessFile(upload, "rw").use { out ->
+                out.seek(offset)
+                var left = length
+                while (left > 0) {
+                    val n = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                    if (n < 0) throw IOException("stopped at ${length - left} of a $length byte piece")
+                    out.write(buffer, 0, n)
+                    left -= n
+                    // Only whole pieces count, so a piece that breaks off is sent again whole
+                    val soFar = offset + length - left
+                    val now = SystemClock.uptimeMillis()
+                    if (now - lastReport >= 250L) {
+                        lastReport = now
+                        mainHandler.post { listener.onProgress(soFar, total) }
+                    }
+                }
+            }
+            arrived = offset + length
+        } catch (e: Exception) {
+            android.util.Log.w("DreamVideoUpload", "a piece at $offset of $total broke off; the phone carries on from $arrived", e)
+            return early(placed())
+        }
+        if (arrived == total) {
+            state = STATE_CHECKING
+            mainHandler.post {
+                listener.onProgress(total, total)
+                listener.onVideoReceived(upload)
+            }
+        }
+        return placed()
+    }
+
+    // A piece whose bytes weren't all read leaves the rest on the connection, so it is closed
+    private fun early(response: Response): Response = response.apply { addHeader("Connection", "close") }
+
+    private fun noRoom(total: Long): String =
+        "The TV has ${DreamVideo.roomFor(context) / (1024 * 1024)} MB free and the video is ${total / (1024 * 1024)} MB. Trim it on your phone, or free up space on the TV."
+
+    private fun placed(): Response = json("{\"state\":\"$state\",\"received\":$arrived}")
 
     private fun resource(id: Int, mime: String): Response {
         val bytes = context.resources.openRawResource(id).use { it.readBytes() }
