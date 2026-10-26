@@ -23,15 +23,20 @@ class NeonHomeActivity : ComponentActivity() {
     // A preview can be opened in a given style to see it, without changing the profile's own
     private var previewStyle by mutableStateOf<HomeStyle?>(null)
 
+    // A console's card shown as if it had just been switched on, to see how it looks
+    private var previewWake by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
         if (preview) previewStyle = intent.getStringExtra(EXTRA_STYLE)?.let(HomeStyle::of)
+        if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         setContent {
             NeonHome(
                 homePresses = homePresses.intValue,
                 onLeave = if (preview) ({ finish() }) else null,
-                previewStyle = previewStyle
+                previewStyle = previewStyle,
+                previewWake = previewWake
             )
         }
     }
@@ -46,11 +51,15 @@ class NeonHomeActivity : ComponentActivity() {
         } else {
             // Asked to show a style while already open, as from Settings again: show it
             intent.getStringExtra(EXTRA_STYLE)?.let { previewStyle = HomeStyle.of(it) }
+            previewWake = intent.getStringExtra(EXTRA_WAKE)
         }
     }
 
     companion object {
         /** The key of a [HomeStyle] to show a preview in. */
         const val EXTRA_STYLE = "style"
+
+        /** The id of a console whose card to show, as if it had just been switched on. */
+        const val EXTRA_WAKE = "wake"
     }
 }
