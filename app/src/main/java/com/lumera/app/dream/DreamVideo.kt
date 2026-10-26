@@ -28,7 +28,27 @@ object DreamVideo {
     fun exists(context: Context): Boolean = file(context).length() > 0
 
     /** Bytes free for an upload, keeping some room for the TV itself. */
-    fun roomFor(context: Context): Long = (folder(context).usableSpace - 512L * 1024 * 1024).coerceAtLeast(0)
+    fun roomFor(context: Context): Long = (folder(context).usableSpace - RESERVE).coerceAtLeast(0)
+
+    /**
+     * Makes room for a video of [bytes] if the TV is short of it, by emptying the app's caches
+     * (posters and pictures it can fetch again), and says whether there is room now.
+     */
+    fun makeRoom(context: Context, bytes: Long): Boolean {
+        if (roomFor(context) >= bytes) return true
+        runCatching { context.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
+        runCatching { context.externalCacheDir?.listFiles()?.forEach { it.deleteRecursively() } }
+        return roomFor(context) >= bytes
+    }
+
+    /** Space left for the TV itself, so a video never fills it to the last byte. */
+    private const val RESERVE = 256L * 1024 * 1024
+
+    /** Removes the screensaver video, freeing its space. */
+    fun remove(context: Context) {
+        file(context).delete()
+        uploadFile(context).delete()
+    }
 
     /**
      * Makes [upload] the screensaver video, at [target], if it has a picture the TV can open, and returns a
