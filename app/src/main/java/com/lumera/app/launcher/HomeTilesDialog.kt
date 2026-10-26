@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,8 +64,10 @@ internal fun homeSlots(keys: List<String>, apps: List<InstalledApp>): List<HomeS
  * already on Home trades places with the one picked instead.
  */
 @Composable
-internal fun PinToHomeDialog(app: InstalledApp, slots: List<HomeSlot>, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+internal fun PinToHomeDialog(app: InstalledApp, slots: List<HomeSlot>, onPick: (Int) -> Unit, onHide: () -> Unit, onDismiss: () -> Unit) {
     val look = LocalHomeLook.current
+    val context = LocalContext.current
+    val kind = remember(app) { HomeApps.kind(context, app.packageName) }
     val first = remember { FocusRequester() }
     val already = slots.indexOfFirst { it.key == app.packageName }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -95,7 +98,31 @@ internal fun PinToHomeDialog(app: InstalledApp, slots: List<HomeSlot>, onPick: (
                 }
             }
             Spacer(Modifier.height(4.dp))
-            Row { PanelButton("Cancel", look, onClick = onDismiss) }
+            // Or away with it: an app of one's own comes off the TV; one that came with the TV can't,
+            // but can lose its updates and data, or be switched off, in its app info, or be hidden
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                when (kind) {
+                    HomeApps.Kind.Own -> PanelButton("Uninstall", look) {
+                        HomeApps.uninstall(context, app.packageName)
+                        onDismiss()
+                    }
+                    HomeApps.Kind.UpdatedSystem -> PanelButton("Remove updates", look) {
+                        HomeApps.uninstall(context, app.packageName)
+                        onDismiss()
+                    }
+                    HomeApps.Kind.System -> Unit
+                }
+                if (kind != HomeApps.Kind.Own) PanelButton("Hide", look, onClick = onHide)
+                PanelButton("App info", look) {
+                    HomeApps.appInfo(context, app.packageName)
+                    onDismiss()
+                }
+                PanelButton("Cancel", look, onClick = onDismiss)
+            }
+            if (kind != HomeApps.Kind.Own) BasicText(
+                "It came with the TV, so it can't be uninstalled. App info can clear its data or switch it off.",
+                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 12.sp, color = look.dim)
+            )
         }
     }
 }
@@ -193,6 +220,51 @@ private fun SlotChoice(slot: HomeSlot, caption: String?, modifier: Modifier = Mo
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+/** The apps hidden from All apps; picking one shows it there again. */
+@Composable
+internal fun HiddenAppsDialog(apps: List<InstalledApp>, onShow: (InstalledApp) -> Unit, onDismiss: () -> Unit) {
+    val look = LocalHomeLook.current
+    val first = remember { FocusRequester() }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        LaunchedEffect(apps.isEmpty()) {
+            if (apps.isEmpty()) {
+                onDismiss()
+                return@LaunchedEffect
+            }
+            withFrameNanos { }
+            runCatching { first.requestFocus() }
+        }
+        Column(
+            modifier = Modifier.width(760.dp).homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            PanelNote("ALL APPS", look)
+            PanelTitle("Hidden apps", look)
+            BasicText(
+                "They are still on the TV, only not in the list. Pick one to show it again.",
+                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 13.sp, color = look.dim)
+            )
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
+            ) {
+                itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
+                    SlotChoice(
+                        HomeSlot(app.packageName, app.known, app.label),
+                        caption = "Show again",
+                        modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
+                        onClick = { onShow(app) }
+                    )
+                }
+            }
+            Row { PanelButton("Done", look, primary = true, onClick = onDismiss) }
         }
     }
 }

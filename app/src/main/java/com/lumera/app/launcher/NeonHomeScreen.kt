@@ -335,9 +335,13 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     var homeKeys by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
     var consoleOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Consoles)) }
     var appOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Apps)) }
+    var hiddenApps by remember { mutableStateOf(order.hidden()) }
+    var showHidden by remember { mutableStateOf(false) }
     val slots = remember(homeKeys, apps, previewTiles) { homeSlots(previewTiles ?: homeKeys, apps) }
     val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
-    val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
+    // Hidden apps stay on the TV but out of the list, and out of the apps to put on Home
+    val orderedApps = remember(apps, appOrder, hiddenApps) { HomeOrder.arrange(apps.filter { it.packageName !in hiddenApps }, appOrder) { it.packageName } }
+    val hiddenList = remember(apps, hiddenApps) { apps.filter { it.packageName in hiddenApps } }
     // A console switched on while the home screen shows gets its card; those already on when
     // the inputs are first read, or still on from before an app was opened, do not
     var woke by remember { mutableStateOf<Console?>(null) }
@@ -691,7 +695,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             spotOn = false
                         },
                         onOpen = { HomeApps.open(context, it.packageName) },
-                        onPin = { pinning = it }
+                        onPin = { pinning = it },
+                        hiddenCount = hiddenList.size,
+                        onHidden = { showHidden = true }
                     )
                 }
             }
@@ -771,7 +777,17 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             PinToHomeDialog(app, slots, onPick = { index ->
                 placeOnHome(app.packageName, index)
                 pinning = null
+            }, onHide = {
+                hiddenApps = hiddenApps + app.packageName
+                order.setHidden(hiddenApps)
+                pinning = null
             }, onDismiss = { pinning = null })
+        }
+        if (showHidden) {
+            HiddenAppsDialog(hiddenList, onShow = { app ->
+                hiddenApps = hiddenApps - app.packageName
+                order.setHidden(hiddenApps)
+            }, onDismiss = { showHidden = false })
         }
         changing?.let { index ->
             slots.getOrNull(index)?.let { slot ->
@@ -1062,7 +1078,9 @@ private fun AllApps(
     firstApp: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
     onOpen: (InstalledApp) -> Unit,
-    onPin: (InstalledApp) -> Unit
+    onPin: (InstalledApp) -> Unit,
+    hiddenCount: Int,
+    onHidden: () -> Unit
 ) {
     // The grid leaves room around the tiles for a focused tile's glow; the offset keeps the
     // tiles themselves in line with the rest of the screen
@@ -1125,6 +1143,27 @@ private fun AllApps(
                         }
                         Spacer(Modifier.weight(1f))
                         TileName(app.name, 11.5.sp)
+                    }
+                }
+            }
+        }
+        // The way back to the apps hidden from the list
+        if (hiddenCount > 0) {
+            item(key = "hidden") {
+                val color = look.tint(look.dim)
+                NeonTile(
+                    width = SmallTile.first,
+                    height = SmallTile.second,
+                    shape = tileShape,
+                    color = color,
+                    onClick = onHidden,
+                    onFocus = { onFocusColor(null, "Hidden", look.dim) },
+                    modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                ) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
+                        NeonGlyph(Glyph.Layers, color, Modifier.size(26.dp))
+                        Spacer(Modifier.weight(1f))
+                        TileName("Hidden · $hiddenCount", 11.5.sp)
                     }
                 }
             }

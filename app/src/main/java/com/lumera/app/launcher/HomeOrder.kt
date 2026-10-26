@@ -19,7 +19,16 @@ class HomeOrder(context: Context) {
         prefs.edit().putString(row.key, keys.joinToString("\n")).apply()
     }
 
+    /** The apps hidden from All apps: still on the TV, only not in the list. */
+    fun hidden(): Set<String> = prefs.getStringSet(KEY_HIDDEN, null)?.toSet().orEmpty()
+
+    fun setHidden(packages: Set<String>) {
+        prefs.edit().putStringSet(KEY_HIDDEN, packages).apply()
+    }
+
     companion object {
+        private const val KEY_HIDDEN = "hidden.apps"
+
         /**
          * [items] in the [saved] order; anything the saved order doesn't know yet, like an app
          * put on the TV since, keeps its place relative to the default order at the end.
