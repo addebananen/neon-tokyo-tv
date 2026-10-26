@@ -859,6 +859,21 @@ for pack in original banner glass; do
   key BACK; sleep 2
 done
 
+# The scenes the streaming apps play inside their tile in focus. The emulator has none of these
+# apps, so their tiles are dimmed, but the scene plays all the same
+n=0
+for tiles in "se.tv4.tv4play,se.svt.android.svtplay,allente.b2c.tvclient,com.viaplay.android" "com.netflix.ninja,com.disney.disneyplus,com.amazon.amazonvideo.livingroom,com.wbd.stream"; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tiles "$tiles" >/dev/null 2>&1
+  sleep 6
+  for i in 1 2 3 4; do
+    n=$((n + 1))
+    sleep 2
+    shot "scene-$n"
+    if [ "$i" -lt 4 ]; then key DPAD_RIGHT; fi
+  done
+  key BACK; sleep 2
+done
+
 # A console switched on while the home screen shows: its card slides in at the top, the console
 # boots in neon on it and it takes the focus, so OK switches to it; Back puts it away. The
 # emulator has no HDMI inputs, so the preview shows the card as if Switch 2 had just come on

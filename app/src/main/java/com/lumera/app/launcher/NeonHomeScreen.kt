@@ -215,7 +215,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewWake: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -335,7 +335,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     var homeKeys by remember { mutableStateOf(order.load(HomeOrder.Row.Favourites)) }
     var consoleOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Consoles)) }
     var appOrder by remember { mutableStateOf(order.load(HomeOrder.Row.Apps)) }
-    val slots = remember(homeKeys, apps) { homeSlots(homeKeys, apps) }
+    val slots = remember(homeKeys, apps, previewTiles) { homeSlots(previewTiles ?: homeKeys, apps) }
     val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
     val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
     // A console switched on while the home screen shows gets its card; those already on when

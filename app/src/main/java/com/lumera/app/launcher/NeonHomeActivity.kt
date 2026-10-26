@@ -26,6 +26,9 @@ class NeonHomeActivity : ComponentActivity() {
     // And with another pack of app icons
     private var previewIcons by mutableStateOf<IconPack?>(null)
 
+    // And with other apps on the Home row, without changing the ones Adrian put there
+    private var previewTiles by mutableStateOf<List<String>?>(null)
+
     // A console's card shown as if it had just been switched on, to see how it looks
     private var previewWake by mutableStateOf<String?>(null)
 
@@ -34,6 +37,7 @@ class NeonHomeActivity : ComponentActivity() {
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
         if (preview) previewStyle = intent.getStringExtra(EXTRA_STYLE)?.let(HomeStyle::of)
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
+        if (preview) previewTiles = tilesOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         setContent {
             NeonHome(
@@ -41,6 +45,7 @@ class NeonHomeActivity : ComponentActivity() {
                 onLeave = if (preview) ({ finish() }) else null,
                 previewStyle = previewStyle,
                 previewIcons = previewIcons,
+                previewTiles = previewTiles,
                 previewWake = previewWake
             )
         }
@@ -53,14 +58,19 @@ class NeonHomeActivity : ComponentActivity() {
             preview = false
             previewStyle = null
             previewIcons = null
+            previewTiles = null
             homePresses.intValue++
         } else {
             // Asked to show a style while already open, as from Settings again: show it
             intent.getStringExtra(EXTRA_STYLE)?.let { previewStyle = HomeStyle.of(it) }
             intent.getStringExtra(EXTRA_ICONS)?.let { previewIcons = IconPack.of(it) }
+            tilesOf(intent)?.let { previewTiles = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
         }
     }
+
+    private fun tilesOf(intent: Intent): List<String>? =
+        intent.getStringExtra(EXTRA_TILES)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
 
     companion object {
         /** The key of a [HomeStyle] to show a preview in. */
@@ -68,6 +78,9 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The key of an [IconPack] to show a preview with. */
         const val EXTRA_ICONS = "icons"
+
+        /** The packages of the apps to show on the Home row of a preview, separated by commas. */
+        const val EXTRA_TILES = "tiles"
 
         /** The id of a console whose card to show, as if it had just been switched on. */
         const val EXTRA_WAKE = "wake"
