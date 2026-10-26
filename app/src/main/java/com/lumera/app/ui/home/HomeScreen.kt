@@ -783,102 +783,17 @@ private fun resolveCinematicPreviewItem(
 private fun buildContinueWatchingItems(
     history: List<WatchHistoryEntity>,
     seriesNextUp: List<com.lumera.app.data.model.SeriesNextUpEntity> = emptyList()
-): List<MetaItem> {
-    val result = mutableListOf<Pair<Long, MetaItem>>()
-    val seriesIdsIncluded = mutableSetOf<String>()
-
-    // 1. In-progress items (partially watched, not completed)
-    val inProgress = history.filter { !it.watched }
-
-    val seriesByCanonicalId = mutableMapOf<String, MutableList<WatchHistoryEntity>>()
-    val movieById = mutableMapOf<String, WatchHistoryEntity>()
-
-    inProgress.forEach { entry ->
-        if (entry.type == "series") {
-            val canonicalId = canonicalSeriesId(entry.id)
-            seriesByCanonicalId.getOrPut(canonicalId) { mutableListOf() }.add(entry)
-        } else {
-            movieById.putIfAbsent(entry.id, entry)
-        }
-    }
-
-    val chosenSeries = mutableMapOf<String, WatchHistoryEntity>()
-    seriesByCanonicalId.forEach { (canonicalId, entries) ->
-        val preferred = entries.firstOrNull { isEpisodePlaybackId(it.id) } ?: entries.firstOrNull()
-        if (preferred != null) {
-            chosenSeries[canonicalId] = preferred
-        }
-    }
-
-    inProgress.forEach { entry ->
-        if (entry.type == "series") {
-            val canonicalId = canonicalSeriesId(entry.id)
-            val chosen = chosenSeries[canonicalId] ?: return@forEach
-            if (chosen.id != entry.id) return@forEach
-            seriesIdsIncluded.add(canonicalId)
-            result.add(chosen.lastWatched to MetaItem(
-                id = canonicalId,
-                type = entry.type,
-                name = entry.title,
-                poster = entry.poster,
-                background = chosen.background,
-                logo = chosen.logo,
-                progress = chosen.progress()
-            ))
-        } else {
-            val chosen = movieById[entry.id] ?: return@forEach
-            if (chosen.id != entry.id) return@forEach
-            result.add(entry.lastWatched to MetaItem(
-                id = entry.id,
-                type = entry.type,
-                name = entry.title,
-                poster = entry.poster,
-                background = entry.background,
-                logo = entry.logo,
-                progress = entry.progress()
-            ))
-        }
-    }
-
-    // 2. Next-up entries: series where all in-progress episodes are watched,
-    //    but there's a next episode available. Only include if the episode has aired.
-    val today = java.time.LocalDate.now().toString() // "2026-04-06"
-    for (nextUp in seriesNextUp) {
-        if (nextUp.seriesId in seriesIdsIncluded) continue // already shown as in-progress
-
-        // Check if the next episode has aired (null = assume aired)
-        val released = nextUp.nextReleased
-        if (released != null && released > today) continue
-
-        // Complete with no next episode date = truly done, skip
-        if (nextUp.isComplete && released == null) continue
-
-        // +1 badge: show was complete (user was caught up) and episode has now aired
-        val isReturning = nextUp.isComplete || nextUp.isNewEpisode
-
-        result.add(nextUp.updatedAt to MetaItem(
-            id = nextUp.seriesId,
-            type = "series",
-            name = nextUp.title,
-            poster = nextUp.poster,
-            hasNewEpisode = isReturning
-        ))
-    }
-
-    // Sort all items by most recent activity
-    return result.sortedByDescending { it.first }.map { it.second }
-}
-
-private fun canonicalSeriesId(playbackId: String): String {
-    if (!isEpisodePlaybackId(playbackId)) return playbackId
-    val parts = playbackId.split(":")
-    return parts.dropLast(2).joinToString(":")
-}
-
-private fun isEpisodePlaybackId(playbackId: String): Boolean {
-    val parts = playbackId.split(":")
-    if (parts.size < 3) return false
-    return parts[parts.lastIndex - 1].toIntOrNull() != null && parts.last().toIntOrNull() != null
+): List<MetaItem> = com.lumera.app.domain.continueWatching(history, seriesNextUp).map { entry ->
+    MetaItem(
+        id = entry.id,
+        type = entry.type,
+        name = entry.name,
+        poster = entry.poster,
+        background = entry.background,
+        logo = entry.logo,
+        progress = entry.progress,
+        hasNewEpisode = entry.hasNewEpisode
+    )
 }
 
 private fun resolveLatestPreviewItem(
