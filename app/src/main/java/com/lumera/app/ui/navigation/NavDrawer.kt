@@ -216,7 +216,8 @@ fun NavDrawer(
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Box(modifier = Modifier.graphicsLayer { alpha = extraItemsAlpha }) {
+                    // The photo of who is watching stays in the corner with the menu closed too
+                    Box {
                         ProfileAvatarItem(
                             profile = currentProfile,
                             isMenuExpanded = isMenuFocused,
@@ -400,6 +401,30 @@ fun SidebarItem(
                     color = accentColor,
                     shape = RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp)
                 )
+        )
+    }
+}
+
+/**
+ * The photo of the profile watching, on its own in the top left corner where the side menu has
+ * it, for the screens that show no menu: details and grids. It can't be focused.
+ */
+@Composable
+fun ProfileBadge(profile: ProfileEntity?, modifier: Modifier = Modifier) {
+    val avatarSource = profile?.let { ProfileAssets.getAvatarSource(it.avatarRef) } ?: return
+    val context = LocalContext.current
+    Box(
+        modifier = modifier
+            .padding(start = 15.dp, top = 40.dp)
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF1A1A1A))
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(context).data(avatarSource).size(100, 100).crossfade(true).build(),
+            contentDescription = profile.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
