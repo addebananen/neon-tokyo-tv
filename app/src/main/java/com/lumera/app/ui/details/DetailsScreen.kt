@@ -109,6 +109,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -526,12 +533,10 @@ fun DetailsScreen(
                             false
                         }
                     ) {
-                        ExpandableIconButton(
-                            label = playLabel,
-                            icon = Icons.Default.PlayArrow,
-                            modifier = Modifier.focusRequester(firstButtonFocusRequester),
-                            onClick = {
-                                val ep = resumeEpisode ?: firstEpisode ?: return@ExpandableIconButton
+                        // A press plays (or picks up where it was, with the source used before);
+                        // holding OK for a second opens the sources to choose from instead
+                        fun playEpisode(choose: Boolean) {
+                                val ep = resumeEpisode ?: firstEpisode ?: return
                                 val trackId = resumePlaybackId ?: episodePlaybackId(streamId, ep)
                                 val epStreamId = episodeStreamId(streamId, ep)
                                 val epTitle = when {
@@ -544,8 +549,14 @@ fun DetailsScreen(
                                 pendingPlaybackId = trackId
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = epTitle
-                                viewModel.loadStreams(type, epStreamId, epTitle, sourceSelectionId = trackId, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
-                            }
+                                viewModel.loadStreams(type, epStreamId, epTitle, sourceSelectionId = trackId, forceSourcePicker = choose, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                        }
+                        ExpandableIconButton(
+                            label = playLabel,
+                            icon = Icons.Default.PlayArrow,
+                            modifier = Modifier.focusRequester(firstButtonFocusRequester),
+                            onClick = { playEpisode(choose = false) },
+                            onHold = { playEpisode(choose = true) }
                         )
 
                         ExpandableIconButton(
@@ -598,6 +609,13 @@ fun DetailsScreen(
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = currentMovie.name
                                 viewModel.loadStreams(type, streamId, currentMovie.name, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                            },
+                            // Held for a second: the sources to choose from, whatever was used before
+                            onHold = {
+                                pendingPlaybackId = streamId
+                                pendingPlaybackType = type
+                                pendingPlaybackTitle = currentMovie.name
+                                viewModel.loadStreams(type, streamId, currentMovie.name, forceSourcePicker = true, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
                             }
                         )
 
@@ -912,9 +930,51 @@ private fun ExpandableIconButton(
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isActive: Boolean = false
+    isActive: Boolean = false,
+    /** Holding OK for a second: the button fills up as it is held, then this instead of [onClick]. */
+    onHold: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val holdScope = rememberCoroutineScope()
+    val holdFill = remember { Animatable(0f) }
+    var holdJob by remember { mutableStateOf<Job?>(null) }
+    var holdDone by remember { mutableStateOf(false) }
+    val holdModifier = if (onHold == null) Modifier else Modifier
+        .onPreviewKeyEvent { event ->
+            if (event.key != Key.DirectionCenter && event.key != Key.Enter && event.key != Key.NumPadEnter) return@onPreviewKeyEvent false
+            when (event.type) {
+                KeyEventType.KeyDown -> {
+                    if (event.nativeKeyEvent.repeatCount == 0) {
+                        holdDone = false
+                        holdJob?.cancel()
+                        holdJob = holdScope.launch {
+                            // The fill is only to look at; the second is timed on its own, so the
+                            // hold lasts a second even where the TV's animations are switched off
+                            val fill = launch { holdFill.animateTo(1f, tween(HOLD_MS, easing = LinearEasing)) }
+                            delay(HOLD_MS.toLong())
+                            fill.cancel()
+                            holdDone = true
+                            holdFill.snapTo(0f)
+                            onHold()
+                        }
+                    }
+                    true
+                }
+                KeyEventType.KeyUp -> {
+                    holdJob?.cancel()
+                    holdJob = null
+                    holdScope.launch { holdFill.snapTo(0f) }
+                    if (!holdDone) onClick()
+                    holdDone = false
+                    true
+                }
+                else -> false
+            }
+        }
+        .drawBehind {
+            val f = holdFill.value
+            if (f > 0f) drawRect(Color.White.copy(alpha = 0.16f), size = Size(size.width * f, size.height))
+        }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val accentColor = MaterialTheme.colorScheme.primary
 
@@ -984,6 +1044,7 @@ private fun ExpandableIconButton(
             .scale(scale)
             .clip(RoundedCornerShape(21.dp))
             .background(bgColor)
+            .then(holdModifier)
             .border(
                 width = if (isFocused) 2.dp else 1.dp,
                 color = borderColor,
@@ -1487,3 +1548,6 @@ private fun resolvePlayableUrl(stream: com.lumera.app.data.model.stremio.Stream)
     }
     return null
 }
+
+/** How long OK is held on Play to choose the source instead of playing at once. */
+private const val HOLD_MS = 1000
