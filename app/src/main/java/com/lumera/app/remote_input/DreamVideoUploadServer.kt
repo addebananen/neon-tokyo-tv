@@ -74,7 +74,7 @@ class DreamVideoUploadServer(
         if (uri != base && !uri.startsWith("$base/")) return notFound()
         return when (uri.removePrefix(base)) {
             "", "/" -> if (session.method == Method.GET) servePage() else notFound()
-            "/status" -> json("{\"state\":\"$state\",\"received\":$arrived}")
+            "/status" -> json("{\"state\":\"$state\",\"received\":$arrived,\"room\":${DreamVideo.roomFor(context)}}")
             "/video" -> if (session.method == Method.POST) receiveVideo(session) else notFound()
             "/piece" -> if (session.method == Method.POST) receivePiece(session) else notFound()
             "/skyline.webp" -> resource(R.drawable.nt_skyline, "image/webp")
@@ -99,7 +99,8 @@ class DreamVideoUploadServer(
             ?: return badRequest("Your phone didn't say how big the video is. Try again.")
         if (total <= 0L) return badRequest("No video arrived. Try again.")
         if (total > MAX_VIDEO_SIZE) return badRequest("That video is over 2 GB. Pick a shorter one.")
-        if (total > DreamVideo.roomFor(context)) return badRequest("The TV doesn't have room for that video. Pick a shorter one.")
+        DreamVideo.uploadFile(context).delete()
+        if (!DreamVideo.makeRoom(context, total)) return badRequest(noRoom(total))
 
         state = STATE_RECEIVING
         val upload = DreamVideo.uploadFile(context)
@@ -153,8 +154,8 @@ class DreamVideoUploadServer(
         if (offset == 0L) {
             if (total <= 0L) return early(badRequest("No video arrived. Try again."))
             if (total > MAX_VIDEO_SIZE) return early(badRequest("That video is over 2 GB. Pick a shorter one."))
-            if (total > DreamVideo.roomFor(context)) return early(badRequest("The TV doesn't have room for that video. Pick a shorter one."))
             upload.delete()
+            if (!DreamVideo.makeRoom(context, total)) return early(badRequest(noRoom(total)))
             expected = total
             arrived = 0L
             state = STATE_RECEIVING
@@ -201,6 +202,9 @@ class DreamVideoUploadServer(
 
     // A piece whose bytes weren't all read leaves the rest on the connection, so it is closed
     private fun early(response: Response): Response = response.apply { addHeader("Connection", "close") }
+
+    private fun noRoom(total: Long): String =
+        "The TV has ${DreamVideo.roomFor(context) / (1024 * 1024)} MB free and the video is ${total / (1024 * 1024)} MB. Trim it on your phone, or free up space on the TV."
 
     private fun placed(): Response = json("{\"state\":\"$state\",\"received\":$arrived}")
 

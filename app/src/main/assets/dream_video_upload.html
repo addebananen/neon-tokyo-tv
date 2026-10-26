@@ -252,7 +252,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
         if (answer.received >= file.size) arrived();
         else send(file, answer.received, id, answer.received > from ? 0 : tries + 1);
       } else {
-        failed(xhr.responseText && xhr.responseText.length < 120 ? xhr.responseText : "The TV couldn't take that video. Try again.");
+        failed(xhr.responseText && xhr.responseText.length < 300 ? xhr.responseText : "The TV couldn't take that video. Try again.");
       }
     };
     xhr.onerror = xhr.ontimeout = function () { if (id === sendId) again(file, id, tries + 1); };
@@ -293,8 +293,17 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     sendingText.textContent = "Keep this page open until it's there.";
     show("sending");
     keepAwake();
-    sendId++;
-    send(chosen, 0, sendId, 0);
+    var id = ++sendId, file = chosen;
+    // The TV says how much room it has; the TV makes more if it can, so this only stops a video
+    // that is far too big, before it is sent for nothing
+    fetch(BASE + "/status", { cache: "no-store" }).then(function (res) { return res.json(); }).then(function (s) {
+      if (id !== sendId) return;
+      if (typeof s.room === "number" && file.size > s.room * 1.5 + 200 * 1048576) {
+        failed("The TV has " + megabytes(s.room) + " free and this video is " + megabytes(file.size) + ". Trim it on your phone, or free up space on the TV.");
+      } else {
+        send(file, 0, id, 0);
+      }
+    }).catch(function () { if (id === sendId) send(file, 0, id, 0); });
   });
   function failed(text) {
     sendId++;

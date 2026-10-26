@@ -311,7 +311,8 @@ private fun ProfileEditor(
             PanelButton("Photo", look) { takingPhoto = true }
             PanelButton("Own picture", look) { takingBackground = true }
             PanelButton("Own video", look) { takingVideo = true }
-            if (profile.background != null) PanelButton("Use the painting", look) { profiles.edit(profile.id) { it.copy(background = null) } }
+            // Removing it deletes the file from the TV as well (HomeProfiles.update)
+            if (profile.background != null) PanelButton("Remove background", look) { profiles.edit(profile.id) { it.copy(background = null) } }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             PanelNote("STYLE", look)
@@ -338,7 +339,7 @@ private fun ProfileEditor(
                 onDone()
             }
             PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
-            if (profile.dreamVideo != null) PanelButton("Style's screensaver", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
+            if (profile.dreamVideo != null) PanelButton("Remove screensaver video", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
             if (canDelete) PanelButton("Remove profile", look, onClick = onDelete)
         }
     }
