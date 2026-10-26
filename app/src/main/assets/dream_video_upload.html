@@ -202,38 +202,103 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   document.getElementById("again").addEventListener("click", function () { clip.pause(); show("pick"); });
 
   // ---- Sending ----
+  // In pieces, each to its place in the file on the TV: when the screen goes dark or the Wi-Fi
+  // drops, the piece is sent again from where the TV has got to instead of the whole video
+  var PIECE = 8 * 1024 * 1024;
   var bar = document.getElementById("bar"), pct = document.getElementById("pct");
+  var sendingText = document.getElementById("sendingText");
+  var sendId = 0, wakeLock = null, waking = null;
+  function progress(done, total) {
+    var p = Math.min(100, Math.floor(done / total * 100));
+    bar.style.width = p + "%";
+    pct.textContent = p + " %  ·  " + megabytes(done) + " of " + megabytes(total);
+  }
+  function keepAwake() {
+    try {
+      if (navigator.wakeLock && document.visibilityState === "visible" && !wakeLock) {
+        navigator.wakeLock.request("screen").then(function (lock) {
+          wakeLock = lock;
+          lock.addEventListener("release", function () { wakeLock = null; });
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  function letSleep() {
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || current !== "sending") return;
+    keepAwake();
+    // Back on the page after the phone slept: carry on at once rather than after the wait
+    if (waking) { var go = waking; waking = null; go(); }
+  });
+  function send(file, from, id, tries) {
+    if (id !== sendId) return;
+    var to = Math.min(file.size, from + PIECE);
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", BASE + "/piece");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Offset", String(from));
+    xhr.setRequestHeader("X-Total", String(file.size));
+    xhr.timeout = 90000;
+    xhr.upload.onprogress = function (e) { if (id === sendId) progress(from + e.loaded, file.size); };
+    xhr.onload = function () {
+      if (id !== sendId) return;
+      var answer = null;
+      try { answer = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status === 200 && answer) {
+        sendingText.textContent = "Keep this page open until it's there.";
+        if (answer.received >= file.size) arrived();
+        else send(file, answer.received, id, answer.received > from ? 0 : tries + 1);
+      } else {
+        failed(xhr.responseText && xhr.responseText.length < 120 ? xhr.responseText : "The TV couldn't take that video. Try again.");
+      }
+    };
+    xhr.onerror = xhr.ontimeout = function () { if (id === sendId) again(file, id, tries + 1); };
+    xhr.send(file.slice(from, to));
+  }
+  // A piece that broke off: ask the TV how much it has, and go on from there
+  function again(file, id, tries) {
+    if (tries > 30) { failed("Couldn't reach the TV. Check that your phone is on the same Wi-Fi, then send it again."); return; }
+    sendingText.textContent = "The connection dropped. Carrying on…";
+    var go = function () {
+      if (id !== sendId) return;
+      fetch(BASE + "/status", { cache: "no-store" }).then(function (res) {
+        if (!res.ok) throw new Error();
+        return res.json();
+      }).then(function (s) {
+        if (id !== sendId) return;
+        if (s.state === "checking" || s.state === "done") { arrived(); return; }
+        if (s.state !== "receiving") { send(file, 0, id, tries); return; }
+        send(file, s.received || 0, id, tries);
+      }).catch(function () { again(file, id, tries + 1); });
+    };
+    var wait = Math.min(8000, 500 * Math.pow(2, Math.min(tries, 4)));
+    if (document.visibilityState !== "visible") { waking = go; return; }
+    setTimeout(go, wait);
+  }
+  function arrived() {
+    progress(1, 1);
+    pct.textContent = "100 %";
+    sendingText.textContent = "The TV is checking it…";
+    lastState = "checking";
+    poll();
+  }
   document.getElementById("send").addEventListener("click", function () {
     if (!chosen) return;
     clip.pause();
     bar.style.width = "0";
     pct.textContent = "0 %";
-    document.getElementById("sendingText").textContent = "Keep this page open until it's there.";
+    sendingText.textContent = "Keep this page open until it's there.";
     show("sending");
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", BASE + "/video");
-    xhr.setRequestHeader("Content-Type", "application/octet-stream");
-    xhr.upload.onprogress = function (e) {
-      if (!e.lengthComputable) return;
-      var p = Math.floor(e.loaded / e.total * 100);
-      bar.style.width = p + "%";
-      pct.textContent = p + " %  ·  " + megabytes(e.loaded) + " of " + megabytes(e.total);
-    };
-    xhr.onload = function () {
-      if (xhr.status === 200) {
-        bar.style.width = "100%";
-        pct.textContent = "100 %";
-        document.getElementById("sendingText").textContent = "The TV is checking it…";
-        lastState = "checking";
-        poll();
-      } else {
-        failed(xhr.responseText && xhr.responseText.length < 120 ? xhr.responseText : "The TV couldn't take that video. Try again.");
-      }
-    };
-    xhr.onerror = function () { failed("Couldn't reach the TV. Check that your phone is on the same Wi-Fi."); };
-    xhr.send(chosen);
+    keepAwake();
+    sendId++;
+    send(chosen, 0, sendId, 0);
   });
   function failed(text) {
+    sendId++;
+    letSleep();
     show("check");
     message("checkMsg", text, true);
   }
@@ -258,7 +323,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   function react(state) {
     if (state === lastState) return;
     lastState = state;
-    if (state === "done") show("done");
+    if (state === "done") { letSleep(); show("done"); }
     else if (state === "error") failed("The TV can't play that video. Try another one, like one filmed with your phone.");
   }
 })();

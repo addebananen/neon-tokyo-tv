@@ -249,9 +249,32 @@ video_from_phone() {
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"error"' || fail "a file that is no video left the phone at $state instead of error"
   screen_has "play that video" || fail "the TV did not say it can't play a file that is no video"
-  # A phone's video with sound, which the TV makes lighter before it keeps it
-  code=$(curl -s -m 60 -H "Expect:" -H "Content-Type: application/octet-stream" -o "$OUT/video-post.txt" -w "%{http_code}" --data-binary "@.github/scripts/video-fixture-sound.mp4" "$base/video")
-  if [ "$code" != 200 ]; then fail "sending the video answered $code: $(cat "$OUT/video-post.txt")"; return 1; fi
+  # A phone's video with sound, which the TV makes lighter before it keeps it. The page sends it in
+  # pieces; one breaks off halfway, as when the phone's screen goes dark, and one goes to the wrong
+  # place, and the TV must carry on from where it really got to
+  local fixture=.github/scripts/video-fixture-sound.mp4 size half got
+  size=$(stat -c %s "$fixture")
+  half=$((size / 2))
+  piece() { # piece <offset> <length> [<claimed length>]
+    local claim=()
+    [ -n "${3:-}" ] && claim=(-H "Content-Length: $3")
+    tail -c +"$(($1 + 1))" "$fixture" | head -c "$2" > "$OUT/piece.bin"
+    curl -s -m "${4:-60}" -H "Expect:" -H "Content-Type: application/octet-stream" -H "X-Offset: $1" -H "X-Total: $size" \
+      "${claim[@]}" --data-binary "@$OUT/piece.bin" "$base/piece"
+  }
+  got=$(piece 0 "$half")
+  echo "first piece: $got"
+  echo "$got" | grep -q "\"received\":$half" || fail "the TV did not take the first piece of the video ($got)"
+  piece "$half" 1000 "$((size - half))" 3 >/dev/null 2>&1
+  sleep 1
+  got=$(curl -s -m 5 "$base/status")
+  echo "after a piece broke off: $got"
+  echo "$got" | grep -q "\"received\":$half" || fail "a piece that broke off counted towards the video ($got)"
+  got=$(piece 1234 100)
+  echo "$got" | grep -q "\"received\":$half" || fail "a piece sent to the wrong place moved the video on ($got)"
+  got=$(piece "$half" "$((size - half))")
+  echo "last piece: $got"
+  echo "$got" | grep -q "\"received\":$size" || fail "the TV did not take the rest of the video ($got)"
   if ! wait_for "Your video is on" 90; then fail "the TV never took the video"; return 1; fi
   # Its picture is light already, so what comes out without the sound must be smaller still
   shrunk=$(adb logcat -d -s DreamVideoShrink:I | grep -o "from [0-9]* kB to [0-9]* kB" | tail -n 1)
