@@ -108,7 +108,12 @@ print(center(focused[-1]) if focused else -1, center(target[0]) if target else -
 # focused_label: the text inside the element that has the D-pad focus
 focused_label() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
-  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+  adb shell cat /sdcard/ui.xml 2>/dev/null | focused_text
+}
+
+# focused_text: the label of the focused element in the UI tree read from stdin
+focused_text() {
+  python3 -c '
 import re, sys
 xml = sys.stdin.read()
 nodes = re.findall(r"<node [^>]*>", xml)
@@ -802,8 +807,8 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
-    for _ in 1 2 3; do
+    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3 4; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
@@ -814,11 +819,52 @@ for style in "${styles[@]}"; do
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
     key BACK; sleep 2
+    screen_has "Who's home?" && fail "one press of Back did not close the profile picker"
+    # The panel gives the focus back to the pill that opened it
+    label=$(focused_label)
+    case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
+    # The pill with the version number, three along, says which version this is and looks for a newer one
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "three along from the profile pill is $label, not the version pill" ;; esac
+    key DPAD_CENTER; sleep 4
+    shot "style-$style-updates"
+    screen_has "This version" || fail "the version pill did not open the updates panel"
+    key BACK; sleep 2
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "the focus did not go back to the version pill when the updates panel closed ($label has it)" ;; esac
     key BACK; sleep 2
   fi
   key BACK
   sleep 2
 done
+
+# A console switched on while the home screen shows: its card slides in at the top, the console
+# boots in neon on it and it takes the focus, so OK switches to it; Back puts it away. The
+# emulator has no HDMI inputs, so the preview shows the card as if Switch 2 had just come on
+adb shell settings put global animator_duration_scale 1
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es wake switch2 >/dev/null 2>&1
+adb shell screenrecord --time-limit 7 --size 1280x720 --bit-rate 6000000 /sdcard/console-wake.mp4 > "$OUT/wake-record.txt" 2>&1 &
+recorder=$!
+sleep 2
+shot console-wake
+# The card goes by itself after 14 s and each UI dump waits out its breathing ring, so the
+# checks read the one dump the shot made and Back comes before the time runs out
+wake_xml="$OUT/$(printf "%02d" "$step")-console-wake.xml"
+grep -q "Switch 2 is on" "$wake_xml" 2>/dev/null || fail "the card of a console that was just switched on did not show"
+label=$(focused_text < "$wake_xml" 2>/dev/null)
+case "$label" in *Play*) ;; *) fail "the card of a console that was just switched on does not have the focus on Play ($label has it)" ;; esac
+key BACK
+sleep 2
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/console-wake.mp4 "$OUT/console-wake.mp4" > /dev/null 2>&1 || true
+shot console-wake-away
+if screen_has "Switch 2 is on"; then fail "Back did not put the console's card away"; fi
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "the focus did not go back to YouTube when the console's card went ($label has it)"
+adb shell settings put global animator_duration_scale 0
+key BACK
+sleep 2
 
 # A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
 # opens over the app the way its Preview button does; clearing the task would close the app too

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.ViewConfiguration
 import android.provider.Settings
@@ -34,6 +35,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -131,6 +133,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -154,6 +157,7 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Glow
 import androidx.tv.material3.Surface
+import com.lumera.app.data.update.UpdateState
 import com.lumera.app.projectivy.NeonWallpaper
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.neonPanel
@@ -181,6 +185,7 @@ private val Side = 55.dp
 
 /** The keys a TV Surface clicks on. */
 private val SelectKeys = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
+private val ArrowKeys = setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)
 
 /** Columns of the All apps grid; Up and Down move a lifted app by a whole row. */
 private const val AppColumns = 6
@@ -208,7 +213,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewWake: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -219,6 +224,21 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val look = style.look
     val inputs = remember { TvInputs(appContext) }
     val links = remember { ConsoleLinks(appContext) }
+    val sounds = remember { HomeSounds(appContext) }
+    DisposableEffect(sounds) { onDispose { sounds.release() } }
+    val updates = remember { homeUpdates(appContext) }
+    val updateState by updates.state.collectAsState()
+    var showUpdates by remember { mutableStateOf(false) }
+    // A quiet look for a newer version once the home screen is up; the pill at the top says so
+    LaunchedEffect(Unit) {
+        delay(4000)
+        if (updates.state.value is UpdateState.Idle) updates.checkForUpdate()
+    }
+    // Only a move the remote made ticks: not the focus the screen sets itself as it opens
+    val lastArrow = remember { longArrayOf(0L) }
+    fun focusMoved() {
+        if (SystemClock.uptimeMillis() - lastArrow[0] < 400) sounds.move()
+    }
     var apps by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
     var installed by remember { mutableStateOf(HomeCatalog.favourites.toSet()) }
     var appsVersion by remember { mutableIntStateOf(0) }
@@ -314,6 +334,26 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val slots = remember(homeKeys, apps) { homeSlots(homeKeys, apps) }
     val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
     val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
+    // A console switched on while the home screen shows gets its card; those already on when
+    // the inputs are first read, or still on from before an app was opened, do not
+    var woke by remember { mutableStateOf<Console?>(null) }
+    val wasOn = remember { arrayOfNulls<Set<String>>(1) }
+    LaunchedEffect(states, consoleInputs) {
+        if (inputList.isEmpty()) return@LaunchedEffect
+        val on = HomeCatalog.consoles.filter { TvInputs.isOn(consoleInputs[it]?.let { input -> states[input.id] }) }.map { it.id }.toSet()
+        val before = wasOn[0]
+        wasOn[0] = on
+        val fresh = before?.let { ConsoleWake.woke(consoles.map { it.id }, it, on) }
+        when {
+            fresh != null -> woke = HomeCatalog.consoles.first { it.id == fresh }
+            woke?.id?.let { it !in on } == true -> woke = null
+        }
+    }
+    LaunchedEffect(woke) { if (woke != null) sounds.wake() }
+    LaunchedEffect(previewWake) {
+        previewWake?.let { id -> HomeCatalog.consoles.firstOrNull { it.id == id }?.let { woke = it } }
+    }
+
     var lifted by remember { mutableStateOf<Lifted?>(null) }
     // OK or Back puts a lifted tile down when let go, once it was pressed after the lift: the
     // OK that lifted it is still held when the lift starts
@@ -379,6 +419,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         // A tab that just opened is only there after a frame or two
         repeat(10) {
             withFrameNanos { }
+            // A console's card that just came has the focus, and keeps it
+            if (woke != null) return@LaunchedEffect
             val target = when (tab) {
                 HomeTab.Home -> firstFavourite
                 HomeTab.Apps -> firstApp
@@ -387,11 +429,29 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             if (runCatching { target.requestFocus() }.isSuccess) return@LaunchedEffect
         }
     }
+    // A panel that closes gives the focus back to the pill that opened it; without this the
+    // focus is left nowhere once the panel's window goes and the first arrow press is lost
+    val profilePill = remember { FocusRequester() }
+    val inputsPill = remember { FocusRequester() }
+    val versionPill = remember { FocusRequester() }
+    var reopen by remember { mutableStateOf<FocusRequester?>(null) }
+    LaunchedEffect(showProfiles, showInputs, showUpdates) {
+        val back = reopen ?: return@LaunchedEffect
+        if (showProfiles || showInputs || showUpdates) return@LaunchedEffect
+        reopen = null
+        repeat(10) {
+            withFrameNanos { }
+            if (runCatching { back.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
     // Home pressed while the home screen shows: back to the start, as on other TV home screens
     LaunchedEffect(homePresses) {
         if (homePresses == 0) return@LaunchedEffect
+        reopen = null
         drop()
         linking = null
+        woke = null
+        showUpdates = false
         showInputs = false
         showProfiles = false
         pinning = null
@@ -426,6 +486,15 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
+                // The arrows the remote presses, for the tick as the focus moves, and a blip on OK
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) {
+                        val code = event.nativeKeyEvent.keyCode
+                        if (code in ArrowKeys) lastArrow[0] = SystemClock.uptimeMillis()
+                        if (code in SelectKeys && event.nativeKeyEvent.repeatCount == 0 && lifted == null) sounds.select()
+                    }
+                    false
+                }
                 // While a tile is lifted every key goes to moving it, so the focus stays on it
                 .onPreviewKeyEvent { event ->
                     val current = lifted ?: return@onPreviewKeyEvent false
@@ -446,9 +515,20 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     true
                 }
         ) {
+            val leanX = with(LocalDensity.current) { 12.dp.toPx() }
+            val leanY = with(LocalDensity.current) { 5.dp.toPx() }
             val tabsTop = maxHeight * 0.415f
             val rowsTop = maxHeight * 0.485f
-            HomeBackdrop(style, profile.background, wallpaper)
+            // The picture lies a little further back than the tiles: it leans gently away from
+            // the tile in focus, and settles in the middle when the focus is up top or on All apps
+            val leanTo = spot?.takeIf { spotOn }?.bounds?.center?.let { c ->
+                Offset(
+                    -(c.x / constraints.maxWidth - 0.5f) * 2f * leanX,
+                    -(c.y / constraints.maxHeight - 0.5f) * 2f * leanY
+                )
+            } ?: Offset.Zero
+            val lean by animateOffsetAsState(leanTo, tween(1100, easing = FastOutSlowInEasing), label = "BackdropLean")
+            HomeBackdrop(style, profile.background, wallpaper, lean = { lean })
             if (style == HomeStyle.Neon && profile.background == null) {
                 SkySparkles()
                 FloorLight(spot, spotOn, ignite = { ignite.value })
@@ -464,19 +544,43 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                     modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = ignite.value }
                 ) {
-                    ProfilePill(profile, onClick = { showProfiles = true }, onFocus = {
+                    ProfilePill(profile, Modifier.focusRequester(profilePill), onClick = {
+                        reopen = profilePill
+                        showProfiles = true
+                    }, onFocus = {
+                        focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
                     })
                     Pill("Search", Glyph.Search, onClick = { openSearch(context) }, onFocus = {
+                        focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
                     })
-                    Pill("Inputs", Glyph.Hdmi, onClick = { showInputs = true }, onFocus = {
+                    Pill("Inputs", Glyph.Hdmi, Modifier.focusRequester(inputsPill), onClick = {
+                        reopen = inputsPill
+                        showInputs = true
+                    }, onFocus = {
+                        focusMoved()
                         wallpaper = NeonWallpaper.OCEAN
                         spotOn = false
                     })
+                    Pill(
+                        if (updateState is UpdateState.UpdateAvailable) "Update" else shortVersion(),
+                        Glyph.Update,
+                        Modifier.focusRequester(versionPill),
+                        onClick = {
+                            reopen = versionPill
+                            showUpdates = true
+                        },
+                        onFocus = {
+                            focusMoved()
+                            wallpaper = NeonWallpaper.TOKYO
+                            spotOn = false
+                        }
+                    )
                     Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
+                        focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
                     })
@@ -504,14 +608,17 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 TabPill("Home", tab == HomeTab.Home, homeTab, onFocus = {
+                    focusMoved()
                     tab = HomeTab.Home
                     spotOn = false
                 }, onClick = { focusFirst++ })
                 TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = {
+                    focusMoved()
                     tab = HomeTab.Apps
                     spotOn = false
                 }, onClick = { focusFirst++ })
                 TabPill("Källor", tab == HomeTab.Sources, sourcesTab, onFocus = {
+                    focusMoved()
                     tab = HomeTab.Sources
                     spotOn = false
                 }, onClick = { focusFirst++ })
@@ -543,7 +650,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         },
                         onChange = { changing = it },
                         firstFavourite = firstFavourite,
-                        onFocusColor = { pkg, title, color -> wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
+                        onFocusColor = { pkg, title, color -> focusMoved(); wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
                         onSpot = {
                             spot = it
                             spotOn = true
@@ -559,7 +666,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         onLift = { lift(HomeOrder.Row.Consoles, it) },
                         live = { console -> TvInputs.isOn(consoleInputs[console]?.let { states[it.id] }) },
                         firstConsole = firstConsole,
-                        onFocusColor = { title, color -> wallpaper = NeonWallpaper.forCard(null, title, color.toArgb()) },
+                        onFocusColor = { title, color -> focusMoved(); wallpaper = NeonWallpaper.forCard(null, title, color.toArgb()) },
                         onSpot = {
                             spot = it
                             spotOn = true
@@ -573,6 +680,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         onLift = { lift(HomeOrder.Row.Apps, it) },
                         firstApp = firstApp,
                         onFocusColor = { pkg, title, color ->
+                            focusMoved()
                             wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb())
                             spotOn = false
                         },
@@ -589,6 +697,32 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp)
             ) {
                 MoveHint(grid = lifted?.let { columns(it.row) > 0 } == true)
+            }
+
+            // The card of a console that was just switched on, kept on screen while it slides away
+            val wakeShown = remember { arrayOfNulls<Console>(1) }
+            woke?.let { wakeShown[0] = it }
+            AnimatedVisibility(
+                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && pinning == null && changing == null,
+                enter = fadeIn(tween(260)) + slideInVertically(tween(420, easing = FastOutSlowInEasing)) { -it / 2 },
+                exit = fadeOut(tween(220)) + slideOutVertically(tween(260)) { -it / 3 },
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = Side)
+            ) {
+                val console = wakeShown[0] ?: return@AnimatedVisibility
+                key(console.id) {
+                    ConsoleWakeCard(
+                        console = console,
+                        input = consoleInputs[console]?.label,
+                        onPlay = {
+                            woke = null
+                            openConsole(console)
+                        },
+                        onDismiss = { hadFocus ->
+                            woke = null
+                            if (hadFocus) focusFirst++
+                        }
+                    )
+                }
             }
         }
 
@@ -623,6 +757,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         }
         if (showProfiles) {
             HomeProfilesDialog(homeProfiles, onDismiss = { showProfiles = false })
+        }
+        if (showUpdates) {
+            HomeUpdatesDialog(updates, onDismiss = { showUpdates = false })
         }
         pinning?.let { app ->
             PinToHomeDialog(app, slots, onPick = { index ->
@@ -1215,12 +1352,12 @@ private fun BoxScope.TubeCore(shape: RoundedCornerShape, color: Color, lit: () -
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () -> Unit) {
+private fun Pill(text: String, glyph: Glyph, modifier: Modifier = Modifier, onClick: () -> Unit, onFocus: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(
         onClick = onClick,
-        modifier = Modifier.onFocusChanged { if (it.isFocused) onFocus() },
+        modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
         colors = ClickableSurfaceDefaults.colors(
@@ -1252,12 +1389,12 @@ private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () ->
 /** Who is home: the active profile's face and name, opening the profile picker. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ProfilePill(profile: HomeProfile, onClick: () -> Unit, onFocus: () -> Unit) {
+private fun ProfilePill(profile: HomeProfile, modifier: Modifier = Modifier, onClick: () -> Unit, onFocus: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(
         onClick = onClick,
-        modifier = Modifier.onFocusChanged { if (it.isFocused) onFocus() },
+        modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
         colors = ClickableSurfaceDefaults.colors(
@@ -2019,14 +2156,25 @@ private fun HomeClock(resumes: Int, light: () -> Float, ignite: () -> Float) {
  * in until the chip shows them, and for good on a TV that can't. A new style fades in over the old.
  */
 @Composable
-private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWallpaper) {
+private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWallpaper, lean: () -> Offset = { Offset.Zero }) {
     val context = LocalContext.current
     val plane = remember { Plane() }
     // A picture from a phone is made into a still for the video chip the first time it shows
     LaunchedEffect(picture) { if (picture != null && !isVideo(picture)) PictureStill.make(context, picture) }
     val made = PictureStill.made
     val media = remember(style, picture, made) { planeMedia(context, style, picture) }
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            // A touch larger than the screen, so leaning never shows its edge
+            .graphicsLayer {
+                val l = lean()
+                translationX = l.x
+                translationY = l.y
+                scaleX = LEAN_SCALE
+                scaleY = LEAN_SCALE
+            }
+    ) {
         PlaneSurface(plane, media)
         Crossfade(targetState = picture to style, animationSpec = tween(650), label = "HomeBackdrop") { (shownPicture, shown) ->
             val mine = remember(shown, shownPicture, made) { planeMedia(context, shown, shownPicture) }
@@ -2034,6 +2182,8 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
         }
     }
 }
+
+private const val LEAN_SCALE = 1.035f
 
 /**
  * What is drawn for a style or a profile's own [picture] over the video chip: the stand-in until
