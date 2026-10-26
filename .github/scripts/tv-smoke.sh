@@ -18,6 +18,11 @@ step=0
 fail() { echo "FAIL: $*" | tee -a "$OUT/FAILURES.txt"; }
 
 alive() {
+  # The emulator itself gone: nothing after this can pass, so stop rather than wait out the job
+  if ! timeout 10 adb get-state >/dev/null 2>&1; then
+    fail "the emulator went away after step $1"
+    exit 1
+  fi
   if ! adb shell pidof "$PKG" >/dev/null 2>&1; then
     fail "app is not running after step $1"
   elif ! adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG"; then
