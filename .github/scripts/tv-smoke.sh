@@ -820,6 +820,30 @@ for style in "${styles[@]}"; do
   sleep 2
 done
 
+# A console switched on while the home screen shows: its card slides in at the top, the console
+# boots in neon on it and it takes the focus, so OK switches to it; Back puts it away. The
+# emulator has no HDMI inputs, so the preview shows the card as if Switch 2 had just come on
+adb shell settings put global animator_duration_scale 1
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es wake switch2 >/dev/null 2>&1
+adb shell screenrecord --time-limit 7 --size 1280x720 --bit-rate 6000000 /sdcard/console-wake.mp4 > "$OUT/wake-record.txt" 2>&1 &
+recorder=$!
+sleep 3
+shot console-wake
+screen_has "Switch 2 is on" || fail "the card of a console that was just switched on did not show"
+label=$(focused_label)
+case "$label" in *Play*) ;; *) fail "the card of a console that was just switched on does not have the focus on Play ($label has it)" ;; esac
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/console-wake.mp4 "$OUT/console-wake.mp4" > /dev/null 2>&1 || true
+key BACK
+sleep 2
+shot console-wake-away
+if screen_has "Switch 2 is on"; then fail "Back did not put the console's card away"; fi
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "the focus did not go back to YouTube when the console's card went ($label has it)"
+adb shell settings put global animator_duration_scale 0
+key BACK
+sleep 2
+
 # A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
 # opens over the app the way its Preview button does; clearing the task would close the app too
 for style in "${dreams[@]}"; do

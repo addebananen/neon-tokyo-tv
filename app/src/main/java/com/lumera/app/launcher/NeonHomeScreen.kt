@@ -34,6 +34,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -208,7 +209,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewWake: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -314,6 +315,25 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val slots = remember(homeKeys, apps) { homeSlots(homeKeys, apps) }
     val consoles = remember(consoleOrder) { HomeOrder.arrange(HomeCatalog.consoles, consoleOrder) { it.id } }
     val orderedApps = remember(apps, appOrder) { HomeOrder.arrange(apps, appOrder) { it.packageName } }
+    // A console switched on while the home screen shows gets its card; those already on when
+    // the inputs are first read, or still on from before an app was opened, do not
+    var woke by remember { mutableStateOf<Console?>(null) }
+    val wasOn = remember { arrayOfNulls<Set<String>>(1) }
+    LaunchedEffect(states, consoleInputs) {
+        if (inputList.isEmpty()) return@LaunchedEffect
+        val on = HomeCatalog.consoles.filter { TvInputs.isOn(consoleInputs[it]?.let { input -> states[input.id] }) }.map { it.id }.toSet()
+        val before = wasOn[0]
+        wasOn[0] = on
+        val fresh = before?.let { ConsoleWake.woke(consoles.map { it.id }, it, on) }
+        when {
+            fresh != null -> woke = HomeCatalog.consoles.first { it.id == fresh }
+            woke?.id?.let { it !in on } == true -> woke = null
+        }
+    }
+    LaunchedEffect(previewWake) {
+        previewWake?.let { id -> HomeCatalog.consoles.firstOrNull { it.id == id }?.let { woke = it } }
+    }
+
     var lifted by remember { mutableStateOf<Lifted?>(null) }
     // OK or Back puts a lifted tile down when let go, once it was pressed after the lift: the
     // OK that lifted it is still held when the lift starts
@@ -392,6 +412,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (homePresses == 0) return@LaunchedEffect
         drop()
         linking = null
+        woke = null
         showInputs = false
         showProfiles = false
         pinning = null
@@ -589,6 +610,32 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp)
             ) {
                 MoveHint(grid = lifted?.let { columns(it.row) > 0 } == true)
+            }
+
+            // The card of a console that was just switched on, kept on screen while it slides away
+            val wakeShown = remember { arrayOfNulls<Console>(1) }
+            woke?.let { wakeShown[0] = it }
+            AnimatedVisibility(
+                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && pinning == null && changing == null,
+                enter = fadeIn(tween(260)) + slideInVertically(tween(420, easing = FastOutSlowInEasing)) { -it / 2 },
+                exit = fadeOut(tween(220)) + slideOutVertically(tween(260)) { -it / 3 },
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = Side)
+            ) {
+                val console = wakeShown[0] ?: return@AnimatedVisibility
+                key(console.id) {
+                    ConsoleWakeCard(
+                        console = console,
+                        input = consoleInputs[console]?.label,
+                        onPlay = {
+                            woke = null
+                            openConsole(console)
+                        },
+                        onDismiss = { hadFocus ->
+                            woke = null
+                            if (hadFocus) focusFirst++
+                        }
+                    )
+                }
             }
         }
 
