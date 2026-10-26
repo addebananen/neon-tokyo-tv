@@ -85,7 +85,8 @@ enum class Glyph(pathData: String) {
     // The buttons at the top of the home screen
     Search(circle(43, 43, 25) + "M62 62 L84 84"),
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
-    Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11));
+    Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
+    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68");
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }

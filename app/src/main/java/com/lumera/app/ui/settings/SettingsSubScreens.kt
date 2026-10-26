@@ -1982,7 +1982,7 @@ fun AboutSettings(
             Text(
                 text = when (updateState) {
                     is UpdateState.Checking -> "Checking..."
-                    is UpdateState.UpToDate -> "You're up to date"
+                    is UpdateState.UpToDate -> "You're on the newest version"
                     is UpdateState.Error -> (updateState as UpdateState.Error).message
                     else -> "Check for Updates"
                 },

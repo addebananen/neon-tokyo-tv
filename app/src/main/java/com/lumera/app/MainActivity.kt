@@ -112,7 +112,10 @@ import kotlinx.coroutines.runBlocking
 import java.util.Locale
 import javax.inject.Inject
 
-private const val DOUBLE_BACK_EXIT_WINDOW_MS = 400L
+private const val DOUBLE_BACK_EXIT_WINDOW_MS = 700L
+
+// Coming back to the app after this long away plays the intro again, as switching a TV on would
+private const val INTRO_AGAIN_AFTER_MS = 2 * 60_000L
 private const val SOURCE_SELECTION_COMMIT_MIN_POSITION_MS = 5_000L
 private const val SOURCE_SELECTION_FAILURE_RESET_MAX_POSITION_MS = 1_000L
 
@@ -704,6 +707,8 @@ class MainActivity : ComponentActivity() {
     private var splashOverlay: NeonIntroView? = null
     private val _splashFinished = mutableStateOf(false)
     private var poweringOff = false
+    // When the app last went out of sight, by the clock that keeps counting while the TV sleeps
+    private var stoppedAt = 0L
 
     override fun onDestroy() {
         dismissSplash()
@@ -714,8 +719,30 @@ class MainActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         if (splashOverlay == null) {
             outState.putBoolean(KEY_SPLASH_SHOWN, true)
+            outState.putLong(KEY_SPLASH_SHOWN_AT, SystemClock.elapsedRealtime())
         }
     }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isFinishing) stoppedAt = SystemClock.elapsedRealtime()
+    }
+
+    // Back after a while away (Home pressed, the TV asleep), the app switches on with its intro
+    override fun onRestart() {
+        super.onRestart()
+        val away = SystemClock.elapsedRealtime() - stoppedAt
+        if (stoppedAt == 0L || away < INTRO_AGAIN_AFTER_MS || splashOverlay != null || poweringOff) return
+        if (!NeonIntroView.animationsOn(this) || !splashEnabled()) return
+        attachSplashOverlay()
+        // Everything under it is already there, so it leaves as soon as it has played
+        onSplashAppReady()
+    }
+
+    private fun splashEnabled(): Boolean =
+        profileConfigurationManager.getLastActiveProfileId()?.let { id ->
+            runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
+        }?.splashEnabled ?: true
 
     /** The first screen has something to show: the intro leaves as soon as it has played. */
     private fun onSplashAppReady() {
@@ -800,12 +827,13 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val splashEnabledInProfile = profileConfigurationManager.getLastActiveProfileId()?.let { id ->
-            runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
-        }?.splashEnabled ?: true
+        val splashEnabledInProfile = splashEnabled()
+        // Brought back after the TV slept and the app was put away: the intro plays again when
+        // it has been a while, not when the screen was only turned or rebuilt a moment ago
+        val shownAgo = safeState?.getLong(KEY_SPLASH_SHOWN_AT, 0L)?.takeIf { it > 0L }?.let { SystemClock.elapsedRealtime() - it }
+        val shownLately = safeState?.getBoolean(KEY_SPLASH_SHOWN) == true && (shownAgo == null || shownAgo in 0 until INTRO_AGAIN_AFTER_MS)
         // No intro when the system's animations are switched off
-        val showSplash = splashEnabledInProfile && safeState?.getBoolean(KEY_SPLASH_SHOWN) != true &&
-            NeonIntroView.animationsOn(this)
+        val showSplash = splashEnabledInProfile && !shownLately && NeonIntroView.animationsOn(this)
         if (!showSplash) _splashFinished.value = true
 
         setContent {
@@ -2315,5 +2343,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val KEY_SPLASH_SHOWN = "splash_shown"
+        private const val KEY_SPLASH_SHOWN_AT = "splash_shown_at"
     }
 }

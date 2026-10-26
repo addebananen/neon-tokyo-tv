@@ -802,8 +802,8 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
-    for _ in 1 2 3; do
+    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3 4; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
@@ -813,6 +813,15 @@ for style in "${styles[@]}"; do
     key DPAD_CENTER; sleep 2
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
+    key BACK; sleep 2
+    # The pill with the version number, three along, says which version this is and looks for a newer one
+    for _ in 1 2 3 4; do key DPAD_LEFT; sleep 1; done
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "three along from the profile pill is $label, not the version pill" ;; esac
+    key DPAD_CENTER; sleep 4
+    shot "style-$style-updates"
+    screen_has "This version" || fail "the version pill did not open the updates panel"
     key BACK; sleep 2
     key BACK; sleep 2
   fi

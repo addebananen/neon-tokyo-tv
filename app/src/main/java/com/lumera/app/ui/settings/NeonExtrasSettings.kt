@@ -29,6 +29,7 @@ import com.lumera.app.dream.DreamVideo
 import com.lumera.app.dream.NeonDreamPreviewActivity
 import com.lumera.app.dream.NeonDreamService
 import com.lumera.app.dream.NeonDreamStyle
+import com.lumera.app.launcher.HomeSounds
 import com.lumera.app.launcher.NeonHomeActivity
 import com.lumera.app.projectivy.NeonWallpaperSettingsActivity
 
@@ -40,6 +41,7 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
     var homeActive by remember { mutableStateOf(false) }
     var dreamStyle by remember { mutableStateOf(NeonDreamStyle.get(context)) }
     var choosingVideo by remember { mutableStateOf(false) }
+    var homeSounds by remember { mutableStateOf(HomeSounds.enabled(context)) }
     LaunchedEffect(Unit) {
         dreamActive = isNeonDreamActive(context)
         homeActive = isNeonHomeActive(context)
@@ -62,6 +64,29 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
                 selectedOption = -1,
                 onOptionSelected = {
                     context.startActivity(Intent(context, NeonHomeActivity::class.java))
+                },
+                onBack = onGoBack
+            )
+        }
+    }
+    Spacer(Modifier.height(15.dp))
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+    Spacer(Modifier.height(15.dp))
+
+    SettingRow("Home screen sounds") {
+        Column {
+            Text(
+                "A soft tick as you move, a blip on OK and a chime when a console comes on.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = Color.White.copy(0.6f),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            VoidSegmentedControl(
+                options = listOf("On" to true, "Off" to false),
+                selectedOption = homeSounds,
+                onOptionSelected = {
+                    homeSounds = it
+                    HomeSounds.setEnabled(context, it)
                 },
                 onBack = onGoBack
             )
