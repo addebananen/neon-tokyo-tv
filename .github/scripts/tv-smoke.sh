@@ -691,6 +691,9 @@ pinned=$(focused_label)
 adb shell input keyevent --longpress DPAD_CENTER
 sleep 2
 shot neon-home-pin
+# The same panel takes an app away: uninstall for one's own, hide for one that came with the TV
+screen_has "App info" || fail "the panel for $pinned has no App info"
+grep -q -e 'text="Uninstall"' -e 'text="Hide"' "$OUT"/*-neon-home-pin.xml 2>/dev/null || fail "the panel for $pinned offers neither Uninstall nor Hide"
 if screen_has "Put $pinned on Home"; then
   key DPAD_CENTER
   sleep 2
