@@ -1616,23 +1616,27 @@ class MainActivity : ComponentActivity() {
                                         trailerReturnToken = trailerReturnToken,
                                         isTrailerLoading = isTrailerLoading,
                                         onTrailerClick = { youtubeKey, trailerName ->
-                                            isTrailerLoading = true
-                                            uiScope.launch {
-                                                val extractor = com.lumera.app.data.trailer.YouTubeExtractor()
-                                                val source = extractor.extractPlaybackSource(youtubeKey)
-                                                isTrailerLoading = false
-                                                if (source != null) {
-                                                    selectedVideoUrl = source.videoUrl
-                                                    selectedTrailerAudioUrl = source.audioUrl ?: ""
-                                                    selectedPlaybackId = "trailer_$youtubeKey"
-                                                    selectedPlaybackType = selectedMovieType
-                                                    selectedPlaybackTitle = trailerName
-                                                    selectedPlaybackPoster = selectedMoviePoster
-                                                    playerState.selectedPlayerSubtitles = emptyList()
-                                                    playerState.selectedPlayerSources = emptyList()
-                                                    activeView = "player"
-                                                } else {
-                                                    showTrailerError = true
+                                            // The YouTube app plays it; taking the video out of YouTube's pages is the
+                                            // stand-in for a TV without YouTube
+                                            if (!com.lumera.app.data.trailer.TrailerLauncher.open(this@MainActivity, youtubeKey)) {
+                                                isTrailerLoading = true
+                                                uiScope.launch {
+                                                    val extractor = com.lumera.app.data.trailer.YouTubeExtractor()
+                                                    val source = extractor.extractPlaybackSource(youtubeKey)
+                                                    isTrailerLoading = false
+                                                    if (source != null) {
+                                                        selectedVideoUrl = source.videoUrl
+                                                        selectedTrailerAudioUrl = source.audioUrl ?: ""
+                                                        selectedPlaybackId = "trailer_$youtubeKey"
+                                                        selectedPlaybackType = selectedMovieType
+                                                        selectedPlaybackTitle = trailerName
+                                                        selectedPlaybackPoster = selectedMoviePoster
+                                                        playerState.selectedPlayerSubtitles = emptyList()
+                                                        playerState.selectedPlayerSources = emptyList()
+                                                        activeView = "player"
+                                                    } else {
+                                                        showTrailerError = true
+                                                    }
                                                 }
                                             }
                                         }
