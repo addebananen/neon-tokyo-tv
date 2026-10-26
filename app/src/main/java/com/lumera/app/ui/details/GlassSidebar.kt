@@ -164,8 +164,18 @@ fun GlassSidebar(
         previousState = state
     }
 
-    LaunchedEffect(state) {
-        if (isVisible) { delay(200); runCatching { focusRequester.requestFocus() } }
+    // The focus goes into the panel as it opens and stays there: once the sources it was waiting
+    // for arrive, and when the content crossfades from one list to the next, the part that had it
+    // is taken away, so it is put back until the panel has it again
+    var panelHasFocus by remember { mutableStateOf(false) }
+    val sourcesArrived = (state as? SidebarState.Sources)?.streams != null
+    LaunchedEffect(isVisible, state::class, sourcesArrived) {
+        if (!isVisible) return@LaunchedEffect
+        delay(120)
+        repeat(30) {
+            if (!panelHasFocus) runCatching { focusRequester.requestFocus() }
+            delay(50)
+        }
     }
 
     val isEpisodes = state is SidebarState.Episodes
@@ -174,7 +184,13 @@ fun GlassSidebar(
         onDismiss = onDismiss,
         panelWidth = 620.dp
     ) {
-        Crossfade(targetState = state, label = "Sidebar") { current ->
+        Crossfade(
+            targetState = state,
+            // A list that fills in stays the same list, rather than fading into a copy of itself
+            contentKey = { it::class },
+            modifier = Modifier.onFocusChanged { panelHasFocus = it.hasFocus },
+            label = "Sidebar"
+        ) { current ->
             when (current) {
                 is SidebarState.Episodes -> EpisodesContent(
                     videos = current.videos,

@@ -1690,6 +1690,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        // Who is watching stays in the top left corner, where the side menu has it
+                        if (view == "grid" || view == "details") {
+                            com.lumera.app.ui.navigation.ProfileBadge(currentProfile)
+                        }
                         if (view == "player") {
                             if (selectedVideoUrl.isBlank() && torrentProgress == null) {
                                 LaunchedEffect(Unit) { activeView = "details" }
