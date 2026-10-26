@@ -86,7 +86,15 @@ enum class Glyph(pathData: String) {
     Search(circle(43, 43, 25) + "M62 62 L84 84"),
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
     Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
-    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68");
+    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68"),
+
+    // The weather by the clock
+    Sun(circle(50, 50, 16) + "M50 14 V24 M50 76 V86 M14 50 H24 M76 50 H86 M24.5 24.5 L31.6 31.6 M68.4 68.4 L75.5 75.5 M24.5 75.5 L31.6 68.4 M68.4 31.6 L75.5 24.5"),
+    Cloud("M30 70 H72 A14 14 0 0 0 70 42 A20 20 0 0 0 32 46 A12 12 0 0 0 30 70 Z"),
+    Rain("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z M38 66 L33 80 M52 66 L47 80 M66 66 L61 80"),
+    Snow("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z " + circle(38, 70, 2.5) + circle(52, 76, 2.5) + circle(66, 70, 2.5) + circle(44, 86, 2.5) + circle(60, 86, 2.5)),
+    Storm("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z M54 60 L44 74 H56 L46 90"),
+    Fog("M18 40 H82 M26 52 H74 M18 64 H82 M30 76 H70");
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
