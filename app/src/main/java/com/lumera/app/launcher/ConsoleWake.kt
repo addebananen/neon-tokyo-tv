@@ -120,9 +120,9 @@ internal fun ConsoleWakeCard(
     }
     LaunchedEffect(console) {
         // The card is only laid out after a frame or two
-        repeat(10) {
+        for (attempt in 0 until 10) {
             withFrameNanos { }
-            if (focused || runCatching { play.requestFocus() }.isSuccess) return@repeat
+            if (focused || runCatching { play.requestFocus() }.isSuccess) break
         }
         left.snapTo(1f)
         left.animateTo(0f, tween(ConsoleWake.SHOW_MS, easing = LinearEasing))

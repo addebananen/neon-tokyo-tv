@@ -108,7 +108,12 @@ print(center(focused[-1]) if focused else -1, center(target[0]) if target else -
 # focused_label: the text inside the element that has the D-pad focus
 focused_label() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
-  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+  adb shell cat /sdcard/ui.xml 2>/dev/null | focused_text
+}
+
+# focused_text: the label of the focused element in the UI tree read from stdin
+focused_text() {
+  python3 -c '
 import re, sys
 xml = sys.stdin.read()
 nodes = re.findall(r"<node [^>]*>", xml)
@@ -841,15 +846,18 @@ adb shell settings put global animator_duration_scale 1
 adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es wake switch2 >/dev/null 2>&1
 adb shell screenrecord --time-limit 7 --size 1280x720 --bit-rate 6000000 /sdcard/console-wake.mp4 > "$OUT/wake-record.txt" 2>&1 &
 recorder=$!
-sleep 3
+sleep 2
 shot console-wake
-screen_has "Switch 2 is on" || fail "the card of a console that was just switched on did not show"
-label=$(focused_label)
+# The card goes by itself after 14 s and each UI dump waits out its breathing ring, so the
+# checks read the one dump the shot made and Back comes before the time runs out
+wake_xml="$OUT/$(printf "%02d" "$step")-console-wake.xml"
+grep -q "Switch 2 is on" "$wake_xml" 2>/dev/null || fail "the card of a console that was just switched on did not show"
+label=$(focused_text < "$wake_xml" 2>/dev/null)
 case "$label" in *Play*) ;; *) fail "the card of a console that was just switched on does not have the focus on Play ($label has it)" ;; esac
-wait "$recorder" 2>/dev/null || true
-adb pull /sdcard/console-wake.mp4 "$OUT/console-wake.mp4" > /dev/null 2>&1 || true
 key BACK
 sleep 2
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/console-wake.mp4 "$OUT/console-wake.mp4" > /dev/null 2>&1 || true
 shot console-wake-away
 if screen_has "Switch 2 is on"; then fail "Back did not put the console's card away"; fi
 label=$(focused_label)
