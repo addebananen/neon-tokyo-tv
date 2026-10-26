@@ -419,6 +419,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         // A tab that just opened is only there after a frame or two
         repeat(10) {
             withFrameNanos { }
+            // A console's card that just came has the focus, and keeps it
+            if (woke != null) return@LaunchedEffect
             val target = when (tab) {
                 HomeTab.Home -> firstFavourite
                 HomeTab.Apps -> firstApp
@@ -427,9 +429,25 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             if (runCatching { target.requestFocus() }.isSuccess) return@LaunchedEffect
         }
     }
+    // A panel that closes gives the focus back to the pill that opened it; without this the
+    // focus is left nowhere once the panel's window goes and the first arrow press is lost
+    val profilePill = remember { FocusRequester() }
+    val inputsPill = remember { FocusRequester() }
+    val versionPill = remember { FocusRequester() }
+    var reopen by remember { mutableStateOf<FocusRequester?>(null) }
+    LaunchedEffect(showProfiles, showInputs, showUpdates) {
+        val back = reopen ?: return@LaunchedEffect
+        if (showProfiles || showInputs || showUpdates) return@LaunchedEffect
+        reopen = null
+        repeat(10) {
+            withFrameNanos { }
+            if (runCatching { back.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+    }
     // Home pressed while the home screen shows: back to the start, as on other TV home screens
     LaunchedEffect(homePresses) {
         if (homePresses == 0) return@LaunchedEffect
+        reopen = null
         drop()
         linking = null
         woke = null
@@ -526,7 +544,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                     modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = ignite.value }
                 ) {
-                    ProfilePill(profile, onClick = { showProfiles = true }, onFocus = {
+                    ProfilePill(profile, Modifier.focusRequester(profilePill), onClick = {
+                        reopen = profilePill
+                        showProfiles = true
+                    }, onFocus = {
                         focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
@@ -536,7 +557,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
                     })
-                    Pill("Inputs", Glyph.Hdmi, onClick = { showInputs = true }, onFocus = {
+                    Pill("Inputs", Glyph.Hdmi, Modifier.focusRequester(inputsPill), onClick = {
+                        reopen = inputsPill
+                        showInputs = true
+                    }, onFocus = {
                         focusMoved()
                         wallpaper = NeonWallpaper.OCEAN
                         spotOn = false
@@ -544,7 +568,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     Pill(
                         if (updateState is UpdateState.UpdateAvailable) "Update" else shortVersion(),
                         Glyph.Update,
-                        onClick = { showUpdates = true },
+                        Modifier.focusRequester(versionPill),
+                        onClick = {
+                            reopen = versionPill
+                            showUpdates = true
+                        },
                         onFocus = {
                             focusMoved()
                             wallpaper = NeonWallpaper.TOKYO
@@ -1324,12 +1352,12 @@ private fun BoxScope.TubeCore(shape: RoundedCornerShape, color: Color, lit: () -
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () -> Unit) {
+private fun Pill(text: String, glyph: Glyph, modifier: Modifier = Modifier, onClick: () -> Unit, onFocus: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(
         onClick = onClick,
-        modifier = Modifier.onFocusChanged { if (it.isFocused) onFocus() },
+        modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
         colors = ClickableSurfaceDefaults.colors(
@@ -1361,12 +1389,12 @@ private fun Pill(text: String, glyph: Glyph, onClick: () -> Unit, onFocus: () ->
 /** Who is home: the active profile's face and name, opening the profile picker. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ProfilePill(profile: HomeProfile, onClick: () -> Unit, onFocus: () -> Unit) {
+private fun ProfilePill(profile: HomeProfile, modifier: Modifier = Modifier, onClick: () -> Unit, onFocus: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(
         onClick = onClick,
-        modifier = Modifier.onFocusChanged { if (it.isFocused) onFocus() },
+        modifier = modifier.onFocusChanged { if (it.isFocused) onFocus() },
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.07f),
         colors = ClickableSurfaceDefaults.colors(

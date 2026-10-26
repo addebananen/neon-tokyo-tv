@@ -814,8 +814,11 @@ for style in "${styles[@]}"; do
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
     key BACK; sleep 2
+    screen_has "Who's home?" && fail "one press of Back did not close the profile picker"
+    # The panel gives the focus back to the pill that opened it
+    label=$(focused_label)
+    case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
     # The pill with the version number, three along, says which version this is and looks for a newer one
-    for _ in 1 2 3 4; do key DPAD_LEFT; sleep 1; done
     key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
     label=$(focused_label)
     case "$label" in nt.*|Update) ;; *) fail "three along from the profile pill is $label, not the version pill" ;; esac
@@ -823,6 +826,8 @@ for style in "${styles[@]}"; do
     shot "style-$style-updates"
     screen_has "This version" || fail "the version pill did not open the updates panel"
     key BACK; sleep 2
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "the focus did not go back to the version pill when the updates panel closed ($label has it)" ;; esac
     key BACK; sleep 2
   fi
   key BACK
