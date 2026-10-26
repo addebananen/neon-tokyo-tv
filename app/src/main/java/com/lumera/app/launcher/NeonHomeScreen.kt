@@ -127,6 +127,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.lumera.app.domain.ContinueEntry
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -227,6 +229,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val sounds = remember { HomeSounds(appContext) }
     DisposableEffect(sounds) { onDispose { sounds.release() } }
     val updates = remember { homeUpdates(appContext) }
+    // What the Neon Tokyo profile of the same name has left to watch, for the row under the apps
+    val watching = rememberHomeWatching(appContext, profile.name)
     val updateState by updates.state.collectAsState()
     var showUpdates by remember { mutableStateOf(false) }
     // A quiet look for a newer version once the home screen is up; the pill at the top says so
@@ -658,7 +662,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         onOpenApp = { slot ->
                             val known = slot.known
                             if (known != null && known in HomeCatalog.favourites) HomeApps.open(context, known) else HomeApps.open(context, slot.key)
-                        }
+                        },
+                        watching = watching,
+                        onOpenWatching = { profileId, entry -> HomeWatchingSource.open(context, profileId, entry) }
                     )
                     HomeTab.Sources -> Sources(
                         consoles = consoles,
@@ -799,7 +805,9 @@ private fun HomeRows(
     firstFavourite: FocusRequester,
     onFocusColor: (String?, String, Color) -> Unit,
     onSpot: (Spot) -> Unit,
-    onOpenApp: (HomeSlot) -> Unit
+    onOpenApp: (HomeSlot) -> Unit,
+    watching: HomeWatching?,
+    onOpenWatching: (Int, ContinueEntry) -> Unit
 ) {
     val look = LocalHomeLook.current
     val tileShape = RoundedCornerShape(look.corner)
@@ -842,8 +850,102 @@ private fun HomeRows(
                 }
             }
         }
+        if (watching != null && watching.entries.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            ContinueRow(watching, tileShape, onFocusColor, onSpot, onOpenWatching)
+        }
     }
 }
+
+/**
+ * Continue watching: what the Neon Tokyo profile with the same name as the home profile left part
+ * way, or the next episode of a series it follows. OK opens it in Neon Tokyo, logged in as that
+ * profile, on its page, where it plays on from where it was.
+ */
+@Composable
+private fun ContinueRow(
+    watching: HomeWatching,
+    shape: RoundedCornerShape,
+    onFocusColor: (String?, String, Color) -> Unit,
+    onSpot: (Spot) -> Unit,
+    onOpen: (Int, ContinueEntry) -> Unit
+) {
+    val look = LocalHomeLook.current
+    val color = look.accent
+    RowTitle("Continue watching")
+    Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
+        watching.entries.forEach { entry ->
+            key(entry.type, entry.id) {
+                NeonTile(
+                    width = BigTile.first,
+                    height = WatchTileHeight,
+                    shape = shape,
+                    color = color,
+                    onClick = { onOpen(watching.profileId, entry) },
+                    onFocus = { onFocusColor(null, entry.name, color) },
+                    modifier = Modifier.animatePlacement(),
+                    onFocusRect = { onSpot(Spot(it, color)) }
+                ) { focused ->
+                    val picture = entry.background?.takeIf { it.isNotBlank() } ?: entry.poster
+                    if (picture != null) {
+                        AsyncImage(
+                            model = picture,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(shape).graphicsLayer { alpha = if (focused) 0.95f else 0.7f }
+                        )
+                    }
+                    // Dark at the foot, so the name reads on any picture
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.82f)), shape)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 10.dp, end = 10.dp, bottom = 9.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
+                        TileName(entry.name, 13.sp)
+                        val episode = episodeLabel(entry)
+                        val note = when {
+                            entry.hasNewEpisode -> listOfNotNull("New episode", episode).joinToString("  ·  ")
+                            else -> episode
+                        }
+                        if (note != null) {
+                            BasicText(
+                                text = note,
+                                maxLines = 1,
+                                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.text.copy(alpha = 0.75f))
+                            )
+                        }
+                    }
+                    if (entry.progress > 0f) {
+                        // How far in: a lit line along the foot of the tile
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                .fillMaxWidth()
+                                .height(2.dp)
+                                .background(look.text.copy(alpha = 0.18f), RoundedCornerShape(1.dp))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(entry.progress.coerceIn(0.03f, 1f))
+                                    .background(color, RoundedCornerShape(1.dp))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val WatchTileHeight = 92.dp
 
 /**
  * Källor, the consoles and the PC by their HDMI numbers, as big tiles three to a row. One that

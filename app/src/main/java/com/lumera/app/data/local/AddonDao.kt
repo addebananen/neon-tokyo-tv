@@ -303,6 +303,13 @@ interface AddonDao {
 
     // ── One profile's rows, for moving old data and deleting a profile ──
 
+    /** One profile's history as it changes, for Neon Home, which shows it without logging in. */
+    @Query("SELECT * FROM watch_history WHERE profileId = :profileId ORDER BY lastWatched DESC")
+    fun getWatchHistoryFlowOf(profileId: Int): Flow<List<WatchHistoryEntity>>
+
+    @Query("SELECT * FROM series_next_up WHERE profileId = :profileId AND isComplete = 0 ORDER BY updatedAt DESC")
+    fun getActiveSeriesNextUpFlowOf(profileId: Int): Flow<List<SeriesNextUpEntity>>
+
     @Query("SELECT * FROM watch_history WHERE profileId = :profileId")
     suspend fun getHistoryOf(profileId: Int): List<WatchHistoryEntity>
 
