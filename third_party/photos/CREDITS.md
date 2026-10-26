@@ -19,6 +19,10 @@ screen; the glow masks next to them are drawn from the same photo.
 | `app/src/main/res/drawable-nodpi/home_style_solarpunk.webp`, `home_style_solarpunk_glow.webp` | A garden under a glass dome with an indoor waterfall and a train. [Pexels photo 17517619](https://www.pexels.com/photo/17517619/) | [Pexels License](https://www.pexels.com/license/) |
 | `app/src/main/res/drawable-nodpi/home_style_dusk.webp`, `home_style_dusk_glow.webp` | A path under burning evening clouds, a painting by **Angel Ganev** (his signature stays on the picture). | Used with the artist's permission. Not covered by the app's licence; do not reuse it without asking him. |
 
+The stills in `app/src/main/res/raw/home_still_*.mp4`, which the TV's video chip shows, are the
+same pictures; the photo styles are rebuilt at 4K from the original photos above, with the same
+crop and grade.
+
 ## Videos
 
-- Deep Blue (`res/raw/home_style_deepblue.mp4`, poster `home_style_deepblue.webp`): animation made by Adrian, the app's owner, cropped and re-encoded for the home screen.
+- Deep Blue (`res/raw/home_style_deepblue.mp4`, poster `home_style_deepblue.webp`): animation made by Adrian, the app's owner, cropped, shaded where the clock and tiles sit and re-encoded for the home screen at its full 60 frames a second.

@@ -175,6 +175,11 @@ dependencies {
     implementation(files("../playbackcore/libs/lib-decoder-ffmpeg-release.aar"))
     implementation(files("../playbackcore/libs/lib-decoder-iamf-release.aar"))
     implementation(files("../playbackcore/libs/lib-decoder-mpegh-release.aar"))
+    // Shrinks videos sent from a phone on the TV's own encoder; ExoPlayer itself is the AAR above
+    implementation("androidx.media3:media3-transformer:1.10.0-beta01") {
+        exclude(group = "androidx.media3", module = "media3-exoplayer")
+    }
+    implementation("androidx.media3:media3-effect:1.10.0-beta01")
 
     // 8. Testing & Debugging
     testImplementation("junit:junit:4.13.2")

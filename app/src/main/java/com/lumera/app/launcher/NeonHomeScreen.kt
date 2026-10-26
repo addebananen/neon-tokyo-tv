@@ -1571,10 +1571,10 @@ private fun rememberFocusClock(focused: Boolean): State<Float> {
         if (!focused) return@LaunchedEffect
         var last = withFrameNanos { it }
         while (true) {
-            withFrameNanos { now ->
-                seconds.floatValue += (now - last) / 1_000_000_000f
-                last = now
-            }
+            // On the beat the little lights keep, so the two never take turns redrawing the screen
+            val now = awaitBeat()
+            seconds.floatValue += (now - last) / 1_000_000_000f
+            last = now
         }
     }
     return seconds
@@ -2013,28 +2013,53 @@ private fun HomeClock(resumes: Int, light: () -> Float, ignite: () -> Float) {
 }
 
 /**
- * What fills the screen behind everything: the picture the profile sent from a phone, or its
- * style's painting with the little things that move in it, or for Neon the skyline. A new style
- * fades in over the old one.
+ * What fills the screen behind everything: the picture or film the profile sent from a phone, or
+ * its style's painting or film with the little things that move in it, or for Neon the skyline.
+ * Pictures and films are shown by the TV's video chip ([PlaneSurface]); what is drawn here stands
+ * in until the chip shows them, and for good on a TV that can't. A new style fades in over the old.
  */
 @Composable
 private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWallpaper) {
-    Crossfade(targetState = picture to style, animationSpec = tween(650), label = "HomeBackdrop") { (shownPicture, shown) ->
-        Box(Modifier.fillMaxSize()) {
-            when {
-                shownPicture != null && isVideo(shownPicture) -> VideoBackdrop(Uri.fromFile(java.io.File(shownPicture)), poster = null)
-                shownPicture != null -> PictureBackdrop(shownPicture)
-                // A film carries its own motion, so the painting's little lights stay off
-                shown.video != null -> VideoBackdrop(shown.video, poster = shown.backdrop)
-                shown.backdrop == null -> SkylineBackdrop(wallpaper)
-                shown.drift -> DriftingBox(shown.driftX, shown.driftY) {
-                    PaintingBackdrop(shown.backdrop)
-                    StyleAmbience(shown.ambience, light = shown.light)
-                }
-                else -> {
-                    PaintingBackdrop(shown.backdrop)
-                    StyleAmbience(shown.ambience, light = shown.light)
-                }
+    val context = LocalContext.current
+    val plane = remember { Plane() }
+    // A picture from a phone is made into a still for the video chip the first time it shows
+    LaunchedEffect(picture) { if (picture != null && !isVideo(picture)) PictureStill.make(context, picture) }
+    val made = PictureStill.made
+    val media = remember(style, picture, made) { planeMedia(context, style, picture) }
+    Box(Modifier.fillMaxSize()) {
+        PlaneSurface(plane, media)
+        Crossfade(targetState = picture to style, animationSpec = tween(650), label = "HomeBackdrop") { (shownPicture, shown) ->
+            val mine = remember(shown, shownPicture, made) { planeMedia(context, shown, shownPicture) }
+            StyleCover(plane, mine, shown, shownPicture, wallpaper)
+        }
+    }
+}
+
+/**
+ * What is drawn for a style or a profile's own [picture] over the video chip: the stand-in until
+ * the chip shows [media], then only what moves in it and the shade the tiles need.
+ */
+@Composable
+internal fun StyleCover(plane: Plane, media: PlaneMedia?, style: HomeStyle, picture: String?, wallpaper: NeonWallpaper?) {
+    val cover by rememberCover(plane, media)
+    val drawn = plane.drawn(media)
+    val coverAlpha = { if (drawn) 1f else cover }
+    val showCover = drawn || cover > 0f
+    Box(Modifier.fillMaxSize()) {
+        when {
+            picture != null && isVideo(picture) -> VideoShade()
+            picture != null -> PictureBackdrop(picture, showCover, coverAlpha, drift = drawn)
+            // A film carries its own motion, so the painting's little lights stay off
+            style.video != null -> if (showCover && style.backdrop != null) PaintingBackdrop(style.backdrop, coverAlpha)
+            style.backdrop == null -> if (wallpaper != null) SkylineBackdrop(wallpaper)
+            // Drawn for good, the photo drifts slowly as it did before the video chip showed it
+            drawn && style.drift -> DriftingBox(style.driftX, style.driftY) {
+                PaintingBackdrop(style.backdrop)
+                StyleAmbience(style.ambience, light = style.light)
+            }
+            else -> {
+                if (showCover) PaintingBackdrop(style.backdrop, coverAlpha)
+                StyleAmbience(style.ambience, light = style.light)
             }
         }
     }
@@ -2062,16 +2087,24 @@ internal fun DriftingBox(towardX: Float, towardY: Float, content: @Composable ()
     ) { content() }
 }
 
-/** A style's painting, decoded once off the main thread and faded in. */
+/** A style's painting, decoded once off the main thread, at [alpha] as the video chip takes over. */
 @Composable
-internal fun PaintingBackdrop(drawable: Int) {
+internal fun PaintingBackdrop(drawable: Int, alpha: () -> Float = { 1f }) {
     val context = LocalContext.current
     var image by remember(drawable) { mutableStateOf(PaintingCache.cached(drawable)) }
     LaunchedEffect(drawable) {
         if (image == null) image = withContext(Dispatchers.Default) { PaintingCache.load(context, drawable) }
     }
     val shown = image ?: return
-    Image(shown, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+    Image(
+        shown,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.fillMaxSize().graphicsLayer {
+            this.alpha = alpha()
+            compositingStrategy = CompositingStrategy.ModulateAlpha
+        }
+    )
 }
 
 /** The paintings last shown; full screen pictures, so only two are kept. */
@@ -2093,36 +2126,44 @@ private object PaintingCache {
 }
 
 /**
- * A picture someone sent from their phone, drifting slowly closer and back so it never sits
- * quite still, darkened where the clock and the tiles sit so they stay easy to read.
+ * A picture someone sent from their phone, darkened where the clock and the tiles sit so they stay
+ * easy to read. The picture itself is drawn while [shown], at [alpha] as the video chip takes over,
+ * and when it is drawn for good it drifts slowly closer and back so it never sits quite still.
  */
 @Composable
-internal fun PictureBackdrop(path: String) {
-    var image by remember(path) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(path) {
-        image = withContext(Dispatchers.IO) {
-            // The phone page sends 1920 by 1080, but a bigger file must not fill the TV's memory
-            decodeSampled(java.io.File(path), 1080)
-        }
-    }
-    val drift = rememberInfiniteTransition(label = "PictureDrift")
-    val zoom by drift.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(tween(40_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "PictureZoom"
-    )
-    val shown = image ?: return
+internal fun PictureBackdrop(path: String, shown: Boolean, alpha: () -> Float, drift: Boolean) {
     Box(Modifier.fillMaxSize()) {
-        Image(
-            shown,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = zoom
-                scaleY = zoom
+        if (shown) {
+            var image by remember(path) { mutableStateOf<ImageBitmap?>(null) }
+            LaunchedEffect(path) {
+                image = withContext(Dispatchers.IO) {
+                    // The phone page sends up to 4K, which must not fill the TV's memory
+                    decodeSampled(java.io.File(path), 1080)
+                }
             }
-        )
+            val zoom = if (drift) {
+                val value by rememberInfiniteTransition(label = "PictureDrift").animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.06f,
+                    animationSpec = infiniteRepeatable(tween(40_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                    label = "PictureZoom"
+                )
+                value
+            } else 1f
+            image?.let {
+                Image(
+                    it,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        scaleX = zoom
+                        scaleY = zoom
+                        this.alpha = alpha()
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    }
+                )
+            }
+        }
         Spacer(
             Modifier.fillMaxSize().drawBehind {
                 drawRect(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.6f)))

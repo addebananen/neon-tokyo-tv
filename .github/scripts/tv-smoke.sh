@@ -244,9 +244,15 @@ video_from_phone() {
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"error"' || fail "a file that is no video left the phone at $state instead of error"
   screen_has "play that video" || fail "the TV did not say it can't play a file that is no video"
-  code=$(curl -s -m 60 -H "Expect:" -H "Content-Type: application/octet-stream" -o "$OUT/video-post.txt" -w "%{http_code}" --data-binary "@.github/scripts/video-fixture.mp4" "$base/video")
+  # A phone's video with sound, which the TV makes lighter before it keeps it
+  code=$(curl -s -m 60 -H "Expect:" -H "Content-Type: application/octet-stream" -o "$OUT/video-post.txt" -w "%{http_code}" --data-binary "@.github/scripts/video-fixture-sound.mp4" "$base/video")
   if [ "$code" != 200 ]; then fail "sending the video answered $code: $(cat "$OUT/video-post.txt")"; return 1; fi
-  if ! wait_for "Your video is on" 20; then fail "the TV never took the video"; return 1; fi
+  if ! wait_for "Your video is on" 90; then fail "the TV never took the video"; return 1; fi
+  # Its picture is light already, so what comes out without the sound must be smaller still
+  shrunk=$(adb logcat -d -s DreamVideoShrink:I | grep -o "from [0-9]* kB to [0-9]* kB" | tail -n 1)
+  echo "video shrink: ${shrunk:-none}"
+  read -r _ before _ _ after _ <<< "${shrunk:-from 0 kB to 0 kB}"
+  [ "${after:-0}" -gt 0 ] && [ "$after" -lt "$before" ] || fail "the TV did not make the video with sound lighter (${shrunk:-not shrunk})"
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"done"' || fail "the phone was told $state instead of done"
   adb forward --remove tcp:18081 >/dev/null 2>&1
@@ -771,9 +777,14 @@ else
 fi
 echo "home styles under test ($MODE): ${styles[*]}"
 for style in "${styles[@]}"; do
+  adb logcat -c
   adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style "$style" >/dev/null 2>&1
   sleep 7
   shot "style-$style"
+  # The picture or film is shown by the video chip; the drawn painting only stands in for it
+  plane=$(adb logcat -d -s PlaneSurface:I | tr -d '\r' | grep -o "showing .*\|can't play.*" | tail -n 1)
+  echo "$style backdrop: ${plane:-nothing on the video chip}"
+  if ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
   # The style under review is filmed too, for its motion

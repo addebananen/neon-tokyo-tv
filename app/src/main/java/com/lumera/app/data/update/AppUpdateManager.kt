@@ -81,7 +81,7 @@ class AppUpdateManager @Inject constructor(
             val remoteVersion = release.tagName.removePrefix("v")
             val currentVersion = BuildConfig.VERSION_NAME
 
-            if (remoteVersion != currentVersion) {
+            if (isNewerVersion(remoteVersion, currentVersion)) {
                 val apkAsset = release.assets.firstOrNull { it.name.endsWith(".apk") }
                 if (apkAsset != null) {
                     if (!isAllowedDownloadUrl(apkAsset.downloadUrl)) {

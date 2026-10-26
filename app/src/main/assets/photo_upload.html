@@ -307,12 +307,18 @@ body.round .wide-only { display: none; }
   sendBtn.addEventListener("click", function () {
     message("cropMsg", "");
     var scale = cover * z;
+    // A background goes up to 4K, for a 4K TV, but never larger than the part of the photo chosen
+    var outW = OUT_W, outH = OUT_H;
+    if (WIDE) {
+      outW = Math.max(1920, Math.min(3840, Math.round(sw / scale / 16) * 16));
+      outH = outW * 9 / 16;
+    }
     var canvas = document.createElement("canvas");
-    canvas.width = OUT_W; canvas.height = OUT_H;
+    canvas.width = outW; canvas.height = outH;
     var ctx = canvas.getContext("2d");
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, -x / scale, -y / scale, sw / scale, sh / scale, 0, 0, OUT_W, OUT_H);
-    var data = canvas.toDataURL("image/jpeg", WIDE ? 0.86 : 0.9).split(",")[1];
+    ctx.drawImage(img, -x / scale, -y / scale, sw / scale, sh / scale, 0, 0, outW, outH);
+    var data = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
     var form = new FormData();
     form.append("image", data);
     sendBtn.disabled = true;
