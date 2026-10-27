@@ -1006,6 +1006,7 @@ class MainActivity : ComponentActivity() {
                         val searchEntryRequester = remember { FocusRequester() }
                         val settingsEntryRequester = remember { FocusRequester() }
                         val watchlistEntryRequester = remember { FocusRequester() }
+                        val liveTvEntryRequester = remember { FocusRequester() }
 
                         // STATE CHANGE TRIGGER:
                         LaunchedEffect(currentNav, activeView) {
@@ -1037,6 +1038,10 @@ class MainActivity : ComponentActivity() {
                                 NavDestination.Watchlist -> {
                                     delay(200)
                                     watchlistEntryRequester.requestFocus()
+                                }
+                                NavDestination.LiveTv -> {
+                                    delay(200)
+                                    runCatching { liveTvEntryRequester.requestFocus() }
                                 }
                                 else -> Unit
                             }
@@ -1071,6 +1076,7 @@ class MainActivity : ComponentActivity() {
                                             NavDestination.Search -> searchEntryRequester.requestFocus()
                                             NavDestination.Settings -> settingsEntryRequester.requestFocus()
                                             NavDestination.Watchlist -> watchlistEntryRequester.requestFocus()
+                                            NavDestination.LiveTv -> { runCatching { liveTvEntryRequester.requestFocus() } }
                                             else -> {}
                                         }
                                     } else {
@@ -1087,6 +1093,7 @@ class MainActivity : ComponentActivity() {
                                         NavDestination.Search -> searchEntryRequester.requestFocus()
                                         NavDestination.Settings -> settingsEntryRequester.requestFocus()
                                         NavDestination.Watchlist -> watchlistEntryRequester.requestFocus()
+                                        NavDestination.LiveTv -> { runCatching { liveTvEntryRequester.requestFocus() } }
                                         else -> {}
                                     }
                                 }
@@ -1231,6 +1238,13 @@ class MainActivity : ComponentActivity() {
                                                     activeView = "menu"
                                                     themeManager.resetTheme()
                                                     mainViewModel.logout()
+                                                }
+                                                NavDestination.LiveTv -> {
+                                                    com.lumera.app.livetv.LiveTvScreen(
+                                                        currentProfile = currentProfile,
+                                                        entryRequester = liveTvEntryRequester,
+                                                        drawerRequester = drawerRequesters[NavDestination.LiveTv]!!
+                                                    )
                                                 }
                                                 NavDestination.Watchlist -> {
                                                     val watchlistHomeVm = hiltViewModel<HomeViewModel>()
@@ -1384,6 +1398,13 @@ class MainActivity : ComponentActivity() {
                                                     activeView = "menu"
                                                     themeManager.resetTheme()
                                                     mainViewModel.logout()
+                                                }
+                                                NavDestination.LiveTv -> {
+                                                    com.lumera.app.livetv.LiveTvScreen(
+                                                        currentProfile = currentProfile,
+                                                        entryRequester = liveTvEntryRequester,
+                                                        drawerRequester = drawerRequesters[NavDestination.LiveTv]!!
+                                                    )
                                                 }
                                                 NavDestination.Watchlist -> {
                                                     val watchlistHomeVm = hiltViewModel<HomeViewModel>()

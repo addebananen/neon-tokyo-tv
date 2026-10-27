@@ -522,6 +522,82 @@ shot series-tab
 key DPAD_DOWN DPAD_DOWN DPAD_DOWN
 sleep 2
 shot series-rows
+
+# --- Live TV: a pretend Xtream provider on the runner, added from "the phone" -------------
+IPTV_PORT=8765
+iptv_stream="-"
+if command -v ffmpeg >/dev/null 2>&1 &&
+  ffmpeg -loglevel error -y -f lavfi -i testsrc=size=1280x720:rate=25 -f lavfi -i sine=frequency=440 -t 20 \
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -f mpegts "$OUT/iptv-stream.ts"; then
+  iptv_stream="$OUT/iptv-stream.ts"
+fi
+python3 "$(dirname "$0")/fake-iptv.py" "$IPTV_PORT" "$iptv_stream" &
+IPTV_PID=$!
+menu_go "Live TV"
+sleep 4
+shot livetv-empty
+screen_has "Add your IPTV service" || fail "Live TV without a service does not invite adding one"
+key DPAD_CENTER
+sleep 3
+shot livetv-setup
+read -r ip port token < <(photo_address)
+if [ -z "${token:-}" ]; then
+  fail "the Live TV setup dialog shows no address"
+else
+  adb forward tcp:18082 tcp:"$port" >/dev/null
+  base="http://127.0.0.1:18082/$token"
+  curl -fsS -m 10 "$base" -o "$OUT/iptv-page.html" || fail "the Live TV phone page did not open"
+  grep -q "Xtream login" "$OUT/iptv-page.html" || fail "the Live TV phone page has no Xtream form"
+  wrong=$(curl -s -m 30 -d kind=xtream -d server="10.0.2.2:$IPTV_PORT" -d user=neon -d pass=nope "$base")
+  echo "wrong login: $wrong"
+  echo "$wrong" | grep -q '"ok":false' || fail "a wrong Xtream password was accepted: $wrong"
+  echo "$wrong" | grep -qi "wrong username or password" || fail "a wrong Xtream password did not say so: $wrong"
+  right=$(curl -s -m 30 -d kind=xtream -d server="10.0.2.2:$IPTV_PORT" -d user=neon -d pass=tokyo "$base")
+  echo "right login: $right"
+  echo "$right" | grep -q '"ok":true' || fail "the Xtream login was refused: $right"
+  adb forward --remove tcp:18082 >/dev/null 2>&1
+  if wait_for "Sverige" 30; then
+    shot livetv-list
+    screen_has "4 channels" || fail "Live TV does not count the four channels"
+    # From Favourites (empty) down to All channels, then across into the channels
+    key DPAD_DOWN
+    sleep 2
+    screen_has "Morning Neon" || fail "the guide shows no programme on Neon One"
+    key DPAD_RIGHT
+    sleep 2
+    shot livetv-channel-focus
+    timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    adb shell cat /sdcard/ui.xml 2>/dev/null | grep -o '<node [^>]*>' | grep 'focused="true"' | grep -q 'content-desc="Neon One"' ||
+      fail "the first channel did not take the focus, focus on: $(focused_label)"
+    hold_ok 1.2 >/dev/null || fail "could not hold OK on a channel"
+    sleep 2
+    screen_has 'text="  ★"' || fail "holding OK did not make Neon One a favourite"
+    shot livetv-favourite
+    key DPAD_CENTER
+    sleep 8
+    shot livetv-player
+    screen_has "Neon One" || fail "the player shows no banner with the channel"
+    key DPAD_DOWN
+    sleep 6
+    shot livetv-zap
+    screen_has "Neon Two" || fail "Down in the player did not zap to the next channel"
+    if adb logcat -d -s ExoPlayerImplInternal:E 2>/dev/null | grep -q "Playback error"; then
+      [ "$iptv_stream" = "-" ] || fail "the test stream did not play (ExoPlayer error in the log)"
+    fi
+    key BACK
+    sleep 3
+    shot livetv-back
+    screen_has "Sverige" || fail "Back from the player did not return to the channel list"
+    key DPAD_LEFT DPAD_UP DPAD_UP
+    sleep 2
+    shot livetv-favourites
+    screen_has "Tokyo Drive" && fail "Favourites shows a channel that was not added" || true
+  else
+    fail "the Live TV channels did not load from the pretend provider"
+    shot livetv-failed
+  fi
+fi
+kill "$IPTV_PID" 2>/dev/null
 menu_go Search
 sleep 6
 shot search-tab
