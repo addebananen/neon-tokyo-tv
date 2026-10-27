@@ -890,6 +890,13 @@ class MainActivity : ComponentActivity() {
                     }
                     return@LaunchedEffect
                 }
+                if (open.type == com.lumera.app.livetv.LiveTv.OPEN_TYPE) {
+                    // A channel from Neon Home's Live TV row: the Live TV tab plays it
+                    com.lumera.app.livetv.LiveTv.want(open.id)
+                    activeView = "menu"
+                    pendingOpen.value = null
+                    return@LaunchedEffect
+                }
                 selectedMovieId = open.id
                 selectedMovieType = open.type
                 selectedMovieTitle = open.name
@@ -982,6 +989,8 @@ class MainActivity : ComponentActivity() {
                         // MAIN APP CONTENT
                         LaunchedEffect(Unit) { onSplashAppReady() }
                         var currentNav by remember { mutableStateOf(NavDestination.Home) }
+                        val wantedChannel by com.lumera.app.livetv.LiveTv.wanted.collectAsState()
+                        LaunchedEffect(wantedChannel) { if (wantedChannel != null) currentNav = NavDestination.LiveTv }
                         
                         // Grid view state
                         var gridViewTitle by rememberSaveable { mutableStateOf("") }

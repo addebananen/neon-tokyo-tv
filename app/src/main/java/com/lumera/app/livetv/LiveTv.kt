@@ -40,6 +40,9 @@ object LiveTv {
         data class Failed(val message: String, val channels: List<IptvChannel> = emptyList()) : State()
     }
 
+    /** The type Neon Home puts on the request to open a channel in the app. */
+    const val OPEN_TYPE = "livetv"
+
     private const val TAG = "LiveTv"
     private const val SECURE_PREFS = "livetv_secure"
     private const val PREFS = "livetv"
@@ -53,6 +56,14 @@ object LiveTv {
 
     private val _guide = MutableStateFlow<Map<String, List<Programme>>>(emptyMap())
     val guide: StateFlow<Map<String, List<Programme>>> = _guide.asStateFlow()
+
+    private val _wanted = MutableStateFlow<String?>(null)
+    /** A channel Neon Home asked to play; Live TV opens and plays it, then clears this. */
+    val wanted: StateFlow<String?> = _wanted.asStateFlow()
+
+    fun want(channelId: String?) {
+        _wanted.value = channelId
+    }
 
     private val gson = Gson()
     private val loadLock = Mutex()
@@ -253,6 +264,22 @@ object LiveTv {
     fun setLastChannel(context: Context, profileId: Int, channelId: String) {
         init(context)
         prefs?.edit()?.putString("last.$profileId", channelId)?.apply()
+    }
+
+    /**
+     * A profile's favourite channels as kept on the TV, with what is on each now, for the row on
+     * Neon Home; nothing is fetched for it.
+     */
+    suspend fun homeFavourites(context: Context, profileId: Int, max: Int): List<Pair<IptvChannel, Programme?>> = withContext(Dispatchers.IO) {
+        init(context)
+        if (source(context) == null) return@withContext emptyList()
+        val favourites = favourites(context, profileId)
+        if (favourites.isEmpty()) return@withContext emptyList()
+        val kept = (state.value as? State.Ready)?.channels?.takeIf { it.isNotEmpty() } ?: readChannels()
+        val byId = kept.associateBy { it.id }
+        val guide = _guide.value.ifEmpty { readGuide().orEmpty() }
+        val now = System.currentTimeMillis()
+        favourites.mapNotNull { byId[it] }.take(max).map { it to guide[it.epgId]?.nowNext(now)?.now }
     }
 
     // ---- Plumbing ----

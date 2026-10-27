@@ -179,6 +179,14 @@ fun LiveTvScreen(
                 }
             }
             val counts = remember(channels) { channels.groupingBy { it.group }.eachCount() }
+            // A channel picked on Neon Home: played at once, among the favourites when it is one
+            val wanted by LiveTv.wanted.collectAsState()
+            LaunchedEffect(wanted, byId) {
+                val channel = wanted?.let { byId[it] } ?: return@LaunchedEffect
+                val among = favouriteChannels.takeIf { channel in it } ?: listOf(channel)
+                playing = among to among.indexOf(channel)
+                LiveTv.want(null)
+            }
             LaunchedEffect(focusList) {
                 if (!focusList) return@LaunchedEffect
                 delay(150)
