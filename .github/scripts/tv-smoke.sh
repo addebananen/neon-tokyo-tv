@@ -940,18 +940,18 @@ label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "the focus did not go back to YouTube when the console's card went ($label has it)"
 # A paired headphone switched on near the TV: its card slides in at the bottom corner with the
 # focus on Connect, and Back puts it away. The emulator has no Bluetooth devices, so the preview
-# shows the card for a made-up pair of AirPods
-adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es bluetooth "AirPods Pro" >/dev/null 2>&1
+# shows the card for a made-up pair of AirPods (one word: adb shell splits the extra at spaces)
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es bluetooth AirPods >/dev/null 2>&1
 sleep 2
 shot bluetooth-card
 bt_xml="$OUT/$(printf "%02d" "$step")-bluetooth-card.xml"
-grep -q "AirPods Pro turned on" "$bt_xml" 2>/dev/null || fail "the card of a Bluetooth device that was just switched on did not show"
+grep -q "AirPods turned on" "$bt_xml" 2>/dev/null || fail "the card of a Bluetooth device that was just switched on did not show"
 label=$(focused_text < "$bt_xml" 2>/dev/null)
 case "$label" in *Connect*) ;; *) fail "the Bluetooth card does not have the focus on Connect ($label has it)" ;; esac
 key BACK
 sleep 2
 shot bluetooth-card-away
-if screen_has "AirPods Pro turned on"; then fail "Back did not put the Bluetooth card away"; fi
+if screen_has "AirPods turned on"; then fail "Back did not put the Bluetooth card away"; fi
 adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
