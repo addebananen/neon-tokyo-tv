@@ -204,10 +204,14 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   // ---- Sending ----
   // In pieces, each to its place in the file on the TV: when the screen goes dark or the Wi-Fi
   // drops, the piece is sent again from where the TV has got to instead of the whole video
-  var PIECE = 8 * 1024 * 1024;
+  // The size of a piece follows the Wi-Fi: about ten seconds' worth, so a slow link still
+  // gets whole pieces through and a fast one isn't held up by asking after each
+  var MB = 1024 * 1024, piece = 2 * MB, MIN_PIECE = 256 * 1024, MAX_PIECE = 16 * MB;
+  // A piece is only given up when nothing has moved for this long, however slow it is
+  var STALL = 45000;
   var bar = document.getElementById("bar"), pct = document.getElementById("pct");
   var sendingText = document.getElementById("sendingText");
-  var sendId = 0, wakeLock = null, waking = null;
+  var sendId = 0, wakeLock = null, waking = null, reached = 0;
   function progress(done, total) {
     var p = Math.min(100, Math.floor(done / total * 100));
     bar.style.width = p + "%";
@@ -235,27 +239,50 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   });
   function send(file, from, id, tries) {
     if (id !== sendId) return;
-    var to = Math.min(file.size, from + PIECE);
+    // Getting further, however slowly, is never a reason to give up
+    if (from > reached) { reached = from; tries = 0; }
+    var to = Math.min(file.size, from + piece);
     var xhr = new XMLHttpRequest();
+    var started = Date.now(), moved = started, watch = null;
+    function stop() { clearInterval(watch); }
     xhr.open("POST", BASE + "/piece");
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.setRequestHeader("X-Offset", String(from));
     xhr.setRequestHeader("X-Total", String(file.size));
-    xhr.timeout = 90000;
-    xhr.upload.onprogress = function (e) { if (id === sendId) progress(from + e.loaded, file.size); };
+    xhr.upload.onprogress = function (e) {
+      moved = Date.now();
+      if (id === sendId) progress(from + e.loaded, file.size);
+    };
     xhr.onload = function () {
+      stop();
       if (id !== sendId) return;
       var answer = null;
       try { answer = JSON.parse(xhr.responseText); } catch (e) {}
       if (xhr.status === 200 && answer) {
         sendingText.textContent = "Keep this page open until it's there.";
+        var got = answer.received - from;
+        if (got > 0 && answer.received === to) {
+          var seconds = Math.max(0.2, (Date.now() - started) / 1000);
+          piece = Math.max(MIN_PIECE, Math.min(MAX_PIECE, Math.round(got / seconds * 10)));
+        }
         if (answer.received >= file.size) arrived();
         else send(file, answer.received, id, answer.received > from ? 0 : tries + 1);
       } else {
         failed(xhr.responseText && xhr.responseText.length < 300 ? xhr.responseText : "The TV couldn't take that video. Try again.");
       }
     };
-    xhr.onerror = xhr.ontimeout = function () { if (id === sendId) again(file, id, tries + 1); };
+    xhr.onerror = xhr.onabort = function () {
+      stop();
+      if (id !== sendId) return;
+      // Smaller pieces from here, so the next one has a better chance of getting through
+      piece = Math.max(MIN_PIECE, Math.floor(piece / 2));
+      again(file, id, tries + 1);
+    };
+    // Nothing moving for a while: give the piece up and ask the TV where to go on from
+    watch = setInterval(function () {
+      if (id !== sendId) { stop(); xhr.abort(); return; }
+      if (document.visibilityState === "visible" && Date.now() - moved > STALL) xhr.abort();
+    }, 2000);
     xhr.send(file.slice(from, to));
   }
   // A piece that broke off: ask the TV how much it has, and go on from there
@@ -294,6 +321,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     show("sending");
     keepAwake();
     var id = ++sendId, file = chosen;
+    reached = 0;
     // The TV says how much room it has; the TV makes more if it can, so this only stops a video
     // that is far too big, before it is sent for nothing
     fetch(BASE + "/status", { cache: "no-store" }).then(function (res) { return res.json(); }).then(function (s) {
