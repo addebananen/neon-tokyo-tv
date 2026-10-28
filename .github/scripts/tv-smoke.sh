@@ -296,7 +296,10 @@ video_from_phone() {
 # hold_ok <seconds>: holds OK down like a thumb on the remote. `input keyevent` can only tap or
 # long press, the shell may not write /dev/input, and the emulator console's keys never arrive
 # without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
-hold_ok() {
+hold_ok() { hold_keys 23 "$1"; }
+
+# hold_keys <codes> <seconds>: the same for any key, or for keys held together ("19,20")
+hold_keys() {
   if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
     local sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}" build tools
     build=$(mktemp -d)
@@ -306,8 +309,8 @@ hold_ok() {
       adb push "$build/classes.dex" /data/local/tmp/holdkey.dex >/dev/null || return 1
   fi
   local ms
-  ms=$(awk -v s="$1" 'BEGIN { printf "%d", s * 1000 }')
-  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey 23 "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
+  ms=$(awk -v s="$2" 'BEGIN { printf "%d", s * 1000 }')
+  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey "$1" "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
@@ -377,7 +380,6 @@ if ! adb install -r -g "$APK" > "$OUT/install.txt" 2>&1; then
   exit 1
 fi
 
-adb logcat -c
 adb logcat -v time > "$OUT/logcat-full.txt" 2>&1 &
 LOGCAT_PID=$!
 
@@ -1139,6 +1141,18 @@ adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
 
+# Widgets under the clock, a profile's own extra: weather, the week, what plays and the network
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es widgets Weather,Calendar,Music,Network >/dev/null 2>&1
+sleep 5
+shot neon-home-widgets
+screen_has 'text="Week [0-9]*"' || fail "the week widget did not show under the clock"
+screen_has 'text="Nothing playing"' || fail "the music widget did not show under the clock"
+screen_has 'text="Wi‑Fi"\|text="Ethernet"\|text="Online"\|text="Offline"' || fail "the network widget did not show under the clock"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "with widgets on, Neon Home does not start on YouTube ($label has the focus)"
+key BACK
+sleep 2
+
 # A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
 # opens over the app the way its Preview button does; clearing the task would close the app too
 for style in "${dreams[@]}"; do
@@ -1220,6 +1234,62 @@ fi
 [ "$(resolve_home)" = "$stock_home" ] || fail "the stock home screen did not get the Home button back ($(resolve_home) instead of $stock_home)"
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3
+
+# --- Overlays: picture diagnostics and the gaming HUD over whatever shows ---------
+# The TV turns the overlay service on under Accessibility; the shell may do the same. Holding Up
+# and Down together opens diagnostics and Back puts it away; Left and Right bring the HUD, which
+# goes by itself. The windows draw over the app without taking its focus
+overlay_on() { adb shell dumpsys window windows 2>/dev/null | grep -q "NeonOverlay"; }
+overlay_me="$PKG/com.lumera.app.overlay.NeonOverlayService"
+overlay_before=$(adb shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')
+adb shell pm grant "$PKG" android.permission.DUMP > "$OUT/overlay.txt" 2>&1
+adb shell settings put secure enabled_accessibility_services "$overlay_me"
+adb shell settings put secure accessibility_enabled 1
+sleep 4
+adb shell dumpsys accessibility >> "$OUT/overlay.txt" 2>&1
+grep -q "NeonOverlayService" "$OUT/overlay.txt" || fail "the overlay service did not start once Accessibility turned it on"
+adb shell settings put global animator_duration_scale 1
+adb shell screenrecord --time-limit 6 --size 1280x720 --bit-rate 6000000 /sdcard/overlay.mp4 >> "$OUT/overlay.txt" 2>&1 &
+recorder=$!
+sleep 0.5
+# Keys injected from the shell never pass the accessibility key filter the chords listen through
+# (a real remote's do; the chords themselves are unit tested), so the overlays are opened the way
+# a PC can: a broadcast only the shell and the system may send. Pictures are plain screencaps,
+# since uiautomator unbinds every accessibility service while it reads the screen
+overlay() { adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show "$1" >/dev/null 2>&1; }
+overlay_shot() { step=$((step + 1)); adb exec-out screencap -p > "$OUT/$(printf "%02d-%s" "$step" "$1").png"; }
+overlay diagnostics
+sleep 2.5
+overlay_on || fail "picture diagnostics did not open"
+sleep 1.5
+overlay_shot overlay-diagnostics
+sleep 1.5
+overlay off
+sleep 1
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/overlay.mp4 "$OUT/overlay-diagnostics.mp4" > /dev/null 2>&1 || true
+if overlay_on; then fail "picture diagnostics did not go away"; fi
+adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
+  fail "picture diagnostics took the app out of front"
+# The app's own folder is closed to adb on Android 11, so the save is read from the log
+adb logcat -d -s Dumps | grep -q "Saved the report" || fail "picture diagnostics saved no report"
+adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show report > "$OUT/overlay-readings.txt" 2>&1
+grep -q "\[Panel\]" "$OUT/overlay-readings.txt" || fail "the overlay service sent no readings back to am broadcast"
+overlay hud
+sleep 1.5
+overlay_on || fail "the gaming HUD did not open"
+overlay_shot overlay-hud
+sleep 6
+if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
+adb shell settings put global animator_duration_scale 0
+if [ -z "$overlay_before" ] || [ "$overlay_before" = null ]; then
+  adb shell settings delete secure enabled_accessibility_services > /dev/null 2>&1
+else
+  adb shell settings put secure enabled_accessibility_services "$overlay_before"
+fi
+sleep 1
+
+adb logcat -d -s NeonOverlay Dumps >> "$OUT/overlay.txt" 2>&1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------

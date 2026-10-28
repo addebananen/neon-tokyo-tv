@@ -1,6 +1,7 @@
 package com.lumera.app.dream
 
 import android.service.dreams.DreamService
+import com.lumera.app.launcher.DreamWidgetsView
 
 /**
  * The screensaver: the night drive through the city, the Neon Tokyo skyline, or your own video.
@@ -13,7 +14,8 @@ class NeonDreamService : DreamService() {
         super.onAttachedToWindow()
         isInteractive = false
         isFullscreen = true
-        setContentView(NeonDreamStyle.view(this))
+        // The home profile's widgets ride along when it wants them on the screensaver
+        setContentView(DreamWidgetsView.wrap(this, NeonDreamStyle.view(this)))
     }
 
     companion object {

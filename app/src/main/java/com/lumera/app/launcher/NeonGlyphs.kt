@@ -96,7 +96,20 @@ enum class Glyph(pathData: String) {
     Earbuds(
         "M30 20 A13 13 0 1 1 30 46 A13 13 0 0 1 30 20 Z M37 40 V80 A5 5 0 0 1 27 80 V44 " +
             "M70 20 A13 13 0 1 0 70 46 A13 13 0 0 0 70 20 Z M63 40 V80 A5 5 0 0 0 73 80 V44"
-    );
+    ),
+
+    // The widgets by the clock
+    Sun(circle(50, 50, 16) + "M50 14 V24 M50 76 V86 M14 50 H24 M76 50 H86 M24.5 24.5 L31.6 31.6 M68.4 68.4 L75.5 75.5 M24.5 75.5 L31.6 68.4 M68.4 31.6 L75.5 24.5"),
+    Cloud("M30 70 H72 A14 14 0 0 0 70 42 A20 20 0 0 0 32 46 A12 12 0 0 0 30 70 Z"),
+    Rain("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z M38 66 L33 80 M52 66 L47 80 M66 66 L61 80"),
+    Snow("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z " + circle(38, 70, 2.5) + circle(52, 76, 2.5) + circle(66, 70, 2.5) + circle(44, 86, 2.5) + circle(60, 86, 2.5)),
+    Storm("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z M54 60 L44 74 H56 L46 90"),
+    Fog("M18 40 H82 M26 52 H74 M18 64 H82 M30 76 H70"),
+    Wifi("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67" + circle(50, 80, 4)),
+    Ethernet(rect(22, 20, 56, 50, 6) + "M36 70 V84 H64 V70 M34 34 V46 M44 34 V46 M56 34 V46 M66 34 V46"),
+    Offline("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67 M18 18 L82 82"),
+    Note("M40 72 V22 L78 14 V64" + circle(30, 72, 10) + circle(68, 64, 10) + "M40 34 L78 26"),
+    Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54");
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }

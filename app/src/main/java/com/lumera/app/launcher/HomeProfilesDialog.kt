@@ -288,6 +288,7 @@ private fun ProfileEditor(
     var takingBackground by remember { mutableStateOf(false) }
     var takingDreamVideo by remember { mutableStateOf(false) }
     var takingVideo by remember { mutableStateOf(false) }
+    var choosingWidgets by remember { mutableStateOf(false) }
     val styleList = remember { FocusRequester() }
     LaunchedEffect(profile.id) {
         withFrameNanos { }
@@ -357,10 +358,14 @@ private fun ProfileEditor(
                 saveName()
                 onDone()
             }
+            PanelButton("Widgets", look) { choosingWidgets = true }
             PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
             if (profile.dreamVideo != null) PanelButton("Remove screensaver video", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
             if (canDelete) PanelButton("Remove profile", look, onClick = onDelete)
         }
+    }
+    if (choosingWidgets) {
+        HomeWidgetsDialog(profile, onDismiss = { choosingWidgets = false })
     }
     if (takingPhoto) {
         ProfilePhotoDialog(

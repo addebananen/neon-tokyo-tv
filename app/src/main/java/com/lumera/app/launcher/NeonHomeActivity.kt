@@ -122,6 +122,7 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewTint = intent.getStringExtra(EXTRA_TINT)?.let(IconTint::of)
         if (preview) previewTiles = tilesOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
+        HomeWidgets.preview(if (preview) widgetsOf(intent) else null)
         if (preview) previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
         if (preview) previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
         setContent {
@@ -148,6 +149,7 @@ class NeonHomeActivity : ComponentActivity() {
             previewIcons = null
             previewTint = null
             previewTiles = null
+            HomeWidgets.preview(null)
             homePresses.intValue++
         } else {
             // Asked to show a style while already open, as from Settings again: show it
@@ -156,10 +158,17 @@ class NeonHomeActivity : ComponentActivity() {
             intent.getStringExtra(EXTRA_TINT)?.let { previewTint = IconTint.of(it) }
             tilesOf(intent)?.let { previewTiles = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
+            widgetsOf(intent)?.let { HomeWidgets.preview(it) }
             previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
             previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
         }
     }
+
+    /** "Weather,Calendar,Network" shows those widgets, as the emulator test asks. */
+    private fun widgetsOf(intent: Intent): WidgetSetup? =
+        intent.getStringExtra(EXTRA_WIDGETS)?.split(',')
+            ?.mapNotNull { name -> WidgetKind.values().firstOrNull { it.name.equals(name.trim(), ignoreCase = true) } }
+            ?.let { WidgetSetup(kinds = it.toSet()) }
 
     private fun tilesOf(intent: Intent): List<String>? =
         intent.getStringExtra(EXTRA_TILES)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
@@ -180,6 +189,8 @@ class NeonHomeActivity : ComponentActivity() {
         /** The id of a console whose card to show, as if it had just been switched on. */
         const val EXTRA_WAKE = "wake"
 
+        /** Widgets to show in a preview, by name, separated by commas. */
+        const val EXTRA_WIDGETS = "widgets"
         /** The name of a Bluetooth device whose card to show, as if it had just been switched on. */
         const val EXTRA_BLUETOOTH = "bluetooth"
 

@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -79,6 +80,72 @@ object HomeDream {
 }
 
 /**
+ * The active profile's widgets over a screensaver that draws its own clock (the city drive, the
+ * skyline) or none (a video), placed under that clock and drifting slowly with the minutes so
+ * nothing stands still on the panel. A home style's screensaver has them under its own clock.
+ */
+object DreamWidgetsView {
+    fun wrap(context: Context, scene: View): View {
+        if (scene is StyleDreamView) return scene
+        val profile = HomeProfiles.get(context).active()
+        val setup = HomeWidgets.get(context, profile.id)
+        if (!setup.onDream || setup.shown.none { it != WidgetKind.Shortcuts }) return scene
+        // Under the drive's clock and its sign, under the skyline's clock, or at the top for a video
+        val (start, top) = when (scene) {
+            is CityDriveView -> 62.dp to 196.dp
+            is com.lumera.app.dream.NeonNightView -> 78.dp to 214.dp
+            else -> 58.dp to 34.dp
+        }
+        return DreamFrame(context, scene, profile.style, start, top)
+    }
+}
+
+/** A screensaver's own view with the widgets on top, keeping a Compose lifecycle of its own. */
+class DreamFrame internal constructor(
+    context: Context,
+    val scene: View,
+    style: HomeStyle,
+    start: Dp,
+    top: Dp
+) : FrameLayout(context) {
+    private val owner = DreamOwner()
+
+    init {
+        setViewTreeLifecycleOwner(owner)
+        setViewTreeSavedStateRegistryOwner(owner)
+        setViewTreeViewModelStoreOwner(owner)
+        addView(scene)
+        addView(ComposeView(context).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                CompositionLocalProvider(LocalHomeLook provides style.look) {
+                    var minute by remember { mutableLongStateOf(System.currentTimeMillis() / 60_000L) }
+                    LaunchedEffect(Unit) {
+                        while (true) {
+                            delay(60_000L - System.currentTimeMillis() % 60_000L + 50L)
+                            minute = System.currentTimeMillis() / 60_000L
+                        }
+                    }
+                    val driftX by animateDpAsState((minute % 5 * 5).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsX")
+                    val driftY by animateDpAsState((minute / 5 % 4 * 4).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsY")
+                    DreamWidgets(Modifier.padding(start = start, top = top).offset(driftX, driftY))
+                }
+            }
+        }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+    }
+
+    override fun onAttachedToWindow() {
+        owner.move(Lifecycle.State.RESUMED)
+        super.onAttachedToWindow()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        owner.move(Lifecycle.State.DESTROYED)
+    }
+}
+
+/**
  * Hosts [StyleDream] in a screensaver's window, which has no activity to give Compose its
  * lifecycle, so the view keeps one of its own from being attached until it is taken away.
  */
@@ -112,7 +179,7 @@ class StyleDreamView internal constructor(context: Context, profile: HomeProfile
     fun onResume() = owner.move(Lifecycle.State.RESUMED)
 }
 
-private class DreamOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
+internal class DreamOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val registry = LifecycleRegistry(this)
     private val saved = SavedStateRegistryController.create(this)
     private val store = ViewModelStore()
@@ -188,7 +255,7 @@ private fun DreamClock(look: HomeLook) {
     )
     // A few dp further each minute, eased over seconds, so nothing stands still on the panel for hours
     val minute = (now / 60_000L).toInt()
-    val driftX by animateDpAsState((minute % 5 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockX")
+    val driftX by animateDpAsState((minute % 5 * 5).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockX")
     val driftY by animateDpAsState((minute / 5 % 4 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockY")
     val locale = Locale.getDefault()
     val time = remember(now) { SimpleDateFormat(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(Date(now)) }
@@ -220,5 +287,6 @@ private fun DreamClock(look: HomeLook) {
                 shadow = look.shade?.let { Shadow(it, blurRadius = 10f) }
             )
         )
+        DreamWidgets(Modifier.padding(top = 12.dp))
     }
 }
