@@ -215,7 +215,7 @@ internal class SignalProbe(private val context: Context) {
                 null -> add(Reading("Low-latency mode", "—", How.Unknown))
             }
             add(Reading("ALLM now", "—", How.Unknown, "The TV doesn't tell apps"))
-            add(Reading("VRR now", "—", How.Unknown, "Android 14 has no way to ask"))
+            add(Reading("VRR now", "—", How.Unknown, "Android gives apps no way to ask"))
         }
 
         val soundReadings = buildList {

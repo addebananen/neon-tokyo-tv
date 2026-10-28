@@ -94,8 +94,8 @@ internal object Dumps {
     }
 
     /**
-     * Everything diagnostics saw, written next to the app's files so it can be fetched with
-     * `adb pull /sdcard/Android/data/com.neontokyo.tv/files/diagnostics/latest.txt`.
+     * Everything diagnostics saw, kept in the app's own files. Android keeps that folder from
+     * adb; a PC reads the readings with `am broadcast ... --es show report` instead.
      */
     fun save(context: Context, report: SignalReport, withSystem: Boolean) {
         runCatching {
