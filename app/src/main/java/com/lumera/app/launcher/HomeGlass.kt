@@ -69,7 +69,7 @@ internal fun Modifier.glassPane(
     val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
     val hair = Stroke(2.dp.toPx())
     val rim = Stroke(1.8.dp.toPx())
-    val rimBrush = Brush.sweepGradient(*RimStops, center = center)
+    val rimBrush = Brush.sweepGradient(*RimStops, center = Offset(size.width / 2f, size.height / 2f))
     val gloss = Brush.radialGradient(
         0f to Color.White.copy(alpha = 0.24f),
         1f to Color.Transparent,
