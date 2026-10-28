@@ -83,6 +83,24 @@ object NeonTokyoStarterPack {
         return SERVICES.firstOrNull { it.second.lowercase() == name }?.first ?: SERVICE_ALIASES[name]
     }
 
+    /**
+     * The scene art a hub card shows: its streaming service, or else the genre its catalogs
+     * filter by (so a renamed card keeps its art), or else the genre its title names.
+     */
+    fun artCode(categoryId: String, title: String): String? {
+        serviceCode(categoryId, title)?.let { return it }
+        (parseCombo(categoryId) ?: listOf(categoryId)).forEach { id ->
+            val genre = id.substringAfter('#', "").split('&')
+                .firstOrNull { it.startsWith("genre=") }
+                ?.let { java.net.URLDecoder.decode(it.removePrefix("genre="), "UTF-8") }
+            GENRES.firstOrNull { it.equals(genre, ignoreCase = true) }?.let { return genreArt(it) }
+        }
+        return GENRES.firstOrNull { it.equals(title.trim(), ignoreCase = true) }?.let(::genreArt)
+    }
+
+    /** A genre's scene code in the art files: g_ and its name in lower-case letters, "Sci-Fi" is g_scifi. */
+    fun genreArt(genre: String) = "g_" + genre.lowercase().filter { it.isLetter() }
+
     private val SERVICE_ALIASES = mapOf(
         "max" to "hbm", "hbo" to "hbm",
         "disney plus" to "dnp",

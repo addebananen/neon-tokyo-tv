@@ -393,7 +393,7 @@ fun CinematicLayout(
             val serviceCode = hub?.second
             when {
                 hub == null -> Unit
-                // A streaming service shows its own scene, other folders a glow in their colour
+                // A streaming service or genre shows its own scene, other folders a glow in their colour
                 serviceCode != null -> ServiceHeroArt(serviceCode)
                 else -> HubHeroGlow(hub.first)
             }
@@ -626,7 +626,7 @@ fun CinematicLayout(
                                                 title = hubItem.title,
                                                 rowTitle = item.title,
                                                 rowId = item.id,
-                                                serviceCode = NeonTokyoStarterPack.serviceCode(hubItem.categoryId, hubItem.title)
+                                                serviceCode = NeonTokyoStarterPack.artCode(hubItem.categoryId, hubItem.title)
                                             )
                                             wrappedOnFocusChange("hub_$focusKey")
                                         },
@@ -717,7 +717,7 @@ fun CinematicLayout(
     }
 }
 
-/** A folder card in focus, for the hero: its title, its row's title and id, and its service if it is one. */
+/** A folder card in focus, for the hero: its title, its row's title and id, and its service's or genre's scene if it has one. */
 private data class FocusedHub(val title: String, val rowTitle: String, val rowId: String, val serviceCode: String?)
 
 /**
