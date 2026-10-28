@@ -1021,19 +1021,15 @@ adb shell input keyevent KEYCODE_HOME
 sleep 2
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Home on Neon Home did not go back to its first tile ($label has the focus)"
-# The TV switched off and on again: Neon Home comes on to the neon intro, filmed as it plays
+# The TV switched off and on again: Neon Home comes on to the neon intro
 adb shell settings put global animator_duration_scale 1
 adb logcat -c 2>/dev/null || true
 adb shell input keyevent KEYCODE_SLEEP
 sleep 4
-adb shell screenrecord --time-limit 5 --size 1280x720 /sdcard/wake-intro.mp4 > "$OUT/wake-intro-record.txt" 2>&1 &
-recorder=$!
-sleep 0.3
+# (screenrecord stops with the screen, so the log says whether it played rather than a film)
 adb shell input keyevent KEYCODE_WAKEUP
 sleep 0.6
 shot wake-intro
-wait "$recorder" 2>/dev/null || true
-adb pull /sdcard/wake-intro.mp4 "$OUT/wake-intro.mp4" > /dev/null 2>&1 || true
 adb shell settings put global animator_duration_scale 0
 adb logcat -d -s NeonIntro > "$OUT/wake-intro-log.txt" 2>&1 || true
 grep -q "played" "$OUT/wake-intro-log.txt" || fail "the intro did not play when the TV came on to Neon Home"

@@ -40,8 +40,11 @@ enum class IconTint(val key: String, val title: String, private val dark: Color?
     /** The app's own colours, turned up. */
     Vivid("vivid", "Vivid", null, null),
 
-    /** Light and dark swapped, the colours kept: a white icon goes dark for the night. */
-    Night("night", "Night", null, null);
+    /** Dimmed and cooled, a little less colourful: quiet for a dark room. */
+    Night("night", "Night", null, null),
+
+    /** Light and dark swapped, the colours kept, as on a photo negative. */
+    Negative("negative", "Negative", null, null);
 
     /** The filter for an app whose tile glows in [app], or null to draw the icon as it is. */
     fun filter(app: Color): ColorFilter? = when (this) {
@@ -49,6 +52,7 @@ enum class IconTint(val key: String, val title: String, private val dark: Color?
         Tone -> ColorFilter.colorMatrix(duotone(lerp(app, Color.Black, 0.82f), lerp(app, Color.White, 0.3f)))
         Vivid -> ColorFilter.colorMatrix(VIVID)
         Night -> ColorFilter.colorMatrix(NIGHT)
+        Negative -> ColorFilter.colorMatrix(NEGATIVE)
         else -> ColorFilter.colorMatrix(duotone(dark!!, light!!))
     }
 
@@ -73,8 +77,18 @@ enum class IconTint(val key: String, val title: String, private val dark: Color?
 
         private val VIVID = ColorMatrix().apply { setToSaturation(1.7f) }
 
-        // Inverted, then turned half way round the colour wheel so the hues come back (feHueRotate 180)
+        // Three quarters of the colour, then dimmed to about 60 %, the blue a little less
         private val NIGHT = ColorMatrix(
+            floatArrayOf(
+                0.482f, 0.107f, 0.011f, 0f, 0f,
+                0.033f, 0.576f, 0.011f, 0f, 0f,
+                0.040f, 0.134f, 0.576f, 0f, 0f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+
+        // Inverted, then turned half way round the colour wheel so the hues come back (feHueRotate 180)
+        private val NEGATIVE = ColorMatrix(
             floatArrayOf(
                 0.574f, -1.43f, -0.144f, 0f, 255f,
                 -0.426f, -0.43f, -0.144f, 0f, 255f,
