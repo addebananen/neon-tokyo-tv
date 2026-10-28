@@ -86,7 +86,9 @@ enum class Glyph(pathData: String) {
     Search(circle(43, 43, 25) + "M62 62 L84 84"),
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
     Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
-    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68");
+    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68"),
+    /** A screen with a triangle coming up into it, as the iPhone draws AirPlay. */
+    AirPlay("M32 70 H20 A6 6 0 0 1 14 64 V24 A6 6 0 0 1 20 18 H80 A6 6 0 0 1 86 24 V64 A6 6 0 0 1 80 70 H68 M50 56 L72 86 H28 Z");
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }

@@ -944,7 +944,7 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    case "$label" in N|Neon|Search|AirPlay|Inputs|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
     for _ in 1 2 3 4; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
@@ -960,10 +960,15 @@ for style in "${styles[@]}"; do
     # The panel gives the focus back to the pill that opened it
     label=$(focused_label)
     case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
-    # The pill with the version number, three along, says which version this is and looks for a newer one
-    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    # Two along is the AirPlay button, for sharing from an iPhone through a receiver app
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    case "$label" in nt.*|Update) ;; *) fail "three along from the profile pill is $label, not the version pill" ;; esac
+    [ "$label" = "AirPlay" ] || fail "two along from the profile pill is $label, not the AirPlay pill"
+    shot "style-$style-airplay"
+    # The pill with the version number, four along, says which version this is and looks for a newer one
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "four along from the profile pill is $label, not the version pill" ;; esac
     key DPAD_CENTER; sleep 4
     shot "style-$style-updates"
     screen_has "This version" || fail "the version pill did not open the updates panel"

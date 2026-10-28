@@ -77,6 +77,13 @@ class NeonHomeTest {
     }
 
     @Test
+    fun theAirPlayButtonOpensAirScreenFirstAndShowsItWithItsIcon() {
+        assertEquals("com.ionitech.airscreen", HomeCatalog.AirPlay.packages.first())
+        assertEquals(HomeCatalog.AirPlay, HomeCatalog.known("com.ionitech.airscreen", "AirScreen"))
+        assertEquals(Glyph.AirPlay, HomeCatalog.known("com.waxrain.airplaydmr", "AirPin")?.glyph)
+    }
+
+    @Test
     fun theGearIconIsAClosedOutlineOfThirtyTwoCorners() {
         val outline = gear(50f, 50f, 38f, 28f, 8)
         assertTrue(outline.startsWith("M") && outline.trimEnd().endsWith("Z"))
