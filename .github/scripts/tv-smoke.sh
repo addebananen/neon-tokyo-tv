@@ -1266,8 +1266,11 @@ adb pull /sdcard/overlay.mp4 "$OUT/overlay-diagnostics.mp4" > /dev/null 2>&1 || 
 if overlay_on; then fail "picture diagnostics did not go away"; fi
 adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
   fail "picture diagnostics took the app out of front"
-adb shell cat "/sdcard/Android/data/$PKG/files/diagnostics/latest.txt" > "$OUT/overlay-report.txt" 2>/dev/null
+adb shell cat "/sdcard/Android/data/$PKG/files/diagnostics/latest.txt" > "$OUT/overlay-report.txt" 2>> "$OUT/overlay.txt"
+adb shell ls -la "/sdcard/Android/data/$PKG/files/diagnostics" >> "$OUT/overlay.txt" 2>&1
 grep -q "\[Panel\]" "$OUT/overlay-report.txt" || fail "picture diagnostics saved no report"
+adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show report > "$OUT/overlay-readings.txt" 2>&1
+grep -q "\[Panel\]" "$OUT/overlay-readings.txt" || fail "the overlay service sent no readings back to am broadcast"
 overlay hud
 sleep 1.5
 overlay_on || fail "the gaming HUD did not open"
@@ -1282,7 +1285,7 @@ else
 fi
 sleep 1
 
-adb logcat -d -s NeonOverlay >> "$OUT/overlay.txt" 2>&1
+adb logcat -d -s NeonOverlay Dumps >> "$OUT/overlay.txt" 2>&1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------

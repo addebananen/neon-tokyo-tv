@@ -82,6 +82,17 @@ internal object Dumps {
         return fps.takeIf { it in 1f..240f }
     }
 
+    /** The readings as text, as saved and as sent back to `am broadcast ... --es show report`. */
+    fun readings(report: SignalReport): String = buildString {
+        appendLine("Neon Tokyo picture diagnostics, ${java.util.Date()}")
+        appendLine("Source: ${report.source}")
+        listOf(report.signal, report.panel, report.hdr, report.game, report.sound, report.latency).forEach { section ->
+            appendLine()
+            appendLine("[${section.title}]")
+            section.readings.forEach { appendLine("${it.label}: ${it.value} (${it.how}${it.note?.let { n -> ", $n" }.orEmpty()})") }
+        }
+    }
+
     /**
      * Everything diagnostics saw, written next to the app's files so it can be fetched with
      * `adb pull /sdcard/Android/data/com.neontokyo.tv/files/diagnostics/latest.txt`.
@@ -89,18 +100,11 @@ internal object Dumps {
     fun save(context: Context, report: SignalReport, withSystem: Boolean) {
         runCatching {
             val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "diagnostics").apply { mkdirs() }
-            val readings = buildString {
-                appendLine("Neon Tokyo picture diagnostics, ${java.util.Date()}")
-                appendLine("Source: ${report.source}")
-                listOf(report.signal, report.panel, report.hdr, report.game, report.sound, report.latency).forEach { section ->
-                    appendLine()
-                    appendLine("[${section.title}]")
-                    section.readings.forEach { appendLine("${it.label}: ${it.value} (${it.how}${it.note?.let { n -> ", $n" }.orEmpty()})") }
-                }
-            }
+            val readings = readings(report)
             val file = File(dir, "latest.txt")
             // The readings first, as asking the system can take seconds
             file.writeText(readings + "\n===== properties =====\n" + props())
+            Log.i(TAG, "Saved the report to $file")
             if (!withSystem) return@runCatching
             val text = buildString {
                 append(readings)

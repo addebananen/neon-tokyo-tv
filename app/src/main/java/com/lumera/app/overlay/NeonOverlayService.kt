@@ -56,13 +56,15 @@ class NeonOverlayService : AccessibilityService() {
     /** A console was just started from Neon Home: the HUD comes when its input shows. */
     private var hudWhenConsole = 0L
 
-    /** From a PC: `adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show diagnostics|hud|off`. */
+    /** From a PC: `adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show diagnostics|hud|off|report`. */
     private val fromAdb = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getStringExtra("show")) {
                 "diagnostics" -> showDiagnostics()
                 "hud" -> showHud()
                 "off" -> { hideDiagnostics(); hideHud() }
+                // What diagnostics read now, printed by am broadcast
+                "report" -> resultData = Dumps.readings(build(layer = null, audioMs = AudioLatency.recent()))
             }
         }
     }
