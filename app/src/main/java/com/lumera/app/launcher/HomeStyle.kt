@@ -17,7 +17,7 @@ import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.theme.KanitFamily
 
 // The other faces the styles letter in (SIL Open Font License, see third_party/fonts)
-private val OutfitFamily = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
+internal val OutfitFamily = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
 private val NunitoFamily = FontFamily(
     Font(R.font.nunito_bold, FontWeight.Bold),
     Font(R.font.nunito_bold_italic, FontWeight.Bold, FontStyle.Italic)
@@ -59,13 +59,38 @@ data class HomeLook(
     val letterSpacing: TextUnit = 1.sp,
     val upperTitles: Boolean = true,
     /** Writing lit like neon tubes, glowing in the accents, rather than shaded for readability. */
-    val glowingText: Boolean = false
+    val glowingText: Boolean = false,
+    /** The glass the tiles, tabs, buttons and menus are made of, or none for the style's own tiles. */
+    val glassMode: HomeGlass = HomeGlass.Off,
+    /** On glass, the white signs on the tiles take the app's own colour in focus. */
+    val brandInFocus: Boolean = true
 ) {
     val tileFill: Brush = Brush.verticalGradient(listOf(tileTop, tileBottom))
     val fontStyle: FontStyle get() = if (italic) FontStyle.Italic else FontStyle.Normal
 
     /** An app's colour as this style shows it. */
     fun tint(color: Color): Color = if (toward == null) color else lerp(color, toward, pull)
+
+    val glassy: Boolean get() = glassMode != HomeGlass.Off
+
+    /**
+     * This look in [glass]: one quiet face in sentence case, a small clock with a soft shadow
+     * rather than a glow, and no glow round anything; the colours stay the style's own.
+     */
+    fun inGlass(glass: HomeGlass): HomeLook = if (glass == HomeGlass.Off) copy(glassMode = glass) else copy(
+        glassMode = glass,
+        font = OutfitFamily,
+        weight = FontWeight.Medium,
+        italic = false,
+        glowingText = false,
+        clockSize = 44.sp,
+        clockGlow = Color(0x59000000),
+        clockBlur = 16f,
+        corner = 15.dp,
+        glow = 0.dp,
+        letterSpacing = 0.4.sp,
+        upperTitles = false
+    )
 }
 
 /**
@@ -92,7 +117,18 @@ enum class HomeStyle(
     val driftX: Float = 0.62f,
     val driftY: Float = 0.3f,
     /** A film that loops behind everything instead of the painting, which shows until it plays. */
-    val video: Int? = null
+    val video: Int? = null,
+    // What a profile in this style shows until it chooses otherwise
+    /** The glass the tiles and menus are made of; Off keeps the style's own tiles. */
+    val glass: HomeGlass = HomeGlass.Off,
+    /** Watch & listen down at the foot of the screen, under the picture. */
+    val rowsDown: Boolean = false,
+    /** The consoles in a row on Home too, not only on Källor. */
+    val consolesOnHome: Boolean = false,
+    /** Square glass icons, as on Apple TV, rather than wide tiles. */
+    val squareIcons: Boolean = false,
+    /** The apps' names under their tiles and the words on the buttons at the top all the time, not only in focus. */
+    val namesAlways: Boolean = true
 ) {
     Neon(
         "neon", "Neon", "Tokyo at night, lit in the colour of what you point at",
@@ -116,10 +152,12 @@ enum class HomeStyle(
             font = OutfitFamily, weight = FontWeight.Medium, italic = false,
             clockSize = 60.sp, clockColor = Color(0xFFFFF8F0), clockGlow = Color(0x99FFB98A), clockBlur = 22f,
             shade = Color(0x660A1020), corner = 12.dp, glow = 12.dp, toward = Color(0xFFFFD2A0), pull = 0.3f,
-            letterSpacing = 2.sp
+            letterSpacing = 2.sp, brandInFocus = false
         ),
         light = R.drawable.home_style_nature_glow,
-        drift = true
+        drift = true,
+        glass = HomeGlass.Frost,
+        consolesOnHome = true
     ),
     Clean(
         "clean", "Clean", "Black, quiet and still",
@@ -132,7 +170,8 @@ enum class HomeStyle(
             clockSize = 64.sp, clockColor = Color(0xFFFFFFFF), clockGlow = Color.Transparent, clockBlur = 0f,
             shade = null, corner = 6.dp, glow = 6.dp, toward = Color(0xFFEDEDED), pull = 0.86f,
             letterSpacing = 3.sp
-        )
+        ),
+        glass = HomeGlass.Frost
     ),
     Dusk(
         "dusk", "Golden Dusk", "A path under burning evening clouds, from a painting by Angel Ganev",
@@ -161,7 +200,9 @@ enum class HomeStyle(
             shade = Color(0x99001320), corner = 16.dp, glow = 14.dp, toward = Color(0xFF8FEFFF), pull = 0.35f,
             letterSpacing = 1.5.sp
         ),
-        video = R.raw.home_style_deepblue
+        video = R.raw.home_style_deepblue,
+        glass = HomeGlass.Liquid,
+        namesAlways = false
     ),
     IceLake(
         "icelake", "Ice Lake", "A frozen lake at sundown under streaks of cloud, filmed from Adrian's drone",
@@ -175,7 +216,9 @@ enum class HomeStyle(
             shade = Color(0x80000000), corner = 18.dp, glow = 8.dp, toward = Color(0xFFFFE6C8), pull = 0.18f,
             letterSpacing = 0.5.sp, upperTitles = false
         ),
-        video = R.raw.home_style_icelake
+        video = R.raw.home_style_icelake,
+        glass = HomeGlass.Liquid,
+        rowsDown = true
     );
 
     companion object {

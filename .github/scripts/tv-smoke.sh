@@ -949,6 +949,8 @@ for style in "${styles[@]}"; do
   if ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
+  # Nature comes with the consoles on Home as well as on Källor
+  if [ "$style" = nature ] && ! screen_has "HDMI 6"; then fail "Nature does not show the consoles on Home"; fi
   # The style under review is filmed too, for its motion
   if [ "$style" = nature ]; then
     adb shell settings put global animator_duration_scale 1
@@ -975,6 +977,19 @@ for style in "${styles[@]}"; do
     key DPAD_CENTER; sleep 2
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
+    # Under the profiles, Customize opens the look and layout of the profile that is home
+    key DPAD_DOWN; sleep 1
+    label=$(focused_label)
+    if [ "$label" = "Customize" ]; then
+      key DPAD_CENTER; sleep 2
+      shot "style-$style-customize"
+      screen_has "Liquid glass" || fail "Customize did not open the profile's glass and layout"
+      screen_has "Consoles on Home" || fail "the profile's layout has no choice of consoles on Home"
+      key BACK; sleep 2
+      screen_has "Who's home?" || fail "Back from Customize did not go back to the profiles"
+    else
+      fail "Down from the profiles is $label, not Customize"
+    fi
     key BACK; sleep 2
     screen_has "Who's home?" && fail "one press of Back did not close the profile picker"
     # The panel gives the focus back to the pill that opened it
@@ -1020,6 +1035,22 @@ for style in "${styles[@]}"; do
   key BACK
   sleep 2
 done
+
+# The glass and the layout a profile can choose, on styles that come without them: Neon in liquid
+# glass with the consoles on Home, and Ice Lake with square icons at the foot of the screen
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es glass liquid --es layout consoles,names >/dev/null 2>&1
+sleep 6
+shot glass-neon-liquid
+screen_has "HDMI 6" || fail "Neon in liquid glass, asked for the consoles on Home, shows none there"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Neon in liquid glass does not start on YouTube ($label has the focus)"
+key BACK; sleep 2
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style icelake --es layout down,square >/dev/null 2>&1
+sleep 6
+shot glass-icelake-square
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Ice Lake with square icons does not start on YouTube ($label has the focus)"
+key BACK; sleep 2
 
 # The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
 # on the All apps tab. Apps the emulator lacks keep their neon face

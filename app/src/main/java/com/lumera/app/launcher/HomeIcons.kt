@@ -3,6 +3,7 @@ package com.lumera.app.launcher
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.LruCache
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -90,6 +92,33 @@ internal object AppArt {
 
     fun cached(packageName: String, banner: Boolean): ImageBitmap? = cache.get(key(packageName, banner))
 
+    fun cachedSign(packageName: String): ImageBitmap? = cache.get("s:$packageName")
+
+    /**
+     * The sign of [packageName] alone, to lay on glass: the front layer of an adaptive icon, cut to
+     * the part a launcher shows, without the plate it stands on. An icon of the older kind is all
+     * one picture, and comes whole.
+     */
+    suspend fun loadSign(context: Context, packageName: String): ImageBitmap? {
+        cache.get("s:$packageName")?.let { return it }
+        return withContext(Dispatchers.IO) {
+            val drawable = runCatching { context.packageManager.getApplicationIcon(packageName) }.getOrNull()
+            val front = (drawable as? AdaptiveIconDrawable)?.foreground
+            val image = if (front == null) {
+                drawable?.let { runCatching { toBitmap(it, 192, 192) }.getOrNull() }
+            } else {
+                runCatching {
+                    // The layer is 108 units across, of which a launcher shows the middle 72
+                    val whole = Bitmap.createBitmap(288, 288, Bitmap.Config.ARGB_8888)
+                    front.setBounds(0, 0, 288, 288)
+                    front.draw(Canvas(whole))
+                    Bitmap.createBitmap(whole, 48, 48, 192, 192)
+                }.getOrNull()
+            }
+            image?.asImageBitmap()?.also { cache.put("s:$packageName", it) }
+        }
+    }
+
     /** The icon or banner of [packageName], or null when the app has none (or is not on the TV). */
     suspend fun load(context: Context, packageName: String, banner: Boolean): ImageBitmap? {
         val key = key(packageName, banner)
@@ -129,6 +158,77 @@ internal object AppArt {
 
 /** An app's art as far as it has been read: [done] once the TV has answered, with or without it. */
 private class Art(val image: ImageBitmap?, val done: Boolean)
+
+/** The first of [packages] with a sign to lay on glass, read off the main thread. */
+@Composable
+private fun rememberAppSign(packages: List<String>): Art {
+    val context = LocalContext.current
+    val ready = packages.firstNotNullOfOrNull { AppArt.cachedSign(it) }
+    val art by produceState(Art(ready, ready != null || packages.isEmpty()), packages) {
+        if (!value.done) value = Art(packages.firstNotNullOfOrNull { AppArt.loadSign(context, it) }, true)
+    }
+    return art
+}
+
+/**
+ * An app on a glass tile, in the middle of it. Liquid glass, and the icon packs of the apps' own
+ * icons, show the app's own sign; Frost and Soft with the neon pack show [glyph], a white sign that
+ * takes [brand], the app's own colour, in focus when the look says so. A banner fills the tile.
+ * [lit] runs from 0 to 1 as the focus lands.
+ */
+@Composable
+internal fun BoxScope.GlassFace(
+    pack: IconPack,
+    packages: List<String>,
+    name: String,
+    shape: RoundedCornerShape,
+    brand: Color,
+    size: Dp,
+    lit: () -> Float,
+    glyph: @Composable BoxScope.(ink: () -> Color) -> Unit
+) {
+    val look = LocalHomeLook.current
+    val tint = LocalIconTint.current
+    val filter = remember(tint, brand) { tint.filter(brand) }
+    val ink = { lerp(Color.White.copy(alpha = 0.94f), brand, if (look.brandInFocus) lit() else 0f) }
+    @Composable
+    fun Sign(art: Art) {
+        val image = art.image
+        when {
+            image != null -> Image(
+                bitmap = image,
+                contentDescription = name,
+                contentScale = ContentScale.Fit,
+                colorFilter = filter,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(size)
+                    // The sign rises a touch as the glass comes forward
+                    .graphicsLayer { translationY = -1.5f * density * lit() }
+                    .clip(RoundedCornerShape(size * 0.22f))
+            )
+            art.done -> glyph(ink)
+        }
+    }
+    when {
+        pack == IconPack.Banner -> {
+            val banner = rememberAppArt(packages, banner = true)
+            when {
+                banner.image != null -> Image(
+                    bitmap = banner.image,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = filter,
+                    modifier = Modifier.fillMaxSize().clip(shape)
+                )
+                banner.done -> Sign(rememberAppArt(packages, banner = false))
+            }
+        }
+        pack == IconPack.Neon && look.glassMode == HomeGlass.Liquid -> Sign(rememberAppSign(packages))
+        pack == IconPack.Neon -> glyph(ink)
+        else -> Sign(rememberAppArt(packages, banner = false))
+    }
+}
 
 /** The first of [packages] that has art of that kind, read off the main thread. */
 @Composable
