@@ -70,6 +70,7 @@ fun TopNavigationBar(
         NavDestination.Home,
         NavDestination.Movies,
         NavDestination.Series,
+        NavDestination.LiveTv,
         NavDestination.Watchlist
     )
 

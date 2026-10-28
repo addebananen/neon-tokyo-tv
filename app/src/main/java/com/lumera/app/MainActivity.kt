@@ -890,6 +890,13 @@ class MainActivity : ComponentActivity() {
                     }
                     return@LaunchedEffect
                 }
+                if (open.type == com.lumera.app.livetv.LiveTv.OPEN_TYPE) {
+                    // A channel from Neon Home's Live TV row: the Live TV tab plays it
+                    com.lumera.app.livetv.LiveTv.want(open.id)
+                    activeView = "menu"
+                    pendingOpen.value = null
+                    return@LaunchedEffect
+                }
                 selectedMovieId = open.id
                 selectedMovieType = open.type
                 selectedMovieTitle = open.name
@@ -982,6 +989,8 @@ class MainActivity : ComponentActivity() {
                         // MAIN APP CONTENT
                         LaunchedEffect(Unit) { onSplashAppReady() }
                         var currentNav by remember { mutableStateOf(NavDestination.Home) }
+                        val wantedChannel by com.lumera.app.livetv.LiveTv.wanted.collectAsState()
+                        LaunchedEffect(wantedChannel) { if (wantedChannel != null) currentNav = NavDestination.LiveTv }
                         
                         // Grid view state
                         var gridViewTitle by rememberSaveable { mutableStateOf("") }
@@ -1006,6 +1015,7 @@ class MainActivity : ComponentActivity() {
                         val searchEntryRequester = remember { FocusRequester() }
                         val settingsEntryRequester = remember { FocusRequester() }
                         val watchlistEntryRequester = remember { FocusRequester() }
+                        val liveTvEntryRequester = remember { FocusRequester() }
 
                         // STATE CHANGE TRIGGER:
                         LaunchedEffect(currentNav, activeView) {
@@ -1037,6 +1047,10 @@ class MainActivity : ComponentActivity() {
                                 NavDestination.Watchlist -> {
                                     delay(200)
                                     watchlistEntryRequester.requestFocus()
+                                }
+                                NavDestination.LiveTv -> {
+                                    delay(200)
+                                    runCatching { liveTvEntryRequester.requestFocus() }
                                 }
                                 else -> Unit
                             }
@@ -1071,6 +1085,7 @@ class MainActivity : ComponentActivity() {
                                             NavDestination.Search -> searchEntryRequester.requestFocus()
                                             NavDestination.Settings -> settingsEntryRequester.requestFocus()
                                             NavDestination.Watchlist -> watchlistEntryRequester.requestFocus()
+                                            NavDestination.LiveTv -> { runCatching { liveTvEntryRequester.requestFocus() } }
                                             else -> {}
                                         }
                                     } else {
@@ -1087,6 +1102,7 @@ class MainActivity : ComponentActivity() {
                                         NavDestination.Search -> searchEntryRequester.requestFocus()
                                         NavDestination.Settings -> settingsEntryRequester.requestFocus()
                                         NavDestination.Watchlist -> watchlistEntryRequester.requestFocus()
+                                        NavDestination.LiveTv -> { runCatching { liveTvEntryRequester.requestFocus() } }
                                         else -> {}
                                     }
                                 }
@@ -1231,6 +1247,13 @@ class MainActivity : ComponentActivity() {
                                                     activeView = "menu"
                                                     themeManager.resetTheme()
                                                     mainViewModel.logout()
+                                                }
+                                                NavDestination.LiveTv -> {
+                                                    com.lumera.app.livetv.LiveTvScreen(
+                                                        currentProfile = currentProfile,
+                                                        entryRequester = liveTvEntryRequester,
+                                                        drawerRequester = drawerRequesters[NavDestination.LiveTv]!!
+                                                    )
                                                 }
                                                 NavDestination.Watchlist -> {
                                                     val watchlistHomeVm = hiltViewModel<HomeViewModel>()
@@ -1384,6 +1407,13 @@ class MainActivity : ComponentActivity() {
                                                     activeView = "menu"
                                                     themeManager.resetTheme()
                                                     mainViewModel.logout()
+                                                }
+                                                NavDestination.LiveTv -> {
+                                                    com.lumera.app.livetv.LiveTvScreen(
+                                                        currentProfile = currentProfile,
+                                                        entryRequester = liveTvEntryRequester,
+                                                        drawerRequester = drawerRequesters[NavDestination.LiveTv]!!
+                                                    )
                                                 }
                                                 NavDestination.Watchlist -> {
                                                     val watchlistHomeVm = hiltViewModel<HomeViewModel>()
