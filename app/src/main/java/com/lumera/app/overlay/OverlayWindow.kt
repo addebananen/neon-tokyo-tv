@@ -69,7 +69,7 @@ internal class OverlayWindow(
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         ).apply {
-            this.gravity = gravity
+            gravity = this@OverlayWindow.gravity
             title = "NeonOverlay"
         }
         return runCatching { windows.addView(compose, params) }
