@@ -255,11 +255,12 @@ video_from_phone() {
   echo "$state" | grep -q '"error"' || fail "a file that is no video left the phone at $state instead of error"
   screen_has "play that video" || fail "the TV did not say it can't play a file that is no video"
   # A phone's video with sound, which the TV makes lighter before it keeps it. The page sends it in
-  # pieces; one breaks off halfway, as when the phone's screen goes dark, and one goes to the wrong
-  # place, and the TV must carry on from where it really got to
-  local fixture=.github/scripts/video-fixture-sound.mp4 size half got
+  # pieces; one breaks off partway, as when the phone's screen goes dark, and one goes to the wrong
+  # place, and the TV must keep what arrived and carry on from where it really got to
+  local fixture=.github/scripts/video-fixture-sound.mp4 size half kept got
   size=$(stat -c %s "$fixture")
   half=$((size / 2))
+  kept=$((half + 1000))
   piece() { # piece <offset> <length> [<claimed length>]
     local claim=()
     [ -n "${3:-}" ] && claim=(-H "Content-Length: $3")
@@ -274,10 +275,10 @@ video_from_phone() {
   sleep 1
   got=$(curl -s -m 5 "$base/status")
   echo "after a piece broke off: $got"
-  echo "$got" | grep -q "\"received\":$half" || fail "a piece that broke off counted towards the video ($got)"
+  echo "$got" | grep -q "\"received\":$kept" || fail "the TV did not keep the part of a piece that arrived before it broke off ($got)"
   got=$(piece 1234 100)
-  echo "$got" | grep -q "\"received\":$half" || fail "a piece sent to the wrong place moved the video on ($got)"
-  got=$(piece "$half" "$((size - half))")
+  echo "$got" | grep -q "\"received\":$kept" || fail "a piece sent to the wrong place moved the video on ($got)"
+  got=$(piece "$kept" "$((size - kept))")
   echo "last piece: $got"
   echo "$got" | grep -q "\"received\":$size" || fail "the TV did not take the rest of the video ($got)"
   if ! wait_for "Your video is on" 90; then fail "the TV never took the video"; return 1; fi
@@ -696,6 +697,31 @@ else
   fail "Screensaver row not found in Personalization"
 fi
 
+# --- Scene art on the service and genre cards ----------------------------------
+# Every card in a grid while focus walks from one to the next, filmed so the moving scenes can
+# be checked, then the tall and square cards at rest
+adb shell settings put global animator_duration_scale 1
+adb shell am start -n "$PKG/com.lumera.app.ui.home.SceneArtPreviewActivity" --ei dwell 3200 >/dev/null 2>&1
+sleep 1
+adb shell screenrecord --time-limit 76 --size 1280x720 --bit-rate 8000000 /sdcard/scene-art.mp4 > "$OUT/scene-art-record.txt" 2>&1 &
+recorder=$!
+sleep 6
+shot scene-art
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/scene-art.mp4 "$OUT/scene-art.mp4" > /dev/null 2>&1 || true
+grep -E "SceneMotion|service_art" "$OUT/logcat-full.txt" | grep -iE "error|exception" | head -5 > "$OUT/scene-art-errors.txt" || true
+[ -s "$OUT/scene-art-errors.txt" ] && fail "the scene art logged errors: $(head -2 "$OUT/scene-art-errors.txt")"
+key BACK
+sleep 2
+for shape in tall square; do
+  adb shell am start -n "$PKG/com.lumera.app.ui.home.SceneArtPreviewActivity" --es shape "$shape" --ei width 150 --ei dwell 60000 >/dev/null 2>&1
+  sleep 6
+  shot "scene-art-$shape"
+  key BACK
+  sleep 2
+done
+adb shell settings put global animator_duration_scale 0
+
 # --- Projectivy wallpaper provider -------------------------------------------
 if ! adb shell cmd package query-services -a tv.projectivy.plugin.WALLPAPER_PROVIDER 2>/dev/null | grep -q NeonWallpaperProviderService; then
   fail "the Projectivy wallpaper provider is not registered"
@@ -944,8 +970,8 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
-    for _ in 1 2 3 4 5 6; do
+    case "$label" in N|Neon|Search|Inputs|Bluetooth|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3 4 5 6 7; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
@@ -960,10 +986,20 @@ for style in "${styles[@]}"; do
     # The panel gives the focus back to the pill that opened it
     label=$(focused_label)
     case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
-    # The pill with the version number, three along, says which version this is and looks for a newer one
+    # Bluetooth, three along, lists the paired headphones and speakers of this profile
     key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    case "$label" in nt.*|Update) ;; *) fail "three along from the profile pill is $label, not the version pill" ;; esac
+    [ "$label" = "Bluetooth" ] || fail "three along from the profile pill is $label, not Bluetooth"
+    key DPAD_CENTER; sleep 3
+    shot "style-$style-bluetooth"
+    screen_has "devices" || screen_has "no Bluetooth" || fail "the Bluetooth pill did not open the Bluetooth panel"
+    key BACK; sleep 2
+    label=$(focused_label)
+    [ "$label" = "Bluetooth" ] || fail "the focus did not go back to Bluetooth when its panel closed ($label has it)"
+    # The pill with the version number, next along, says which version this is and looks for a newer one
+    key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "four along from the profile pill is $label, not the version pill" ;; esac
     key DPAD_CENTER; sleep 4
     shot "style-$style-updates"
     screen_has "This version" || fail "the version pill did not open the updates panel"
@@ -1068,6 +1104,32 @@ shot console-wake-away
 if screen_has "Switch 2 is on"; then fail "Back did not put the console's card away"; fi
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "the focus did not go back to YouTube when the console's card went ($label has it)"
+# A paired headphone switched on near the TV: its card slides in at the bottom corner with the
+# focus on Connect, and Back puts it away. The emulator has no Bluetooth devices, so the preview
+# shows the card for a made-up pair of AirPods (one word: adb shell splits the extra at spaces)
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es bluetooth AirPods >/dev/null 2>&1
+sleep 2
+shot bluetooth-card
+bt_xml="$OUT/$(printf "%02d" "$step")-bluetooth-card.xml"
+grep -q "AirPods turned on" "$bt_xml" 2>/dev/null || fail "the card of a Bluetooth device that was just switched on did not show"
+label=$(focused_text < "$bt_xml" 2>/dev/null)
+case "$label" in *Connect*) ;; *) fail "the Bluetooth card does not have the focus on Connect ($label has it)" ;; esac
+key BACK
+sleep 2
+shot bluetooth-card-away
+if screen_has "AirPods turned on"; then fail "Back did not put the Bluetooth card away"; fi
+# Home pressed twice opens the Bluetooth corner: this profile's devices, each with its own mark
+# and Connect, the first with the focus. The preview lists made-up devices
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es bluetoothlist "AirPods,JBL" >/dev/null 2>&1
+sleep 2
+shot bluetooth-corner
+corner_xml="$OUT/$(printf "%02d" "$step")-bluetooth-corner.xml"
+grep -q 'text="JBL"' "$corner_xml" 2>/dev/null || fail "the Bluetooth corner did not list the devices"
+label=$(focused_text < "$corner_xml" 2>/dev/null)
+case "$label" in *AirPods*) ;; *) fail "the Bluetooth corner does not have the focus on its first device ($label has it)" ;; esac
+key BACK
+sleep 2
+if screen_has "All devices"; then fail "Back did not put the Bluetooth corner away"; fi
 adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2

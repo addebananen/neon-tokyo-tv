@@ -319,6 +319,13 @@ private fun VideoWaiting(
 @Composable
 private fun UploadBar(progress: Float) {
     val shown by animateFloatAsState(progress.coerceIn(0f, 1f), tween(250), label = "dream_video_upload")
+    // Nothing new for a while: most likely the phone left the page or went dark, so say so
+    var stalled by remember { mutableStateOf(false) }
+    LaunchedEffect(progress) {
+        stalled = false
+        delay(20_000L)
+        stalled = true
+    }
     Column {
         Box(
             modifier = Modifier
@@ -337,9 +344,10 @@ private fun UploadBar(progress: Float) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "Getting your video… ${(shown * 100).toInt()} %",
+            if (stalled) "Waiting for your phone… keep the video page open on it  ·  ${(shown * 100).toInt()} %"
+            else "Getting your video… ${(shown * 100).toInt()} %",
             style = MaterialTheme.typography.bodyMedium,
-            color = NeonPalette.Cyan
+            color = if (stalled) NeonPalette.Sun else NeonPalette.Cyan
         )
     }
 }

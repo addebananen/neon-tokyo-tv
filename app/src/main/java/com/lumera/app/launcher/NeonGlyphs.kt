@@ -86,7 +86,14 @@ enum class Glyph(pathData: String) {
     Search(circle(43, 43, 25) + "M62 62 L84 84"),
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
     Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
-    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68");
+    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68"),
+    Bluetooth("M30 34 L68 66 L50 84 V16 L68 34 L30 66"),
+
+    // Earbuds, as AirPods look: two rounded buds, each with its stem hanging down
+    Earbuds(
+        "M30 20 A13 13 0 1 1 30 46 A13 13 0 0 1 30 20 Z M37 40 V80 A5 5 0 0 1 27 80 V44 " +
+            "M70 20 A13 13 0 1 0 70 46 A13 13 0 0 0 70 20 Z M63 40 V80 A5 5 0 0 0 73 80 V44"
+    );
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
