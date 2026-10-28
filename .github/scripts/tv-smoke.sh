@@ -522,6 +522,112 @@ shot series-tab
 key DPAD_DOWN DPAD_DOWN DPAD_DOWN
 sleep 2
 shot series-rows
+
+# --- Live TV: a pretend Xtream provider on the runner, added from "the phone" -------------
+IPTV_PORT=8765
+# A six second test card in MPEG-TS, as a live channel sends it
+iptv_stream="$(dirname "$0")/iptv-test.ts"
+python3 "$(dirname "$0")/fake-iptv.py" "$IPTV_PORT" "$iptv_stream" &
+IPTV_PID=$!
+menu_go "Live TV"
+sleep 4
+shot livetv-empty
+screen_has "Add your IPTV service" || fail "Live TV without a service does not invite adding one"
+key DPAD_CENTER
+sleep 3
+shot livetv-setup
+read -r ip port token < <(photo_address)
+if [ -z "${token:-}" ]; then
+  fail "the Live TV setup dialog shows no address"
+else
+  adb forward tcp:18082 tcp:"$port" >/dev/null
+  base="http://127.0.0.1:18082/$token"
+  curl -fsS -m 10 "$base" -o "$OUT/iptv-page.html" || fail "the Live TV phone page did not open"
+  grep -q "Xtream login" "$OUT/iptv-page.html" || fail "the Live TV phone page has no Xtream form"
+  wrong=$(curl -s -m 30 -d kind=xtream -d server="10.0.2.2:$IPTV_PORT" -d user=neon -d pass=nope "$base")
+  echo "wrong login: $wrong"
+  echo "$wrong" | grep -q '"ok":false' || fail "a wrong Xtream password was accepted: $wrong"
+  echo "$wrong" | grep -qi "wrong username or password" || fail "a wrong Xtream password did not say so: $wrong"
+  right=$(curl -s -m 30 -d kind=xtream -d server="10.0.2.2:$IPTV_PORT" -d user=neon -d pass=tokyo "$base")
+  echo "right login: $right"
+  echo "$right" | grep -q '"ok":true' || fail "the Xtream login was refused: $right"
+  adb forward --remove tcp:18082 >/dev/null 2>&1
+  if wait_for "Sverige" 30; then
+    shot livetv-list
+    screen_has "6 channels" || fail "Live TV does not count the six channels"
+    screen_has "Popular in Sweden" || fail "Live TV has no Popular in Sweden group for SVT1 and TV4"
+    # From Favourites (empty) past Popular in Sweden and the sport groups to All channels, then across into the channels
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-popular
+    screen_has "SE: SVT1 FHD" || fail "Popular in Sweden does not show SVT1"
+    # The sport groups: Neon Two has an SHL match next in the guide, Neon Sport shows Allsvenskan now
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-hockey
+    screen_has "Swedish hockey" || fail "Live TV has no Swedish hockey group for the SHL match in the guide"
+    screen_has "SHL: Fr" || fail "Swedish hockey does not show the channel with the SHL match"
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-football
+    screen_has "Allsvenskan Live" || fail "the Football group does not show the channel with Allsvenskan on"
+    key DPAD_DOWN
+    sleep 2
+    screen_has "Morning Neon" || fail "the guide shows no programme on Neon One"
+    key DPAD_RIGHT
+    sleep 2
+    shot livetv-channel-focus
+    timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
+    adb shell cat /sdcard/ui.xml 2>/dev/null | grep -o '<node [^>]*>' | grep 'focused="true"' | grep -q 'content-desc="Neon One"' ||
+      fail "the first channel did not take the focus, focus on: $(focused_label)"
+    hold_ok 1.2 >/dev/null || fail "could not hold OK on a channel"
+    sleep 2
+    shot livetv-channel-menu
+    screen_has "Add to Favourites" || fail "holding OK on a channel did not offer Add to Favourites"
+    key DPAD_CENTER
+    sleep 2
+    screen_has 'text="  ★"' || fail "Add to Favourites did not make Neon One a favourite"
+    shot livetv-favourite
+    adb logcat -c
+    key DPAD_CENTER
+    sleep 3
+    shot livetv-player
+    # uiautomator cannot read the player's dialog over the video, so the player says what it tuned to
+    adb logcat -d -s LiveTvPlayer:I | grep -q "tuned to Neon One" || fail "the player did not tune to Neon One"
+    sleep 3
+    shot livetv-playing
+    if adb logcat -d 2>/dev/null | grep -q "ExoPlaybackException"; then fail "the test stream did not play (ExoPlayer error in the log)"; fi
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-zap
+    adb logcat -d -s LiveTvPlayer:I | grep -q "tuned to Neon Two" || fail "Down in the player did not zap to the next channel"
+    key BACK
+    sleep 3
+    shot livetv-back
+    screen_has "Sverige" || fail "Back from the player did not return to the channel list"
+    # Search: up to the Search entry, type, and the list narrows to what matches
+    key DPAD_LEFT
+    sleep 1
+    key DPAD_UP DPAD_UP DPAD_UP DPAD_UP DPAD_UP DPAD_UP
+    sleep 1
+    key DPAD_CENTER
+    sleep 2
+    adb shell input text sport
+    sleep 2
+    shot livetv-search-typing
+    key BACK
+    sleep 1
+    screen_has "Search channels" && key BACK
+    sleep 2
+    shot livetv-search
+    screen_has "Neon Sport" || fail "searching for sport did not find Neon Sport"
+    screen_has "Morning Neon" && fail "searching for sport still lists Neon One" || true
+  else
+    fail "the Live TV channels did not load from the pretend provider"
+    shot livetv-failed
+  fi
+fi
+kill "$IPTV_PID" 2>/dev/null
 menu_go Search
 sleep 6
 shot search-tab
