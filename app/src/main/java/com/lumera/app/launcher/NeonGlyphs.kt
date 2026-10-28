@@ -87,6 +87,13 @@ enum class Glyph(pathData: String) {
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
     Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
     Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68"),
+    Bluetooth("M30 34 L68 66 L50 84 V16 L68 34 L30 66"),
+
+    // Earbuds, as AirPods look: two rounded buds, each with its stem hanging down
+    Earbuds(
+        "M30 20 A13 13 0 1 1 30 46 A13 13 0 0 1 30 20 Z M37 40 V80 A5 5 0 0 1 27 80 V44 " +
+            "M70 20 A13 13 0 1 0 70 46 A13 13 0 0 0 70 20 Z M63 40 V80 A5 5 0 0 0 73 80 V44"
+    ),
 
     // The widgets by the clock
     Sun(circle(50, 50, 16) + "M50 14 V24 M50 76 V86 M14 50 H24 M76 50 H86 M24.5 24.5 L31.6 31.6 M68.4 68.4 L75.5 75.5 M24.5 75.5 L31.6 68.4 M68.4 31.6 L75.5 24.5"),
@@ -100,55 +107,3 @@ enum class Glyph(pathData: String) {
     Offline("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67 M18 18 L82 82"),
     Note("M40 72 V22 L78 14 V64" + circle(30, 72, 10) + circle(68, 64, 10) + "M40 34 L78 26"),
     Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54");
-
-    /** The icon's outline on the 100 by 100 grid, made once. */
-    val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
-}
-
-private fun rect(x: Number, y: Number, w: Number, h: Number, r: Number): String {
-    val l = x.toFloat(); val t = y.toFloat(); val rx = r.toFloat()
-    val right = l + w.toFloat(); val bottom = t + h.toFloat()
-    return "M${l + rx} $t H${right - rx} A$rx $rx 0 0 1 $right ${t + rx} V${bottom - rx} " +
-        "A$rx $rx 0 0 1 ${right - rx} $bottom H${l + rx} A$rx $rx 0 0 1 $l ${bottom - rx} V${t + rx} " +
-        "A$rx $rx 0 0 1 ${l + rx} $t Z "
-}
-
-/** A cog wheel with [teeth] square teeth between radius [inner] and [outer]. */
-internal fun gear(cx: Float, cy: Float, outer: Float, inner: Float, teeth: Int): String {
-    val corners = teeth * 4
-    return (0 until corners).joinToString(" ", postfix = " Z ") { k ->
-        // Two corners out on a tooth, two in between, turned so a tooth points straight up
-        val angle = 2.0 * Math.PI * (k - 0.5) / corners - Math.PI / 2
-        val r = if (k % 4 < 2) outer else inner
-        val x = cx + r * Math.cos(angle)
-        val y = cy + r * Math.sin(angle)
-        (if (k == 0) "M" else "L") + String.format(Locale.ROOT, "%.2f %.2f", x, y)
-    }
-}
-
-private fun circle(cx: Number, cy: Number, r: Number): String {
-    val x = cx.toFloat(); val y = cy.toFloat(); val radius = r.toFloat()
-    return "M${x - radius} $y A$radius $radius 0 1 0 ${x + radius} $y A$radius $radius 0 1 0 ${x - radius} $y Z "
-}
-
-/** A neon icon filling its size: a 4 unit tube with a 10 unit glow at a fifth of its strength. */
-@Composable
-fun NeonGlyph(glyph: Glyph, color: Color, modifier: Modifier = Modifier) {
-    Spacer(
-        modifier.drawWithCache {
-            val k = size.minDimension / 100f
-            val left = (size.width - 100f * k) / 2f
-            val top = (size.height - 100f * k) / 2f
-            val glow = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            val tube = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            onDrawBehind {
-                scale(k, k, pivot = Offset.Zero) {
-                    translate(left / k, top / k) {
-                        drawPath(glyph.path, color, alpha = 0.22f, style = glow)
-                        drawPath(glyph.path, color, style = tube)
-                    }
-                }
-            }
-        }
-    )
-}

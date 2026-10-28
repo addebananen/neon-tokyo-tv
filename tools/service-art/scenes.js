@@ -4,75 +4,14 @@
 //
 // L = { W, H, cx, gy, s }: the frame, the subject's ground centre and its scale.
 // Subjects are drawn in local units: origin on the ground, x in about [-120, 120], y up to -170.
-
-const f = n => Number(n.toFixed(2));
-function rng(seed) { let s = seed >>> 0 || 1; return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296; }
-
-function sparkle(x, y, r, color = '#fff', o = 1, extra = '') {
-  const k = r * 0.16;
-  return `<path d="M${f(x)},${f(y - r)} Q${f(x + k)},${f(y - k)} ${f(x + r)},${f(y)} Q${f(x + k)},${f(y + k)} ${f(x)},${f(y + r)} Q${f(x - k)},${f(y + k)} ${f(x - r)},${f(y)} Q${f(x - k)},${f(y - k)} ${f(x)},${f(y - r)} Z" fill="${color}" opacity="${f(o)}" ${extra}/>`;
-}
-
-function stars(L, n, seed, maxY, color = '#ffffff', minY = 0) {
-  const r = rng(seed); let out = '';
-  for (let i = 0; i < n; i++) {
-    const x = r() * L.W, y = minY + r() * (maxY - minY);
-    const big = r() < 0.07;
-    const rad = big ? 0.9 + r() * 0.5 : 0.3 + r() * 0.55;
-    const o = 0.35 + r() * 0.65;
-    out += `<circle cx="${f(x)}" cy="${f(y)}" r="${f(rad)}" fill="${color}" opacity="${f(o)}"/>`;
-    if (big) out += sparkle(x, y, rad * 3.4, color, o * 0.7);
-  }
-  return out;
-}
-
-const commonDefs = `
-  <filter id="b1" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="1"/></filter>
-  <filter id="b2" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="2"/></filter>
-  <filter id="b4" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="4"/></filter>
-  <filter id="b8" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="8"/></filter>
-  <filter id="b14" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000"><feGaussianBlur stdDeviation="14"/></filter>
-  <filter id="glow" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000">
-    <feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  <filter id="glowBig" filterUnits="userSpaceOnUse" x="-3000" y="-3000" width="6000" height="6000">
-    <feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>`;
-
-function helpers(L) {
-  const X = v => L.cx + v * L.s, Y = v => L.gy + v * L.s, S = v => v * L.s;
-  // The frame's edges in local units, for sky decorations that should use the space there is
-  // The room on the narrower side, so decorations stay in frame when the subject is off centre
-  const halfW = Math.min(L.cx, L.W - L.cx) / L.s, skyTop = -L.gy / L.s, below = (L.H - L.gy) / L.s;
-  return { X, Y, S, halfW, skyTop, below };
-}
-
-function floorGrid(L, y0, color, { rays = 12, rows = 6, opacity = 0.35, width = 1, spread = 1.8 } = {}) {
-  let out = `<g stroke="${color}" stroke-width="${width}" opacity="${opacity}">`;
-  const span = L.W / rays;
-  for (let i = -rays; i <= rays; i++) {
-    out += `<line x1="${f(L.cx + i * span * 0.18)}" y1="${f(y0)}" x2="${f(L.cx + i * span * spread)}" y2="${f(L.H + 4)}"/>`;
-  }
-  for (let j = 1; j <= rows; j++) {
-    const t = j / rows, y = y0 + (L.H - y0) * t * t;
-    out += `<line x1="0" y1="${f(y)}" x2="${L.W}" y2="${f(y)}"/>`;
-  }
-  return out + '</g>';
-}
-
-function cubicPoint(p0, p1, p2, p3, t) {
-  const u = 1 - t;
-  return [
-    u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0],
-    u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1]
-  ];
-}
+const { f, rng, sparkle, stars, commonDefs, helpers, floorGrid, cubicPoint, twinkles, wave, keys } = require('./lib');
 
 // ---------------------------------------------------------------------------------------
 // Netflix: movie night at home. A red-lit 80s TV with rabbit ears, popcorn and tapes.
 function nfx(L) {
   const { X, Y, S, skyTop } = helpers(L);
   // Warm string lights hung across the wall, one strand per frame width
+  const bulbs = [];
   function fairyLights(L, skyTop) {
     const yTop = Y(Math.max(skyTop * 0.94, -186)), sag = S(16);
     let out = `<path d="M-10,${f(yTop)} Q${f(L.W / 2)},${f(yTop + sag * 2)} ${L.W + 10},${f(yTop)}" stroke="#3a1420" stroke-width="${f(S(1))}" fill="none"/>`;
@@ -81,6 +20,7 @@ function nfx(L) {
       const t = i / n, x = -10 + (L.W + 20) * t, y = yTop + sag * 2 * 2 * t * (1 - t);
       const c = i % 3 === 0 ? '#ffd27a' : i % 3 === 1 ? '#ff6b75' : '#ffe9c2';
       out += `<circle cx="${f(x)}" cy="${f(y + S(3))}" r="${f(S(4))}" fill="${c}" opacity="0.35" filter="url(#b2)"/><circle cx="${f(x)}" cy="${f(y + S(3))}" r="${f(S(1.6))}" fill="${c}"/>`;
+      bulbs.push([f((x - L.cx) / L.s), f((y + S(3) - L.gy) / L.s), 9, f((i * 0.37) % 1)]);
     }
     return out;
   }
@@ -191,7 +131,16 @@ function nfx(L) {
     <rect x="-121" y="-22" width="40" height="11" rx="1.5" fill="#1d0a14" stroke="#ff5a66" stroke-opacity="0.5" stroke-width="0.8"/>
     <rect x="-113" y="-19" width="24" height="5" rx="1" fill="#ff2b3a" opacity="0.95"/>
   </g>`;
-  return { defs, bg, fg };
+  // The set flickers like a picture changing, the lights twinkle, popcorn pops out of the bucket
+  const flicker = keys(2.6, [[0, 0.5], [0.3, 0.75], [0.45, 0.4], [0.9, 0.62], [1.3, 0.5], [1.38, 0.85, 1], [1.46, 0.45], [2.1, 0.6]]);
+  return {
+    defs, bg, fg,
+    fx: [
+      { type: 'dots', layer: 'scene', pts: bulbs, color: '#ffe3a8', a: 0.15, tw: [0.55, 1.6] },
+      { type: 'glow', layer: 'top', x: -17, y: -77, r: 78, color: '#ff2b3a', a: flicker },
+      { type: 'particles', layer: 'top', shape: 'dot', n: 3, seed: 3, life: 1.3, from: [100, -60], w: 18, arc: [245, 295], speed: [70, 95], g: 190, size: [5, 7], color: ['#fff3d6', '#f7dcae'], fade: [0.02, 0.15] },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -245,14 +194,17 @@ function hbm(L) {
   const windows = [[-95, -104], [-90, -92], [-35, -128], [-29, -128], [-32, -112], [22, -96], [-66, -72], [-2, -72], [26, -72]]
     .map(([x, y]) => `<rect x="${x}" y="${y}" width="3.4" height="6.5" rx="1.7" fill="#ffc271"/>`).join('');
 
-  const dragon = `
-  <g transform="translate(${f(moon.x)},${f(moon.y + S(8))}) scale(${f(L.s * 0.74)})">
-    <path d="M-14,-5 C-20,-20 -18,-34 -8,-44 L-6,-50 L-3,-43 C6,-42 16,-36 22,-26 Q14,-24 12,-14 Q6,-16 2,-6 Z" fill="#1b0f3a"/>
-    <path d="M-46,-8 C-44,-11 -40,-13 -36,-13 L-31,-20 L-30,-13 L-25,-17 L-25,-11 C-18,-9 -12,-6 -6,-4 C6,-3 18,-1 30,2 C42,5 54,4 64,-1 L74,-5 L69,3 L76,8 L64,6 C52,11 40,12 28,10 C16,8 4,8 -6,5 C-14,3 -20,0 -27,-3 C-31,-4 -36,-4 -40,-4 L-47,-5 Z" fill="#0c0620"/>
-    <path d="M-8,-4 C-10,-22 -2,-40 12,-50 L16,-56 L18,-49 C32,-49 48,-40 60,-28 Q50,-25 47,-13 Q40,-17 32,-5 Q24,-9 16,0 Z" fill="#0c0620"/>
-    <path d="M18,-49 L47,-13 M18,-49 L32,-5 M18,-49 L60,-28" stroke="#3a2470" stroke-width="1" opacity="0.8"/>
-    <path d="M6,8 l-3,6 l4,-1 M18,9 l-2,6 l4,-1" stroke="#0c0620" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-  </g>`;
+  // The dragon flies on its own layers: a wing behind, the body, a wing in front, so the
+  // wings can beat round the shoulder while the whole of it glides
+  const dg = svg => `<g transform="translate(${f(moon.x)},${f(moon.y + S(8))}) scale(${f(L.s * 0.74)})">${svg}</g>`;
+  const wingBack = dg(`<path d="M-14,-5 C-20,-20 -18,-34 -8,-44 L-6,-50 L-3,-43 C6,-42 16,-36 22,-26 Q14,-24 12,-14 Q6,-16 2,-6 Z" fill="#1b0f3a"/>`);
+  const body = dg(`<path d="M-46,-8 C-44,-11 -40,-13 -36,-13 L-31,-20 L-30,-13 L-25,-17 L-25,-11 C-18,-9 -12,-6 -6,-4 C6,-3 18,-1 30,2 C42,5 54,4 64,-1 L74,-5 L69,3 L76,8 L64,6 C52,11 40,12 28,10 C16,8 4,8 -6,5 C-14,3 -20,0 -27,-3 C-31,-4 -36,-4 -40,-4 L-47,-5 Z" fill="#0c0620"/>
+    <path d="M6,8 l-3,6 l4,-1 M18,9 l-2,6 l4,-1" stroke="#0c0620" stroke-width="2.4" stroke-linecap="round" fill="none"/>`);
+  const wingFront = dg(`<path d="M-8,-4 C-10,-22 -2,-40 12,-50 L16,-56 L18,-49 C32,-49 48,-40 60,-28 Q50,-25 47,-13 Q40,-17 32,-5 Q24,-9 16,0 Z" fill="#0c0620"/>
+    <path d="M18,-49 L47,-13 M18,-49 L32,-5 M18,-49 L60,-28" stroke="#3a2470" stroke-width="1" opacity="0.8"/>`);
+  const toLocal = (dx, dy) => [f((moon.x + dx * L.s * 0.74 - L.cx) / L.s), f((moon.y + S(8) + dy * L.s * 0.74 - L.gy) / L.s)];
+  const glide = { dx: wave(7, 6.2), dy: wave(4, 3.1, 0.2) };
+  const beat = (amp, ph) => ({ ...glide, rot: wave(amp, 0.95, ph) });
 
   const fg = `
   <g>
@@ -265,7 +217,21 @@ function hbm(L) {
     <path d="M-32,-164 L-32,-178" stroke="#140a2c" stroke-width="1.6"/>
     <path d="M-32,-178 L-20,-174.5 L-32,-171 Z" fill="#9d6bff"/>
   </g>`;
-  return { defs, bg, fg, fgGlobal: dragon };
+  const lit = [[-95, -104], [-90, -92], [-35, -128], [-29, -128], [-32, -112], [22, -96], [-66, -72], [-2, -72], [26, -72]]
+    .map(([x, y], i) => [x + 1.7, y + 3.2, 9, f((i * 0.29) % 1)]);
+  return {
+    defs, bg, fg,
+    parts: [
+      { name: 'wingBack', group: 'subject', frame: true, svg: wingBack, pivot: toLocal(-4, -6), m: beat(-16, 0.08) },
+      { name: 'body', group: 'subject', frame: true, svg: body, pivot: toLocal(4, 0), m: { ...glide, rot: wave(2, 3.1, 0.45) } },
+      { name: 'wingFront', group: 'subject', frame: true, svg: wingFront, pivot: toLocal(-2, -4), m: beat(-18, 0) },
+    ],
+    fx: [
+      { type: 'dots', layer: 'scene', pts: twinkles(L, 70, 21, horizon), color: '#e9dcff', a: 0.2, tw: [0.5, 2.4] },
+      { type: 'glow', layer: 'scene', x: f((moon.x - L.cx) / L.s), y: f((moon.y - L.gy) / L.s), r: 110, color: '#b48cff', a: wave(0.1, 4.2, 0, 0.25) },
+      { type: 'dots', layer: 'top', keep: true, pts: lit, color: '#ffc271', a: 0.2, tw: [0.25, 1.3] },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -367,7 +333,27 @@ function dnp(L) {
   ${trailSparks}
   <circle cx="${p3[0]}" cy="${p3[1]}" r="9" fill="#bfe9ff" opacity="0.6" filter="url(#b4)"/>
   ${sparkle(p3[0], p3[1], 11, '#ffffff', 1)}`;
-  return { defs, bg, fg };
+  // New fireworks bloom over the castle one after another, the shooting star's trail glitters
+  const life = 2.4;
+  const firework = (x, y, color, off, seed) => [
+    { type: 'particles', layer: 'scene', shape: 'glowdot', sync: true, off, n: 20, seed, life, from: [x, y], w: 14, h: 10, speed: [34, 40], g: 16, size: [2, 2.8], color, fade: [0.02, 0.55] },
+    { type: 'glow', layer: 'scene', x, y, r: 46, color, a: keys(life, [[0, 0], [f(life - off - 0.01), 0, 1], [f(life - off), 0.55, 1], [f(Math.min(life - off + 0.5, life - 0.001)), 0]].sort((a, b) => a[0] - b[0]), true) },
+  ];
+  const rt = rng(9), trail = [];
+  for (let i = 0; i < 16; i++) {
+    const t = 0.35 + (i / 16) * 0.62, [x, y] = cubicPoint(p0, p1, p2, p3, t);
+    trail.push([f(x + (rt() - 0.5) * 14), f(y + (rt() - 0.5) * 14), f(4 + t * 6), f((1 - i / 16) * 0.8)]);
+  }
+  return {
+    defs, bg, fg,
+    fx: [
+      ...firework(-halfW * 0.45, skyTop * 0.62, '#ff6fd8', 0.4, 11),
+      ...firework(halfW * 0.5, skyTop * 0.5, '#7ff3ff', 1.2, 12),
+      ...firework(halfW * 0.05, skyTop * 0.8, '#ffd36b', 2.0, 13),
+      { type: 'dots', layer: 'top', pts: trail, shape: 'spark', color: '#ffffff', a: 0.1, tw: [0.8, 1.1] },
+      { type: 'glow', layer: 'top', x: p3[0], y: p3[1], r: 26, color: '#bfe9ff', a: wave(0.25, 1.1, 0, 0.45) },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -452,7 +438,18 @@ function amp(L) {
   <g stroke="#06142c" stroke-width="1"><line x1="24" y1="-25" x2="40" y2="-25"/><line x1="24" y1="-21" x2="36" y2="-21"/></g>
   <g stroke="#06142c" stroke-width="0.9">${[24, 26, 27.5, 30, 31, 33, 35.5, 37, 39, 41, 42.5, 44].map(x => `<line x1="${x}" y1="-18" x2="${x}" y2="-14"/>`).join('')}</g>
   <path d="M-58,0 L-58,-66 L58,-66 L84,-80 L84,-12 L58,0 Z M58,-66 L58,0" fill="none" stroke="#7fe0ff" stroke-opacity="0.85" stroke-width="1.2"/>`;
-  return { defs, bg, fg };
+  // The light out of the box turns slowly, the play button sends out rings, confetti rains
+  const { halfW, skyTop } = helpers(L);
+  const ring = off => ({ type: 'ring', layer: 'top', x: 10, y: -132, lw: 1.6, color: '#7fe0ff', r: keys(1.8, [[0, 24, 1], [off, 24, 1], [Math.min(off + 1.2, 1.79), 64, 1]].filter((v, i, a) => i === 0 || v[0] > a[i - 1][0])), a: keys(1.8, [[0, 0, 1], [off, 0.7, 1], [Math.min(off + 1.2, 1.79), 0, 1]].filter((v, i, a) => i === 0 || v[0] > a[i - 1][0])) });
+  return {
+    defs, bg, fg,
+    fx: [
+      { type: 'rays', layer: 'scene', upper: true, x: 12, y: -76, n: 16, r0: 10, r1: 320, w: 2.4, spin: 6, color: '#bff4ff', a: 0.16 },
+      { type: 'glow', layer: 'top', x: 12, y: -84, r: 80, sx: 1.6, color: '#9eeaff', a: wave(0.12, 1.8, 0, 0.3) },
+      ring(0.01), ring(0.9),
+      { type: 'particles', layer: 'top', shape: 'rect', n: 12, seed: 5, life: 4.2, x: -halfW, w: halfW * 2, y: skyTop - 10, h: 10, vy: (-skyTop + 40) / 4.2, sway: [10, 1.8], size: [4, 6], spin: 160, flipHz: 1.6, color: ['#ffd36b', '#ff6fd8', '#7ff3ff', '#ffffff'], fade: [0.05, 0.15] },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -522,7 +519,17 @@ function atp(L) {
   </g>
   <path d="M-38,-142 A57,57 0 0 1 30,-152" stroke="#ffffff" stroke-width="3" fill="none" opacity="0.8" stroke-linecap="round"/>
   <path d="M46,-130 A57,57 0 0 1 52,-80" stroke="#cfeaff" stroke-width="2.4" fill="none" opacity="0.7" stroke-linecap="round" filter="url(#b1)"/>`;
-  return { defs, bg, fg };
+  // The astronaut floats, the sun flares over the rim of the earth, the stars twinkle
+  return {
+    defs, bg, fg,
+    fgMotion: { pivot: [0, -60], m: { dy: wave(-3.2, 3.8), rot: wave(1.6, 5.4, 0.2) } },
+    fx: [
+      { type: 'dots', layer: 'scene', pts: twinkles(L, 120, 51, Y(-40)), color: '#ffffff', a: 0.2, tw: [0.5, 2.8] },
+      { type: 'glow', layer: 'scene', x: 84, y: -45, r: 70, color: '#cfeaff', a: wave(0.18, 2.6, 0, 0.4) },
+      { type: 'glow', layer: 'scene', x: 84, y: -45, r: 40, sx: 4.5, color: '#ffffff', a: wave(0.12, 2.6, 0.1, 0.25) },
+      { type: 'glow', layer: 'top', x: 22, y: -116, dy: wave(-3.2, 3.8), r: 9, color: '#ffffff', a: keys(4, [[0, 0], [2.4, 0], [2.7, 0.9], [3.2, 0]]) },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -548,6 +555,7 @@ function sst(L) {
   </radialGradient>`;
 
   const beam = (lx, ly, deg, len, w) => `<g transform="translate(${f(X(lx))},${f(Y(ly))}) rotate(${deg})"><polygon points="0,${f(-S(2))} ${f(S(len))},${f(-S(w))} ${f(S(len))},${f(S(w))} 0,${f(S(2))}" fill="url(#sstBeam)"/></g>`;
+  const beams = [[-60, -70, -118, 360, 22], [70, -70, -60, 360, 22], [-20, -80, -98, 380, 16], [30, -80, -76, 380, 16]];
   const r = rng(61);
   let city = `<path d="M0,${f(L.H)} L0,${f(horizon)}`;
   for (let x = 0; x <= L.W; x += S(14)) { const h = S(8 + r() * 22); city += ` L${f(x)},${f(horizon - h)} L${f(x + S(14))},${f(horizon - h)}`; }
@@ -557,9 +565,9 @@ function sst(L) {
   const bg = `
   <rect width="${L.W}" height="${L.H}" fill="url(#sstSky)"/>
   ${stars(L, 50, 63, horizon - S(40), '#ffe6f6')}
-  ${clouds}
-  ${beam(-60, -70, -118, 360, 22)}${beam(70, -70, -60, 360, 22)}${beam(-20, -80, -98, 380, 16)}${beam(30, -80, -76, 380, 16)}
-  ${city}
+  ${clouds}`;
+  // The city stands in front of the searchlights, which sweep the sky on their own layers
+  const street = `${city}
   <rect y="${f(horizon)}" width="${L.W}" height="${f(L.H)}" fill="#1a0730"/>
   <ellipse cx="${f(X(0))}" cy="${f(Y(2))}" rx="${f(S(120))}" ry="${f(S(14))}" fill="#ff9ad6" opacity="0.35" filter="url(#b8)"/>`;
 
@@ -603,7 +611,25 @@ function sst(L) {
   <rect x="-44" y="-40" width="88" height="40" fill="#14052a"/>
   ${[-40, -12, 16].map(x => `<rect x="${x}" y="-36" width="24" height="36" rx="1" fill="url(#sstDoor)" opacity="0.9"/>`).join('')}
   <path d="M-44,0 L44,0 L70,8 L-70,8 Z" fill="#ffb3e0" opacity="0.35" filter="url(#b2)"/>`;
-  return { defs, bg, fg };
+  // Marquee bulbs chase round the sign and along the canopy
+  const chase = [];
+  const ring = (pts, k) => pts.forEach(([x, y], i) => chase.push([f(x), f(y), 5, f(-(i / pts.length) * k)]));
+  ring(Array.from({ length: 24 }, (_, i) => [-90 + i * 7.8, -71]), 4);
+  ring(Array.from({ length: 21 }, (_, i) => [79 - i * 7.9, -47]), 3.5);
+  const sign = [];
+  for (let y = -156; y <= -76; y += 6) sign.push([-9, y]);
+  ring(sign, 3);
+  return {
+    defs, bg, fg,
+    parts: [
+      ...beams.map(([lx, ly, deg, len, w], i) => ({ name: `beam${i + 1}`, group: 'scene', frame: true, svg: beam(lx, ly, deg, len, w), pivot: [lx, ly], m: { rot: wave(i % 2 ? -11 : 11, 5.6 + i * 0.7, i * 0.17) } })),
+      { name: 'street', group: 'scene', frame: true, svg: street },
+    ],
+    fx: [
+      { type: 'dots', layer: 'top', pts: chase, shape: 'glowdot', color: '#ffe9a8', a: 0.05, tw: [0.9, 1.2] },
+      { type: 'glow', layer: 'top', x: 0, y: -168, r: 22, color: '#ffe9a8', a: wave(0.3, 1.3, 0, 0.5) },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -659,7 +685,16 @@ function pmp(L) {
   <path d="M-62,-84 L-50,-70 L-56,-52 M-24,-128 L-18,-100 L-26,-78 M32,-118 L26,-92 L34,-70 M72,-74 L66,-52" stroke="#9fb8ff" stroke-opacity="0.16" stroke-width="1" fill="none"/>
   <ellipse cx="0" cy="-22" rx="170" ry="12" fill="#cfe0ff" opacity="0.18" filter="url(#b8)"/>
   <path d="M-170,0 L-120,-14 L-70,-8 L-20,-18 L30,-10 L80,-20 L130,-8 L170,-14 L170,0 Z" fill="#0a1238"/>`;
-  return { defs, bg, fg };
+  // Stars stream out of the peak at warp speed, its tip glinting
+  return {
+    defs, bg, fg,
+    fx: [
+      { type: 'particles', layer: 'scene', shape: 'streak', n: 40, seed: 17, life: 1.5, from: [0, -152], r0: [16, 70], speed: [40, 90], acc: 160, len: 26, size: [0.9, 1.8], color: ['#ffffff', '#ffffff', '#9fc0ff'], fade: [0.25, 0.2] },
+      { type: 'glow', layer: 'scene', x: 0, y: -152, r: 80, color: '#9fc0ff', a: wave(0.12, 1.6, 0, 0.35) },
+      { type: 'glow', layer: 'top', x: 0, y: -151, r: 14, color: '#ffffff', a: wave(0.35, 1.9, 0, 0.45) },
+      { type: 'dots', layer: 'top', pts: [[0, -151, 16, 0]], shape: 'spark', color: '#ffffff', a: 0.25, tw: [0.6, 1.9] },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -764,13 +799,26 @@ function cru(L) {
     <ellipse cx="64" cy="-70" rx="13" ry="8" fill="#fff7ec"/><ellipse cx="65" cy="-70" rx="6.5" ry="4.2" fill="#ff9e1f"/>
     ${onions}
   </g>
-  <!-- chopsticks lifting noodles -->
+  ${petal(-108, -124, 1.5, 20)}${petal(104, -70, 1.3, 140)}${petal(-116, -36, 1.1, 75)}`;
+  // The chopsticks lift the noodles and dip them again, steam rises, petals fall
+  const sticks = `
   <path d="M8,-108 Q-2,-92 0,-70 M15,-106 Q13,-90 15,-66 M22,-104 Q32,-88 30,-70" stroke="#fff0bf" stroke-width="2.6" fill="none" stroke-linecap="round"/>
   <path d="M6,-110 L110,-168" stroke="url(#cruStick)" stroke-width="4.8" stroke-linecap="round"/>
   <path d="M20,-104 L118,-160" stroke="url(#cruStick)" stroke-width="4.8" stroke-linecap="round"/>
-  <path d="M86,-155 L110,-168 M95,-146 L118,-160" stroke="#c2312a" stroke-width="5" stroke-linecap="round"/>
-  ${petal(-108, -124, 1.5, 20)}${petal(104, -70, 1.3, 140)}${petal(-116, -36, 1.1, 75)}`;
-  return { defs, bg, fg };
+  <path d="M86,-155 L110,-168 M95,-146 L118,-160" stroke="#c2312a" stroke-width="5" stroke-linecap="round"/>`;
+  const { halfW, skyTop } = helpers(L);
+  return {
+    defs, bg, fg,
+    parts: [{ name: 'sticks', group: 'subject', svg: sticks, pivot: [114, -164], m: { dy: keys(3.2, [[0, 0], [0.9, -9], [2.2, -9], [3.0, 0]]), rot: keys(3.2, [[0, 0], [0.9, -2.5], [2.2, -2.5], [3.0, 0]]) } }],
+    fx: [
+      { type: 'rays', layer: 'scene', x: 0, y: -96, n: 30, r0: 70, r1: 420, w: 0.9, spin: 3, color: '#fff0d6', a: 0.12 },
+      { type: 'glow', layer: 'scene', x: 0, y: -96, r: 100, color: '#ffb15c', a: wave(0.1, 2.4, 0, 0.3) },
+      { type: 'particles', layer: 'top', shape: 'puff', n: 7, seed: 31, life: 3.2, x: -44, w: 80, y: -96, h: 6, vy: -22, dv: [3, 4], sway: [5, 2.2], size: [16, 30], color: '#ffffff', alpha: [0.18, 0.3], fade: [0.25, 0.55] },
+      { type: 'particles', layer: 'top', shape: 'petal', n: 9, seed: 37, life: 6, x: -halfW - 10, w: halfW * 2 + 20, y: skyTop - 10, h: 10, vx: 6, vy: (-skyTop + 60) / 6, sway: [14, 2.6], size: [7, 10], spin: 80, color: ['#ffc4dc', '#ff9ac6'], fade: [0.05, 0.15] },
+    ],
+  };
 }
 
-module.exports = { scenes: { nfx, hbm, dnp, amp, atp, sst, pmp, cru }, commonDefs };
+const genres = require('./genres');
+
+module.exports = { scenes: { nfx, hbm, dnp, amp, atp, sst, pmp, cru, ...genres }, commonDefs };

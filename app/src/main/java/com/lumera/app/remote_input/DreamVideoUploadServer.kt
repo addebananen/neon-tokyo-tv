@@ -176,8 +176,10 @@ class DreamVideoUploadServer(
                     if (n < 0) throw IOException("stopped at ${length - left} of a $length byte piece")
                     out.write(buffer, 0, n)
                     left -= n
-                    // Only whole pieces count, so a piece that breaks off is sent again whole
-                    val soFar = offset + length - left
+                    // What is written stays, so a piece that breaks off goes on from its last byte
+                    // rather than starting over: on weak Wi-Fi a whole piece might never make it
+                    arrived += n
+                    val soFar = arrived
                     val now = SystemClock.uptimeMillis()
                     if (now - lastReport >= 250L) {
                         lastReport = now
@@ -185,9 +187,10 @@ class DreamVideoUploadServer(
                     }
                 }
             }
-            arrived = offset + length
         } catch (e: Exception) {
             android.util.Log.w("DreamVideoUpload", "a piece at $offset of $total broke off; the phone carries on from $arrived", e)
+            val soFar = arrived
+            mainHandler.post { listener.onProgress(soFar, total) }
             return early(placed())
         }
         if (arrived == total) {

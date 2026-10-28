@@ -14,6 +14,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -331,6 +333,23 @@ private fun ProfileEditor(
                 PanelButton(pack.title, look, primary = pack == profile.icons) {
                     saveName()
                     profiles.edit(profile.id) { it.copy(icons = pack) }
+                }
+            }
+        }
+        // The remixes are of the apps' own icons, so the neon line icons have none
+        if (profile.icons != IconPack.Neon) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PanelNote("COLOURS", look)
+                Spacer(Modifier.width(8.dp))
+                IconTint.values().forEach { tint ->
+                    PanelButton(tint.title, look, primary = tint == profile.tint) {
+                        saveName()
+                        profiles.edit(profile.id) { it.copy(tint = tint) }
+                    }
                 }
             }
         }
