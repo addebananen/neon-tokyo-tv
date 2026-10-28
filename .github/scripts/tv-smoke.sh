@@ -590,6 +590,31 @@ else
   fail "Screensaver row not found in Personalization"
 fi
 
+# --- Scene art on the service and genre cards ----------------------------------
+# Every card in a grid while focus walks from one to the next, filmed so the moving scenes can
+# be checked, then the tall and square cards at rest
+adb shell settings put global animator_duration_scale 1
+adb shell am start -n "$PKG/com.lumera.app.ui.home.SceneArtPreviewActivity" --ei dwell 3200 >/dev/null 2>&1
+sleep 1
+adb shell screenrecord --time-limit 76 --size 1280x720 --bit-rate 8000000 /sdcard/scene-art.mp4 > "$OUT/scene-art-record.txt" 2>&1 &
+recorder=$!
+sleep 6
+shot scene-art
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/scene-art.mp4 "$OUT/scene-art.mp4" > /dev/null 2>&1 || true
+grep -E "SceneMotion|service_art" "$OUT/logcat-full.txt" | grep -iE "error|exception" | head -5 > "$OUT/scene-art-errors.txt" || true
+[ -s "$OUT/scene-art-errors.txt" ] && fail "the scene art logged errors: $(head -2 "$OUT/scene-art-errors.txt")"
+key BACK
+sleep 2
+for shape in tall square; do
+  adb shell am start -n "$PKG/com.lumera.app.ui.home.SceneArtPreviewActivity" --es shape "$shape" --ei width 150 --ei dwell 60000 >/dev/null 2>&1
+  sleep 6
+  shot "scene-art-$shape"
+  key BACK
+  sleep 2
+done
+adb shell settings put global animator_duration_scale 0
+
 # --- Projectivy wallpaper provider -------------------------------------------
 if ! adb shell cmd package query-services -a tv.projectivy.plugin.WALLPAPER_PROVIDER 2>/dev/null | grep -q NeonWallpaperProviderService; then
   fail "the Projectivy wallpaper provider is not registered"

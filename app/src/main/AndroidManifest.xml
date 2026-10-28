@@ -141,6 +141,11 @@
             android:exported="true"
             android:theme="@style/Theme.Lumera" />
 
+        <activity
+            android:name=".ui.home.SceneArtPreviewActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Lumera" />
+
         <service
             android:name=".data.torrent.TorrentService"
             android:foregroundServiceType="dataSync"

@@ -155,13 +155,13 @@ fun HubCard(
                     )
 
                 } else {
-                    val serviceCode = remember(hubItem.categoryId, hubItem.title) {
-                        NeonTokyoStarterPack.serviceCode(hubItem.categoryId, hubItem.title)
+                    val artCode = remember(hubItem.categoryId, hubItem.title) {
+                        NeonTokyoStarterPack.artCode(hubItem.categoryId, hubItem.title)
                     }
-                    if (serviceCode != null) {
-                        // The service's own scene, its subject lifting off it on focus
+                    if (artCode != null) {
+                        // The service's or genre's own scene, coming alive on focus
                         ServiceCardArt(
-                            code = serviceCode,
+                            code = artCode,
                             title = hubItem.title,
                             shape = shape,
                             focused = isFocused,
