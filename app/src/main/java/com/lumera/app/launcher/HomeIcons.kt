@@ -34,6 +34,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.runtime.LaunchedEffect
+import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -150,10 +157,16 @@ internal fun BoxScope.AppArtFace(
     focused: Boolean,
     big: Boolean,
     nameSize: TextUnit,
+    motion: IconMotion = IconMotion.Rise,
     fallback: @Composable BoxScope.() -> Unit
 ) {
     val look = LocalHomeLook.current
+    val tint = LocalIconTint.current
     val shine = rememberShine(focused, pack != IconPack.Neon)
+    // The remix's colours on the icon, and its glow in the remix's light
+    val filter = remember(tint, color) { tint.filter(color) }
+    val glow = tint.glow(color)
+    val face = IconFace(filter, glow, motion)
     when (pack) {
         IconPack.Neon -> fallback()
         IconPack.Banner -> {
@@ -163,13 +176,14 @@ internal fun BoxScope.AppArtFace(
                     bitmap = banner.image,
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
+                    colorFilter = filter,
                     modifier = Modifier.fillMaxSize().clip(shape).shine(shine)
                 )
                 // Not every app has a TV banner: its icon, as Original shows it
-                banner.done -> OriginalFace(packages, name, big, nameSize, color, shine, fallback)
+                banner.done -> OriginalFace(packages, name, big, nameSize, face, shine, fallback)
             }
         }
-        IconPack.Original -> OriginalFace(packages, name, big, nameSize, color, shine, fallback)
+        IconPack.Original -> OriginalFace(packages, name, big, nameSize, face, shine, fallback)
         IconPack.Glass -> {
             val icon = rememberAppArt(packages, banner = false)
             Box(
@@ -184,7 +198,7 @@ internal fun BoxScope.AppArtFace(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    AppIcon(icon.image, name, if (big) 44.dp else 34.dp, color, shine)
+                    AppIcon(icon.image, name, if (big) 44.dp else 34.dp, face, shine)
                     if (big) {
                         Spacer(Modifier.size(5.dp))
                         Name(name, nameSize, look.text.copy(alpha = 0.9f))
@@ -202,7 +216,7 @@ private fun BoxScope.OriginalFace(
     name: String,
     big: Boolean,
     nameSize: TextUnit,
-    color: Color,
+    face: IconFace,
     shine: Shine,
     fallback: @Composable BoxScope.() -> Unit
 ) {
@@ -218,13 +232,13 @@ private fun BoxScope.OriginalFace(
             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AppIcon(icon, name, 44.dp, color, shine)
+            AppIcon(icon, name, 44.dp, face, shine)
             Spacer(Modifier.width(11.dp))
             Name(name, nameSize, look.text)
         }
     } else {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
-            AppIcon(icon, name, 28.dp, color, shine)
+            AppIcon(icon, name, 28.dp, face, shine)
             Spacer(Modifier.weight(1f))
             Name(name, nameSize, look.text)
         }
@@ -235,26 +249,65 @@ private fun BoxScope.OriginalFace(
  * The light on an app's own icon or banner in focus: it glows in the app's colour, breathing a
  * little, and every few seconds a gleam runs across it as over glass. Only the drawing reads it.
  */
-internal class Shine(val time: State<Float>, val lit: State<Float>)
+internal class Shine(val time: State<Float>, val lit: State<Float>, private val landedAt: FloatArray) {
+    /** Seconds since the focus last landed. */
+    val since: Float get() = time.value - landedAt[0]
+}
 
 @Composable
 private fun rememberShine(focused: Boolean, wanted: Boolean): Shine {
     val time = rememberFocusClock(focused && wanted)
     val lit = animateFloatAsState(if (focused) 1f else 0f, tween(320, easing = FastOutSlowInEasing), label = "IconShine")
-    return remember(time, lit) { Shine(time, lit) }
+    // Kept out of state: only the drawing reads it, and the clock it is read with redraws anyway
+    val landedAt = remember { FloatArray(1) }
+    LaunchedEffect(focused) { if (focused) landedAt[0] = time.value }
+    return remember(time, lit) { Shine(time, lit, landedAt) }
 }
 
+/** How an app's icon is drawn: in its remix's colours, glowing in [glow], doing its [motion]. */
+internal class IconFace(val filter: ColorFilter?, val glow: Color, val motion: IconMotion)
+
 /** The glow around an icon, drawn behind it and past its edges. */
-private fun Modifier.halo(shine: Shine, color: Color): Modifier = drawBehind {
+private fun Modifier.halo(shine: Shine, face: IconFace): Modifier = drawBehind {
     val lit = shine.lit.value
     if (lit <= 0f) return@drawBehind
+    val t = shine.since
+    val color = if (face.motion == IconMotion.Neon) neonAt(shine.time.value) else face.glow
     val breathe = 0.85f + 0.15f * sin(shine.time.value * 2.2f)
-    val radius = size.maxDimension * 0.95f
+    val radius = size.maxDimension * if (face.motion == IconMotion.Neon) 1.25f else 0.95f
+    val strength = if (face.motion == IconMotion.Neon) neonFlicker(t) else 1f
     drawCircle(
         Brush.radialGradient(0f to color.copy(alpha = 0.55f), 1f to Color.Transparent, center = center, radius = radius),
         radius = radius,
-        alpha = lit * breathe
+        alpha = lit * breathe * strength
     )
+    val edge = size.minDimension / 2f
+    if (HomeMotion.icons == HomeMotion.Icons.Off) return@drawBehind
+    when (face.motion) {
+        // Two rings go out with each heartbeat, as from a live broadcast
+        IconMotion.Beat -> for (k in 0..1) {
+            val age = ((t % 1.2f) - k * 0.22f) / 0.9f
+            if (age in 0f..1f) {
+                drawCircle(color, radius = edge * (1f + 0.75f * age), center = center, style = Stroke(1.5.dp.toPx() * (1f - age) + 0.5f), alpha = (1f - age) * 0.8f * lit)
+            }
+        }
+        // Four stars round the icon, twinkling in turn
+        IconMotion.Drift -> for (k in 0 until 4) {
+            val a = k * 1.7f + 0.6f
+            val at = Offset(center.x + cos(a) * edge * 1.35f, center.y + sin(a) * edge * 1.2f)
+            val twinkle = (0.5f + 0.5f * sin(shine.time.value * 3f + k * 1.9f)).let { it * it }
+            val r = 1.6.dp.toPx() * (0.7f + 0.6f * twinkle)
+            drawLine(Color.White, Offset(at.x - r * 2f, at.y), Offset(at.x + r * 2f, at.y), 0.8.dp.toPx(), alpha = twinkle * lit)
+            drawLine(Color.White, Offset(at.x, at.y - r * 2f), Offset(at.x, at.y + r * 2f), 0.8.dp.toPx(), alpha = twinkle * lit)
+            drawCircle(color, radius = r * 2.2f, center = at, alpha = 0.35f * twinkle * lit)
+        }
+        // A ring of tube light right round the icon, in the colours it runs through
+        IconMotion.Neon -> {
+            drawCircle(NeonTubes[0], radius = edge * 1.18f, center = center, style = Stroke(2.dp.toPx()), alpha = 0.55f * lit * strength)
+            drawCircle(NeonTubes[2], radius = edge * 1.32f, center = center, style = Stroke(1.dp.toPx()), alpha = 0.4f * lit * strength * breathe)
+        }
+        else -> {}
+    }
 }
 
 /** The gleam running across an icon or banner, over what it shows. */
@@ -263,7 +316,7 @@ private fun Modifier.shine(shine: Shine): Modifier = drawWithContent {
     val lit = shine.lit.value
     if (lit <= 0f) return@drawWithContent
     // Across in 0.7 s, then a rest, once on landing and every 3.2 s after
-    val run = (shine.time.value % 3.2f) / 0.7f
+    val run = (shine.since % 3.2f) / 0.7f
     if (run < 1f) {
         val band = size.width * 0.35f
         val x = -band + (size.width + band * 2f) * run
@@ -281,24 +334,59 @@ private fun Modifier.shine(shine: Shine): Modifier = drawWithContent {
 }
 
 @Composable
-private fun AppIcon(icon: ImageBitmap, name: String, size: Dp, color: Color, shine: Shine) {
+private fun AppIcon(icon: ImageBitmap, name: String, size: Dp, face: IconFace, shine: Shine) {
     val corner = RoundedCornerShape(size * 0.22f)
-    Image(
-        bitmap = icon,
-        contentDescription = name,
-        contentScale = ContentScale.Fit,
-        modifier = Modifier
-            .size(size)
-            .halo(shine, color)
-            .graphicsLayer {
-                // It rises a touch towards the viewer in focus
-                val s = 1f + 0.08f * shine.lit.value
-                scaleX = s
-                scaleY = s
+    val pose = remember { Pose() }
+    // Read in the layer, so the motion only redraws the icon
+    fun GraphicsLayerScope.posed(): Pose {
+        // As lively as the Motion panel says
+        val p = face.motion.pose(shine.since, shine.lit.value * HomeMotion.icons.amount, density, pose)
+        scaleX = p.scale
+        scaleY = p.scale
+        translationX = p.dx
+        translationY = p.dy
+        rotationZ = p.turn
+        rotationY = p.flip
+        cameraDistance = 14f * density
+        // A swinging sign hangs from its top
+        if (face.motion == IconMotion.Swing) transformOrigin = TransformOrigin(0.5f, 0f)
+        return p
+    }
+    Box(Modifier.size(size).halo(shine, face)) {
+        if (face.motion == IconMotion.Neon) {
+            // The pink and cyan ghosts of the icon a glitch splits off it, at rest exactly under it
+            NeonTubes.forEachIndexed { i, tube ->
+                if (i == 1) return@forEachIndexed
+                Image(
+                    bitmap = icon,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.tint(tube, BlendMode.SrcIn),
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            val p = posed()
+                            val side = if (i == 0) -1f else 1f
+                            translationX += side * 3.5f * density * p.glitch
+                            translationY += side * -1f * density * p.glitch
+                            alpha = (p.glitch * 0.9f).coerceIn(0f, 1f)
+                        }
+                        .clip(corner)
+                )
             }
-            .clip(corner)
-            .shine(shine)
-    )
+        }
+        Image(
+            bitmap = icon,
+            contentDescription = name,
+            contentScale = ContentScale.Fit,
+            colorFilter = face.filter,
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = posed().alpha.let { 0.35f + 0.65f * it } }
+                .clip(corner)
+                .shine(shine)
+        )
+    }
 }
 
 @Composable

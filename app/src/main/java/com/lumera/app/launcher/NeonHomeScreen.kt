@@ -226,7 +226,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -251,6 +251,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     }
     val updateState by updates.state.collectAsState()
     var showUpdates by remember { mutableStateOf(false) }
+    var showMotion by remember { mutableStateOf(false) }
+    remember { HomeMotion.load(appContext) }
     // A quiet look for a newer version once the home screen is up; the pill at the top says so
     LaunchedEffect(Unit) {
         delay(4000)
@@ -513,10 +515,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val inputsPill = remember { FocusRequester() }
     val versionPill = remember { FocusRequester() }
     val bluetoothPill = remember { FocusRequester() }
+    val motionPill = remember { FocusRequester() }
     var reopen by remember { mutableStateOf<FocusRequester?>(null) }
-    LaunchedEffect(showProfiles, showInputs, showUpdates, showBluetooth) {
+    LaunchedEffect(showProfiles, showInputs, showUpdates, showMotion, showBluetooth) {
         val back = reopen ?: return@LaunchedEffect
-        if (showProfiles || showInputs || showUpdates || showBluetooth) return@LaunchedEffect
+        if (showProfiles || showInputs || showUpdates || showMotion || showBluetooth) return@LaunchedEffect
         reopen = null
         repeat(10) {
             withFrameNanos { }
@@ -538,6 +541,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         btCard = null
         showBluetooth = false
         showUpdates = false
+        showMotion = false
         showInputs = false
         showProfiles = false
         pinning = null
@@ -568,7 +572,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons)) {
+    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons), LocalIconTint provides (previewTint ?: profile.tint)) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -601,8 +605,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     true
                 }
         ) {
-            val leanX = with(LocalDensity.current) { 12.dp.toPx() }
-            val leanY = with(LocalDensity.current) { 5.dp.toPx() }
+            // As far as the Motion panel says: by default a gentle few dp
+            val leanX = with(LocalDensity.current) { HomeMotion.lean.across.dp.toPx() }
+            val leanY = with(LocalDensity.current) { HomeMotion.lean.down.dp.toPx() }
             val tabsTop = maxHeight * 0.415f
             val rowsTop = maxHeight * 0.485f
             // The picture lies a little further back than the tiles: it leans gently away from
@@ -673,6 +678,14 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             spotOn = false
                         }
                     )
+                    Pill("Motion", Glyph.Sparkle, Modifier.focusRequester(motionPill), onClick = {
+                        reopen = motionPill
+                        showMotion = true
+                    }, onFocus = {
+                        focusMoved()
+                        wallpaper = NeonWallpaper.TOKYO
+                        spotOn = false
+                    })
                     Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
                         focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
@@ -803,7 +816,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             val wakeShown = remember { arrayOfNulls<Console>(1) }
             woke?.let { wakeShown[0] = it }
             AnimatedVisibility(
-                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && pinning == null && changing == null,
+                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && !showMotion && pinning == null && changing == null,
                 enter = fadeIn(tween(260)) + slideInVertically(tween(420, easing = FastOutSlowInEasing)) { -it / 2 },
                 exit = fadeOut(tween(220)) + slideOutVertically(tween(260)) { -it / 3 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = Side)
@@ -830,7 +843,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             val btShown = remember { arrayOfNulls<BtDevice>(1) }
             btCard?.let { btShown[0] = it }
             AnimatedVisibility(
-                visible = btCard != null && !btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && pinning == null && changing == null,
+                visible = btCard != null && !btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && !showMotion && pinning == null && changing == null,
                 enter = fadeIn(tween(260)) + slideInHorizontally(tween(420, easing = FastOutSlowInEasing)) { it / 2 },
                 exit = fadeOut(tween(220)) + slideOutHorizontally(tween(260)) { it / 3 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 34.dp, end = Side)
@@ -856,7 +869,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
 
             // The Bluetooth corner, after Home pressed twice
             AnimatedVisibility(
-                visible = btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && pinning == null && changing == null,
+                visible = btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && !showMotion && pinning == null && changing == null,
                 enter = fadeIn(tween(240)) + slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { it / 2 },
                 exit = fadeOut(tween(200)) + slideOutHorizontally(tween(240)) { it / 3 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 34.dp, end = Side)
@@ -930,6 +943,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         }
         if (showBluetooth) {
             HomeBluetoothDialog(bt, profile, profileList, onConnect = { connectBluetooth(it) }, onDismiss = { showBluetooth = false })
+        }
+        if (showMotion) {
+            HomeMotionDialog(appContext, onDismiss = { showMotion = false })
         }
         pinning?.let { app ->
             PinToHomeDialog(app, slots, onPick = { index ->
@@ -1021,10 +1037,12 @@ private fun HomeRows(
                         lift = liftOf(lifted, HomeOrder.Row.Favourites, appKey),
                         // Not on the TV yet: dimmed, and opening it goes to its Play Store page
                         dimmed = !isInstalled(slot),
-                        onFocusRect = { onSpot(Spot(it, slot.color)) }
+                        onFocusRect = { onSpot(Spot(it, slot.color)) },
+                        behind = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = true) },
+                        front = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = false) }
                     ) { focused ->
                         if (known != null && pack != IconPack.Banner) TileScene(known, color, focused, tileShape)
-                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp) {
+                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp, motion = IconMotion.of(known?.name ?: slot.name)) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1379,9 +1397,11 @@ private fun AllApps(
                     null -> Lift.None
                     app.packageName -> Lift.Lifted
                     else -> Lift.Other
-                }
+                },
+                behind = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = true) },
+                front = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = false) }
             ) { focused ->
-                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp) {
+                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp, motion = IconMotion.of(known?.name ?: app.name)) {
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
                         if (known != null) {
                             NeonGlyph(known.glyph, color, Modifier.size(26.dp))
@@ -1444,8 +1464,8 @@ private fun NeonTile(
     lift: Lift = Lift.None,
     dimmed: Boolean = false,
     onFocusRect: ((Rect) -> Unit)? = null,
-    behind: @Composable BoxScope.() -> Unit = {},
-    front: @Composable BoxScope.() -> Unit = {},
+    behind: @Composable BoxScope.(focused: Boolean) -> Unit = {},
+    front: @Composable BoxScope.(focused: Boolean) -> Unit = {},
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
     val look = LocalHomeLook.current
@@ -1460,10 +1480,10 @@ private fun NeonTile(
         targetValue = when {
             isLifted -> 1.13f
             pressed -> 1.03f
-            focused -> 1.07f
+            focused -> HomeMotion.pop.scale
             else -> 1f
         },
-        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = 0.55f, stiffness = 650f) else spring(stiffness = 900f),
+        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = HomeMotion.pop.damping, stiffness = 650f) else spring(stiffness = 900f),
         label = "TileScale"
     )
     val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
@@ -1559,7 +1579,7 @@ private fun NeonTile(
                 alpha = faded
             }
     ) {
-        behind()
+        behind(focused)
         Surface(
             onClick = onClick,
             // With a hold the keys are read above, so the Surface never sees a long press
@@ -1602,7 +1622,7 @@ private fun NeonTile(
                     .graphicsLayer { alpha = if (dimmed) 0.5f else 1f }
             ) { content(focused) }
         }
-        front()
+        front(focused)
         TubeCore(shape, color, lit = { tube })
         if (onHold != null) HoldLight(shape, color, progress = { holdLight.value })
         if (isLifted) LiftArrows(color)
