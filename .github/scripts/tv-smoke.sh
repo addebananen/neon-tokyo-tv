@@ -898,7 +898,15 @@ for tint in synthwave night; do
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home with the $tint icons does not start on YouTube ($label has the focus)"
   if [ "$tint" = synthwave ]; then
-    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 2
+    # Filmed with the animations on, to see each icon's motion as the focus lands on it
+    adb shell settings put global animator_duration_scale 1
+    adb shell screenrecord --time-limit 12 --size 1280x720 --bit-rate 6000000 /sdcard/icon-motion.mp4 > "$OUT/motion-record.txt" 2>&1 &
+    recorder=$!
+    sleep 1
+    key DPAD_LEFT; sleep 1; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 4
+    wait "$recorder" 2>/dev/null || true
+    adb pull /sdcard/icon-motion.mp4 "$OUT/icon-motion.mp4" > /dev/null 2>&1 || true
+    adb shell settings put global animator_duration_scale 0
     shot neon-aura
     label=$(focused_label)
     [ "$label" = "Neon Tokyo" ] || fail "the fourth tile on Home is not Neon Tokyo ($label has the focus)"

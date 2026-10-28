@@ -44,7 +44,7 @@ internal fun BoxScope.NeonAura(shape: RoundedCornerShape, focused: Boolean, oute
                 val length = measure.length
                 val trail = Path()
                 val trailLength = length * 0.14f
-                val wide = Stroke(26.dp.toPx())
+                val wide = Stroke(22.dp.toPx())
                 val middle = Stroke(14.dp.toPx())
                 val narrow = Stroke(7.dp.toPx())
                 val tube = Stroke(2.5.dp.toPx())
