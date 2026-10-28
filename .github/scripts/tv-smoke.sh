@@ -903,7 +903,7 @@ for tint in synthwave night; do
     adb shell screenrecord --time-limit 12 --size 1280x720 --bit-rate 6000000 /sdcard/icon-motion.mp4 > "$OUT/motion-record.txt" 2>&1 &
     recorder=$!
     sleep 1
-    key DPAD_LEFT; sleep 1; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 4
+    sleep 2; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 2; key DPAD_RIGHT; sleep 4
     wait "$recorder" 2>/dev/null || true
     adb pull /sdcard/icon-motion.mp4 "$OUT/icon-motion.mp4" > /dev/null 2>&1 || true
     adb shell settings put global animator_duration_scale 0
