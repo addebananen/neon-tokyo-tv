@@ -211,7 +211,7 @@ internal class SignalProbe(private val context: Context) {
         val gameReadings = buildList {
             when (gameModeSupported()) {
                 true -> add(Reading("Low-latency mode", "Supported", How.Reported, "ALLM switches it on from a console"))
-                false -> add(Reading("Low-latency mode", "Not offered", How.Reported))
+                false -> add(Reading("Low-latency mode", "No", How.Reported, "The TV offers no game mode to apps"))
                 null -> add(Reading("Low-latency mode", "—", How.Unknown))
             }
             add(Reading("ALLM now", "—", How.Unknown, "The TV doesn't tell apps"))
@@ -236,7 +236,7 @@ internal class SignalProbe(private val context: Context) {
 
         val latencyReadings = buildList {
             keyMs?.let { add(Reading("Remote to TV", "$it ms", How.Measured, "Last press, as the system got it")) }
-                ?: add(Reading("Remote to TV", "Press a button", How.Unknown))
+                ?: add(Reading("Remote to TV", "—", How.Unknown, "Shows after the next press"))
             pipelineMs()?.let { add(Reading("Picture pipeline", "$it ms", How.Reported, "The TV's own figure")) }
             add(Reading("Console to screen", "—", How.Unknown, "Needs a camera to measure"))
         }

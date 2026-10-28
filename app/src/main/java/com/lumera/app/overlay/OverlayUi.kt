@@ -419,7 +419,7 @@ private fun HudChip(item: Reading, accent: Color, modifier: Modifier = Modifier,
                 HowDot(How.Measured, accent)
                 Spacer(Modifier.width(3.dp))
             }
-            BasicText(item.label, style = TextStyle(fontFamily = Body, fontSize = 6.5.sp, letterSpacing = 1.4.sp, color = if (unknown) Faint else Dim))
+            BasicText(item.label, maxLines = 1, softWrap = false, style = TextStyle(fontFamily = Body, fontSize = 6.5.sp, letterSpacing = 1.4.sp, color = if (unknown) Faint else Dim))
         }
         BasicText(
             item.value,

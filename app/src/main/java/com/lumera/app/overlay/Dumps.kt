@@ -89,7 +89,7 @@ internal object Dumps {
     fun save(context: Context, report: SignalReport, withSystem: Boolean) {
         runCatching {
             val dir = File(context.getExternalFilesDir(null) ?: context.filesDir, "diagnostics").apply { mkdirs() }
-            val text = buildString {
+            val readings = buildString {
                 appendLine("Neon Tokyo picture diagnostics, ${java.util.Date()}")
                 appendLine("Source: ${report.source}")
                 listOf(report.signal, report.panel, report.hdr, report.game, report.sound, report.latency).forEach { section ->
@@ -97,21 +97,26 @@ internal object Dumps {
                     appendLine("[${section.title}]")
                     section.readings.forEach { appendLine("${it.label}: ${it.value} (${it.how}${it.note?.let { n -> ", $n" }.orEmpty()})") }
                 }
-                if (withSystem) {
-                    for (service in listOf("display", "hdmi_control", "tv_input", "media.audio_flinger", "audio")) {
-                        appendLine()
-                        appendLine("===== dumpsys $service =====")
-                        appendLine(run(service, timeoutMs = 2_500L)?.take(60_000) ?: "(no answer)")
-                    }
+            }
+            val file = File(dir, "latest.txt")
+            // The readings first, as asking the system can take seconds
+            file.writeText(readings + "\n===== properties =====\n" + props())
+            if (!withSystem) return@runCatching
+            val text = buildString {
+                append(readings)
+                for (service in listOf("display", "hdmi_control", "tv_input", "media.audio_flinger", "audio")) {
                     appendLine()
-                    appendLine("===== SurfaceFlinger --list =====")
-                    appendLine(run("SurfaceFlinger", "--list") ?: "(no answer)")
+                    appendLine("===== dumpsys $service =====")
+                    appendLine(run(service, timeoutMs = 2_500L)?.take(60_000) ?: "(no answer)")
                 }
+                appendLine()
+                appendLine("===== SurfaceFlinger --list =====")
+                appendLine(run("SurfaceFlinger", "--list") ?: "(no answer)")
                 appendLine()
                 appendLine("===== properties =====")
                 appendLine(props())
             }
-            File(dir, "latest.txt").writeText(text)
+            file.writeText(text)
         }.onFailure { Log.w(TAG, "Could not save the report", it) }
     }
 
