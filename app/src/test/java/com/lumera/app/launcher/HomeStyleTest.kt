@@ -22,6 +22,11 @@ class HomeStyleTest {
     }
 
     @Test
+    fun aProfileOnAStyleThatWasTakenOutWakesUpInNeon() {
+        listOf("google_tv", "anime", "city", "lofi", "vaporwave").forEach { assertEquals(HomeStyle.Neon, HomeStyle.of(it)) }
+    }
+
+    @Test
     fun onlyNeonDrawsTheSkylineInsteadOfAPainting() {
         assertNull(HomeStyle.Neon.backdrop)
         HomeStyle.entries.filter { it != HomeStyle.Neon }.forEach { assertNotNull(it.name, it.backdrop) }

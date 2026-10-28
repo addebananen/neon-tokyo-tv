@@ -7,8 +7,7 @@ APK="$1"
 OUT="$2"
 PKG=com.neontokyo.tv
 ACTIVITY=com.lumera.app.MainActivity
-# SMOKE_MODE=quick, for everyday builds, reviews two of the home styles that rotate from run to
-# run and leaves out the second profile and the scroll stress; the build for a release runs it all
+# SMOKE_MODE=quick, for everyday builds, leaves out the second profile and the scroll stress; the build for a release runs it all
 MODE="${SMOKE_MODE:-full}"
 RUN="${GITHUB_RUN_NUMBER:-0}"
 mkdir -p "$OUT"
@@ -935,14 +934,9 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-others=(nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk)
-if [ "$MODE" = full ]; then
-  styles=(google_tv "${others[@]}" deepblue)
-  dreams=(lofi dusk nature deepblue)
-else
-  styles=(google_tv "${others[$((RUN * 2 % ${#others[@]}))]}" "${others[$(((RUN * 2 + 1) % ${#others[@]}))]}" deepblue)
-  dreams=("${styles[1]}" deepblue)
-fi
+# Six styles, few enough to review them all on every run
+styles=(clean nature dusk deepblue icelake)
+dreams=(dusk nature deepblue icelake)
 echo "home styles under test ($MODE): ${styles[*]}"
 for style in "${styles[@]}"; do
   adb logcat -c
@@ -962,7 +956,7 @@ for style in "${styles[@]}"; do
     adb shell settings put global animator_duration_scale 0
     adb pull "/sdcard/style-$style.mp4" "$OUT/style-$style.mp4" > /dev/null 2>&1 || true
   fi
-  if [ "$style" = google_tv ]; then
+  if [ "$style" = clean ]; then
     key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
     shot "style-$style-apps"
     key DPAD_RIGHT; sleep 2
@@ -1030,7 +1024,7 @@ done
 # The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
 # on the All apps tab. Apps the emulator lacks keep their neon face
 for pack in original banner glass; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons "$pack" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons "$pack" >/dev/null 2>&1
   sleep 6
   shot "icons-$pack"
   # A banner is all picture, the app's name only in its description
@@ -1049,7 +1043,7 @@ done
 
 # Colour remixes of the apps' own icons, and the neon round Neon Tokyo's tile (fourth on Home)
 for tint in synthwave night; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tint "$tint" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons original --es tint "$tint" >/dev/null 2>&1
   sleep 6
   shot "tint-$tint"
   label=$(focused_label)
@@ -1075,7 +1069,7 @@ done
 # apps, so their tiles are dimmed, but the scene plays all the same
 n=0
 for tiles in "se.tv4.tv4play,se.svt.android.svtplay,allente.b2c.tvclient,com.viaplay.android" "com.netflix.ninja,com.disney.disneyplus,com.amazon.amazonvideo.livingroom,com.wbd.stream"; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tiles "$tiles" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons original --es tiles "$tiles" >/dev/null 2>&1
   sleep 6
   for i in 1 2 3 4; do
     n=$((n + 1))
