@@ -60,9 +60,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The screensaver that follows Neon Home: the video the profile on Home sent for it, or else its
- * style's picture with the style's little lights and a quiet clock. Neon, which has the skyline
- * rather than a picture, gets the city drive.
+ * The screensaver that follows Neon Home: the video the profile on Home sent for it, the style's
+ * own film alone (Deep Blue, Ice Lake), or else its style's picture with the style's little lights
+ * and a quiet clock. Neon, which has the skyline rather than a picture, gets the city drive.
  */
 object HomeDream {
     fun view(context: Context): View {
@@ -70,6 +70,13 @@ object HomeDream {
         profile.dreamVideo?.let { File(it) }?.takeIf { it.length() > 0 }?.let { return VideoDreamView(context, it) }
         val style = profile.style
         if (profile.background == null && style.backdrop == null && style.video == null) return CityDriveView(context)
+        return StyleDreamView(context, profile)
+    }
+
+    /** The film of the style on Home, alone, when the style is one (Deep Blue, Ice Lake) and the profile kept it. */
+    fun film(context: Context): View? {
+        val profile = HomeProfiles.get(context).active()
+        if (profile.style.video == null || profile.background != null || profile.dreamVideo != null) return null
         return StyleDreamView(context, profile)
     }
 
@@ -154,16 +161,19 @@ internal fun StyleDream(profile: HomeProfile) {
             val media = remember(style, picture, made) { planeMedia(context, style, picture) }
             PlaneSurface(plane, media)
             StyleCover(plane, media, style, picture, wallpaper = null)
-            // A little darker overall, and a soft shadow pooled under the clock so it reads on busy art
-            Spacer(Modifier.fillMaxSize().drawBehind {
-                drawRect(Color.Black.copy(alpha = 0.12f))
-                drawRect(Brush.radialGradient(
-                    listOf(Color.Black.copy(alpha = 0.42f), Color.Transparent),
-                    center = Offset(size.width * 0.14f, size.height * 0.2f),
-                    radius = size.width * 0.3f
-                ))
-            })
-            DreamClock(look)
+            // A style's own film plays alone, as it is; a picture gets a quiet clock
+            if (style.video == null || picture != null) {
+                // A little darker overall, and a soft shadow pooled under the clock so it reads on busy art
+                Spacer(Modifier.fillMaxSize().drawBehind {
+                    drawRect(Color.Black.copy(alpha = 0.12f))
+                    drawRect(Brush.radialGradient(
+                        listOf(Color.Black.copy(alpha = 0.42f), Color.Transparent),
+                        center = Offset(size.width * 0.14f, size.height * 0.2f),
+                        radius = size.width * 0.3f
+                    ))
+                })
+                DreamClock(look)
+            }
             Box(Modifier.fillMaxSize().graphicsLayer { alpha = curtain.value }.background(Color.Black))
         }
     }

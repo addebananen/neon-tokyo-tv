@@ -1164,13 +1164,17 @@ adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
 
-# A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
-# opens over the app the way its Preview button does; clearing the task would close the app too
+# A home style's own screensaver: its picture, its little lights and a quiet clock, or for a
+# style that is a film (Deep Blue, Ice Lake) the film alone. The preview opens over the app the
+# way its Preview button does; clearing the task would close the app too
 for style in "${dreams[@]}"; do
   adb shell am start -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
   sleep 6
   shot "dream-style-$style"
-  screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock"
+  case "$style" in
+    deepblue|icelake) screen_has 'text="[0-9]*:[0-9][0-9]' && fail "the $style screensaver should be its film alone, without a clock" ;;
+    *) screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock" ;;
+  esac
   key BACK
   sleep 2
 done
