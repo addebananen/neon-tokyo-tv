@@ -1041,6 +1041,18 @@ adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
 
+# Widgets under the clock, a profile's own extra: weather, the week, what plays and the network
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es widgets Weather,Calendar,Music,Network >/dev/null 2>&1
+sleep 5
+shot neon-home-widgets
+screen_has 'text="Week [0-9]*"' || fail "the week widget did not show under the clock"
+screen_has 'text="Nothing playing"' || fail "the music widget did not show under the clock"
+screen_has 'text="Wi‑Fi"\|text="Ethernet"\|text="Online"\|text="Offline"' || fail "the network widget did not show under the clock"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "with widgets on, Neon Home does not start on YouTube ($label has the focus)"
+key BACK
+sleep 2
+
 # A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
 # opens over the app the way its Preview button does; clearing the task would close the app too
 for style in "${dreams[@]}"; do

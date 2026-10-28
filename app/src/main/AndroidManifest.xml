@@ -114,6 +114,18 @@
                 android:resource="@xml/neon_overlay" />
         </service>
 
+        <!-- Lets the music widget see what plays in other apps. It is off until it is allowed over
+             ADB (cmd notification allow_listener) and reads no notifications -->
+        <service
+            android:name="com.lumera.app.launcher.NowPlayingListener"
+            android:exported="true"
+            android:label="@string/nt_now_playing_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Projectivy Launcher wallpaper provider: the skyline follows the focused app -->
         <service
             android:name=".projectivy.NeonWallpaperProviderService"

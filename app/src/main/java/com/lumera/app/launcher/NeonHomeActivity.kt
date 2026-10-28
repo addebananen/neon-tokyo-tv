@@ -39,6 +39,7 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
         if (preview) previewTiles = tilesOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
+        HomeWidgets.preview(if (preview) widgetsOf(intent) else null)
         setContent {
             NeonHome(
                 homePresses = homePresses.intValue,
@@ -59,6 +60,7 @@ class NeonHomeActivity : ComponentActivity() {
             previewStyle = null
             previewIcons = null
             previewTiles = null
+            HomeWidgets.preview(null)
             homePresses.intValue++
         } else {
             // Asked to show a style while already open, as from Settings again: show it
@@ -66,8 +68,15 @@ class NeonHomeActivity : ComponentActivity() {
             intent.getStringExtra(EXTRA_ICONS)?.let { previewIcons = IconPack.of(it) }
             tilesOf(intent)?.let { previewTiles = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
+            widgetsOf(intent)?.let { HomeWidgets.preview(it) }
         }
     }
+
+    /** "Weather,Calendar,Network" shows those widgets, as the emulator test asks. */
+    private fun widgetsOf(intent: Intent): WidgetSetup? =
+        intent.getStringExtra(EXTRA_WIDGETS)?.split(',')
+            ?.mapNotNull { name -> WidgetKind.values().firstOrNull { it.name.equals(name.trim(), ignoreCase = true) } }
+            ?.let { WidgetSetup(kinds = it.toSet()) }
 
     private fun tilesOf(intent: Intent): List<String>? =
         intent.getStringExtra(EXTRA_TILES)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
@@ -84,5 +93,8 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The id of a console whose card to show, as if it had just been switched on. */
         const val EXTRA_WAKE = "wake"
+
+        /** Widgets to show in a preview, by name, separated by commas. */
+        const val EXTRA_WIDGETS = "widgets"
     }
 }

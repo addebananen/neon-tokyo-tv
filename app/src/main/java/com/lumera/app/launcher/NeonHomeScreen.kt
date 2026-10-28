@@ -580,7 +580,23 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 30.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                HomeClock(resumes, light = { clockLight.value }, ignite = { ignite.value })
+                Column {
+                    HomeClock(resumes, light = { clockLight.value }, ignite = { ignite.value })
+                    // The profile's own widgets, if it picked any: none of the styles has them
+                    val widgetsVersion by HomeWidgets.version.collectAsState()
+                    val widgets = remember(profile.id, widgetsVersion) { HomeWidgets.shown(appContext, profile.id) }
+                    WidgetStrip(
+                        widgets,
+                        interactive = true,
+                        apps = apps,
+                        modifier = Modifier.padding(top = 9.dp).graphicsLayer { alpha = ignite.value },
+                        onFocus = {
+                            focusMoved()
+                            wallpaper = NeonWallpaper.TOKYO
+                            spotOn = false
+                        }
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
