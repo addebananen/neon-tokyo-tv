@@ -6,6 +6,7 @@ import android.media.tv.TvInputManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,7 @@ class NeonOverlayService : AccessibilityService() {
         probe = SignalProbe(this)
         gestures = OverlayPrefs.gestures(this)
         instance = this
+        Log.i(TAG, "Connected, chords ${if (gestures) "on" else "off"}")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -115,6 +117,7 @@ class NeonOverlayService : AccessibilityService() {
     }
 
     private fun fire(action: ChordAction) {
+        Log.i(TAG, "Chord: $action")
         when (action) {
             ChordAction.Diagnostics -> if (diagnostics?.isShowing == true) hideDiagnostics() else showDiagnostics()
             ChordAction.GamingHud -> if (hud?.isShowing == true) hideHud() else showHud()
@@ -245,6 +248,7 @@ class NeonOverlayService : AccessibilityService() {
     private fun consoleColor(): Long? = ConsoleSession.last?.takeIf { foreground == it.tvApp }?.color
 
     companion object {
+        private const val TAG = "NeonOverlay"
         private const val CONSOLE_WAIT_MS = 8_000L
         private const val DIAGNOSTICS_MAX_MS = 5 * 60_000L
 

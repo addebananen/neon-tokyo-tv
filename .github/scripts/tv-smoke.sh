@@ -379,7 +379,6 @@ if ! adb install -r -g "$APK" > "$OUT/install.txt" 2>&1; then
   exit 1
 fi
 
-adb logcat -c
 adb logcat -v time > "$OUT/logcat-full.txt" 2>&1 &
 LOGCAT_PID=$!
 
@@ -1166,6 +1165,8 @@ else
   adb shell settings put secure enabled_accessibility_services "$overlay_before"
 fi
 sleep 1
+
+adb logcat -d -s NeonOverlay >> "$OUT/overlay.txt" 2>&1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
