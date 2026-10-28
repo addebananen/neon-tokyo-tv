@@ -255,11 +255,12 @@ video_from_phone() {
   echo "$state" | grep -q '"error"' || fail "a file that is no video left the phone at $state instead of error"
   screen_has "play that video" || fail "the TV did not say it can't play a file that is no video"
   # A phone's video with sound, which the TV makes lighter before it keeps it. The page sends it in
-  # pieces; one breaks off halfway, as when the phone's screen goes dark, and one goes to the wrong
-  # place, and the TV must carry on from where it really got to
-  local fixture=.github/scripts/video-fixture-sound.mp4 size half got
+  # pieces; one breaks off partway, as when the phone's screen goes dark, and one goes to the wrong
+  # place, and the TV must keep what arrived and carry on from where it really got to
+  local fixture=.github/scripts/video-fixture-sound.mp4 size half kept got
   size=$(stat -c %s "$fixture")
   half=$((size / 2))
+  kept=$((half + 1000))
   piece() { # piece <offset> <length> [<claimed length>]
     local claim=()
     [ -n "${3:-}" ] && claim=(-H "Content-Length: $3")
@@ -274,10 +275,10 @@ video_from_phone() {
   sleep 1
   got=$(curl -s -m 5 "$base/status")
   echo "after a piece broke off: $got"
-  echo "$got" | grep -q "\"received\":$half" || fail "a piece that broke off counted towards the video ($got)"
+  echo "$got" | grep -q "\"received\":$kept" || fail "the TV did not keep the part of a piece that arrived before it broke off ($got)"
   got=$(piece 1234 100)
-  echo "$got" | grep -q "\"received\":$half" || fail "a piece sent to the wrong place moved the video on ($got)"
-  got=$(piece "$half" "$((size - half))")
+  echo "$got" | grep -q "\"received\":$kept" || fail "a piece sent to the wrong place moved the video on ($got)"
+  got=$(piece "$kept" "$((size - kept))")
   echo "last piece: $got"
   echo "$got" | grep -q "\"received\":$size" || fail "the TV did not take the rest of the video ($got)"
   if ! wait_for "Your video is on" 90; then fail "the TV never took the video"; return 1; fi
