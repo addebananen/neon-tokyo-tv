@@ -838,8 +838,8 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
-    for _ in 1 2 3 4; do
+    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3 4 5 6; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
@@ -864,6 +864,16 @@ for style in "${styles[@]}"; do
     key BACK; sleep 2
     label=$(focused_label)
     case "$label" in nt.*|Update) ;; *) fail "the focus did not go back to the version pill when the updates panel closed ($label has it)" ;; esac
+    # Next along, the Motion panel: how much the picture, the tiles and the icons move
+    key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    [ "$label" = "Motion" ] || fail "next along from the version pill is $label, not Motion"
+    key DPAD_CENTER; sleep 2
+    shot "style-$style-motion"
+    screen_has "BACKGROUND" || fail "the Motion pill did not open the Motion panel"
+    key BACK; sleep 2
+    label=$(focused_label)
+    [ "$label" = "Motion" ] || fail "the focus did not go back to the Motion pill when its panel closed ($label has it)"
     key BACK; sleep 2
   fi
   key BACK
@@ -1011,6 +1021,23 @@ adb shell input keyevent KEYCODE_HOME
 sleep 2
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Home on Neon Home did not go back to its first tile ($label has the focus)"
+# The TV switched off and on again: Neon Home comes on to the neon intro, filmed as it plays
+adb shell settings put global animator_duration_scale 1
+adb logcat -c 2>/dev/null || true
+adb shell input keyevent KEYCODE_SLEEP
+sleep 4
+adb shell screenrecord --time-limit 5 --size 1280x720 /sdcard/wake-intro.mp4 > "$OUT/wake-intro-record.txt" 2>&1 &
+recorder=$!
+sleep 0.3
+adb shell input keyevent KEYCODE_WAKEUP
+sleep 0.6
+shot wake-intro
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/wake-intro.mp4 "$OUT/wake-intro.mp4" > /dev/null 2>&1 || true
+adb shell settings put global animator_duration_scale 0
+adb logcat -d -s NeonIntro > "$OUT/wake-intro-log.txt" 2>&1 || true
+grep -q "played" "$OUT/wake-intro-log.txt" || fail "the intro did not play when the TV came on to Neon Home"
+home_resumed || fail "Neon Home was not on the screen after the TV came on"
 # Back to the stock launcher, the way undo does it: the original home first, then the alias off
 [ -n "$stock_pkg" ] && adb shell pm enable "$stock_pkg" >> "$OUT/neon-home-switch.txt" 2>&1
 adb shell cmd package set-home-activity "$stock_home" >> "$OUT/neon-home-switch.txt" 2>&1

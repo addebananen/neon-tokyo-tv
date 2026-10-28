@@ -233,6 +233,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val watching = rememberHomeWatching(appContext, profile.name)
     val updateState by updates.state.collectAsState()
     var showUpdates by remember { mutableStateOf(false) }
+    var showMotion by remember { mutableStateOf(false) }
+    remember { HomeMotion.load(appContext) }
     // A quiet look for a newer version once the home screen is up; the pill at the top says so
     LaunchedEffect(Unit) {
         delay(4000)
@@ -442,10 +444,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val profilePill = remember { FocusRequester() }
     val inputsPill = remember { FocusRequester() }
     val versionPill = remember { FocusRequester() }
+    val motionPill = remember { FocusRequester() }
     var reopen by remember { mutableStateOf<FocusRequester?>(null) }
-    LaunchedEffect(showProfiles, showInputs, showUpdates) {
+    LaunchedEffect(showProfiles, showInputs, showUpdates, showMotion) {
         val back = reopen ?: return@LaunchedEffect
-        if (showProfiles || showInputs || showUpdates) return@LaunchedEffect
+        if (showProfiles || showInputs || showUpdates || showMotion) return@LaunchedEffect
         reopen = null
         repeat(10) {
             withFrameNanos { }
@@ -460,6 +463,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         linking = null
         woke = null
         showUpdates = false
+        showMotion = false
         showInputs = false
         showProfiles = false
         pinning = null
@@ -523,8 +527,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     true
                 }
         ) {
-            val leanX = with(LocalDensity.current) { 12.dp.toPx() }
-            val leanY = with(LocalDensity.current) { 5.dp.toPx() }
+            // As far as the Motion panel says: by default a gentle few dp
+            val leanX = with(LocalDensity.current) { HomeMotion.lean.across.dp.toPx() }
+            val leanY = with(LocalDensity.current) { HomeMotion.lean.down.dp.toPx() }
             val tabsTop = maxHeight * 0.415f
             val rowsTop = maxHeight * 0.485f
             // The picture lies a little further back than the tiles: it leans gently away from
@@ -587,6 +592,14 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             spotOn = false
                         }
                     )
+                    Pill("Motion", Glyph.Sparkle, Modifier.focusRequester(motionPill), onClick = {
+                        reopen = motionPill
+                        showMotion = true
+                    }, onFocus = {
+                        focusMoved()
+                        wallpaper = NeonWallpaper.TOKYO
+                        spotOn = false
+                    })
                     Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
                         focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
@@ -715,7 +728,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             val wakeShown = remember { arrayOfNulls<Console>(1) }
             woke?.let { wakeShown[0] = it }
             AnimatedVisibility(
-                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && pinning == null && changing == null,
+                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showMotion && pinning == null && changing == null,
                 enter = fadeIn(tween(260)) + slideInVertically(tween(420, easing = FastOutSlowInEasing)) { -it / 2 },
                 exit = fadeOut(tween(220)) + slideOutVertically(tween(260)) { -it / 3 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = Side)
@@ -772,6 +785,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         }
         if (showUpdates) {
             HomeUpdatesDialog(updates, onDismiss = { showUpdates = false })
+        }
+        if (showMotion) {
+            HomeMotionDialog(appContext, onDismiss = { showMotion = false })
         }
         pinning?.let { app ->
             PinToHomeDialog(app, slots, onPick = { index ->
@@ -1217,10 +1233,10 @@ private fun NeonTile(
         targetValue = when {
             isLifted -> 1.13f
             pressed -> 1.03f
-            focused -> 1.07f
+            focused -> HomeMotion.pop.scale
             else -> 1f
         },
-        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = 0.55f, stiffness = 650f) else spring(stiffness = 900f),
+        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = HomeMotion.pop.damping, stiffness = 650f) else spring(stiffness = 900f),
         label = "TileScale"
     )
     val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")

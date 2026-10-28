@@ -282,6 +282,7 @@ private fun Modifier.halo(shine: Shine, face: IconFace): Modifier = drawBehind {
         alpha = lit * breathe * strength
     )
     val edge = size.minDimension / 2f
+    if (HomeMotion.icons == HomeMotion.Icons.Off) return@drawBehind
     when (face.motion) {
         // Two rings go out with each heartbeat, as from a live broadcast
         IconMotion.Beat -> for (k in 0..1) {
@@ -338,7 +339,8 @@ private fun AppIcon(icon: ImageBitmap, name: String, size: Dp, face: IconFace, s
     val pose = remember { Pose() }
     // Read in the layer, so the motion only redraws the icon
     fun GraphicsLayerScope.posed(): Pose {
-        val p = face.motion.pose(shine.since, shine.lit.value, density, pose)
+        // As lively as the Motion panel says
+        val p = face.motion.pose(shine.since, shine.lit.value * HomeMotion.icons.amount, density, pose)
         scaleX = p.scale
         scaleY = p.scale
         translationX = p.dx

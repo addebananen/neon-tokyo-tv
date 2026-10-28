@@ -1,7 +1,14 @@
 package com.lumera.app.launcher
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import androidx.core.content.ContextCompat
+import com.lumera.app.intro.NeonIntroView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -35,8 +42,74 @@ class NeonHomeActivity : ComponentActivity() {
     // A console's card shown as if it had just been switched on, to see how it looks
     private var previewWake by mutableStateOf<String?>(null)
 
+    // The night the screen goes to as the TV is switched off, so it comes on to the intro rather
+    // than to the home screen for a moment first
+    private var sleepCover: View? = null
+    private var intro: NeonIntroView? = null
+
+    private val screen = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> coverForSleep()
+                Intent.ACTION_SCREEN_ON -> playWakeIntro()
+            }
+        }
+    }
+
+    private var stoppedAt = 0L
+
+    override fun onStop() {
+        super.onStop()
+        stoppedAt = android.os.SystemClock.uptimeMillis()
+    }
+
+    private fun coverForSleep() {
+        if (sleepCover != null || preview) return
+        // Only when the home screen is what was showing: the TV may stop it just before it says it went off
+        val showing = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) ||
+            android.os.SystemClock.uptimeMillis() - stoppedAt < 1500
+        if (!showing) return
+        HomeMotion.load(this)
+        if (!HomeMotion.wakeIntro || !NeonIntroView.animationsOn(this)) return
+        val cover = View(this).apply { setBackgroundColor(android.graphics.Color.rgb(13, 7, 33)) }
+        addContentView(cover, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        sleepCover = cover
+    }
+
+    /** The TV has come on: the intro the app opens with plays, then fades into the home screen. */
+    private fun playWakeIntro() {
+        val cover = sleepCover ?: return
+        sleepCover = null
+        if (intro == null) {
+            val view = NeonIntroView(this) {
+                intro?.let { (it.parent as? ViewGroup)?.removeView(it) }
+                intro = null
+            }
+            addContentView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            intro = view
+            // The home screen is all there under it, so it goes as soon as it has played
+            view.appReady()
+        }
+        // Under the intro now, which has the same night until its first picture
+        (cover.parent as? ViewGroup)?.removeView(cover)
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(screen) }
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(
+            this,
+            screen,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
         if (preview) previewStyle = intent.getStringExtra(EXTRA_STYLE)?.let(HomeStyle::of)
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
