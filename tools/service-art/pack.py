@@ -53,6 +53,18 @@ for code, frames in motion.items():
             im, p["box"] = cropped(load("p_" + p["name"], "RGBA"))
             im.save(os.path.join(DST, f"{code}_{frame}_p_{p['name']}.webp"), "WEBP", quality=86, method=6)
 
+# A NaN in a scene's numbers comes out of JSON.stringify as null, which the app cannot read
+def no_holes(v, where):
+    if isinstance(v, list):
+        for i, x in enumerate(v):
+            if x is None:
+                raise SystemExit(f"{where}[{i}] is not a number")
+            no_holes(x, f"{where}[{i}]")
+    elif isinstance(v, dict):
+        for k, x in v.items():
+            no_holes(x, f"{where}.{k}")
+
+no_holes(motion, "motion")
 with open(os.path.join(DST, "motion.json"), "w") as out:
     json.dump(motion, out, separators=(",", ":"))
 print(f"packed {len(motion)} scenes")

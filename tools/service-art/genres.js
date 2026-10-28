@@ -583,7 +583,7 @@ function g_animation(L) {
   const dx = keys(end, [...pts.map(([x], i) => [T[i], x - pts[0][0], 1]), [2.0, pts[6][0] - pts[0][0], 0], [2.3, 0, 1]]);
   const dy = keys(end, [...pts.map(([, y], i) => [T[i], y - pts[0][1], i % 2 ? 3 : 2]), [2.0, pts[6][1] - pts[0][1], 0], [2.3, 0, 1]]);
   // Squash on each landing, stretch as it falls
-  const hit = (t, k) => [[t - 0.08, 0.86 + 0 * k], [t, 1.32], [t + 0.06, 0.92], [t + 0.12, 1]];
+  const hit = (t) => [[t - 0.08, 0.86], [t, 1.32], [t + 0.06, 0.92], [t + 0.12, 1]];
   const sx = keys(end, [[0, 1], [0.3, 0.9], ...hit(T[1]), ...hit(T[3]), ...hit(T[5]), [2.0, 1]]);
   const sy = keys(end, [[0, 1], [0.3, 1.14], [T[1] - 0.08, 1.16], [T[1], 0.64], [T[1] + 0.06, 1.08], [T[1] + 0.12, 1], [T[3] - 0.08, 1.12], [T[3], 0.7], [T[3] + 0.06, 1.05], [T[3] + 0.12, 1], [T[5] - 0.08, 1.08], [T[5], 0.78], [T[5] + 0.06, 1.03], [T[5] + 0.12, 1], [2.0, 1]]);
   const ball = `<circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="${R}" fill="url(#anBall)"/><circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="${R}" fill="none" stroke="#7a0a3c" stroke-width="1"/><ellipse cx="${pts[0][0] - 3}" cy="${pts[0][1] - 4}" rx="3.2" ry="2.2" fill="#fff" opacity="0.8"/>`;

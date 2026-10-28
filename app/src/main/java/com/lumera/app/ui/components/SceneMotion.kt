@@ -1,6 +1,7 @@
 package com.lumera.app.ui.components
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -53,7 +54,10 @@ object SceneMotion {
                 runCatching {
                     val json = context.assets.open(FILE).bufferedReader().use { it.readText() }
                     parse(JSONObject(json))
-                }.getOrElse { emptyMap() }
+                }.getOrElse {
+                    Log.w("SceneMotion", "motion.json unreadable", it)
+                    emptyMap()
+                }
             }.also { scenes = it }
         }[code]?.get(frame)
     }
@@ -61,7 +65,12 @@ object SceneMotion {
     private fun parse(root: JSONObject): Map<String, Map<String, FrameMotion>> =
         root.keys().asSequence().associateWith { code ->
             val frames = root.getJSONObject(code)
-            frames.keys().asSequence().associateWith { FrameMotion.parse(frames.getJSONObject(it)) }
+            // A scene that does not parse stays still; the others still move
+            frames.keys().asSequence().mapNotNull { frame ->
+                runCatching { frame to FrameMotion.parse(frames.getJSONObject(frame)) }
+                    .onFailure { Log.w("SceneMotion", "$code $frame: bad motion", it) }
+                    .getOrNull()
+            }.toMap()
         }
 }
 
