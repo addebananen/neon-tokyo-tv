@@ -1,7 +1,10 @@
 package com.lumera.app.overlay
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.tv.TvInputManager
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +13,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +56,17 @@ class NeonOverlayService : AccessibilityService() {
     /** A console was just started from Neon Home: the HUD comes when its input shows. */
     private var hudWhenConsole = 0L
 
+    /** From a PC: `adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show diagnostics|hud|off`. */
+    private val fromAdb = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.getStringExtra("show")) {
+                "diagnostics" -> showDiagnostics()
+                "hud" -> showHud()
+                "off" -> { hideDiagnostics(); hideHud() }
+            }
+        }
+    }
+
     private val checkChord = Runnable {
         chords.due(SystemClock.uptimeMillis())?.let { fire(it.action) }
     }
@@ -60,6 +75,9 @@ class NeonOverlayService : AccessibilityService() {
         probe = SignalProbe(this)
         gestures = OverlayPrefs.gestures(this)
         instance = this
+        // Only the shell and the system hold DUMP, so no app can open the overlays this way
+        runCatching { unregisterReceiver(fromAdb) }
+        ContextCompat.registerReceiver(this, fromAdb, IntentFilter(ACTION_ADB), "android.permission.DUMP", handler, ContextCompat.RECEIVER_EXPORTED)
         Log.i(TAG, "Connected, chords ${if (gestures) "on" else "off"}")
     }
 
@@ -109,6 +127,7 @@ class NeonOverlayService : AccessibilityService() {
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        runCatching { unregisterReceiver(fromAdb) }
         handler.removeCallbacksAndMessages(null)
         diagnostics?.close()
         hud?.close()
@@ -249,6 +268,7 @@ class NeonOverlayService : AccessibilityService() {
 
     companion object {
         private const val TAG = "NeonOverlay"
+        private const val ACTION_ADB = "com.neontokyo.tv.OVERLAY"
         private const val CONSOLE_WAIT_MS = 8_000L
         private const val DIAGNOSTICS_MAX_MS = 5 * 60_000L
 

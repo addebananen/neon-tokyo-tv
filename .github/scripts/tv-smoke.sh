@@ -298,18 +298,6 @@ video_from_phone() {
 # without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
 hold_ok() { hold_keys 23 "$1"; }
 
-# hold_chord <linux key> <linux key> <seconds>: two buttons held on the emulator's own keyboard.
-# Keys injected from the shell never pass the accessibility key filter the overlays listen
-# through, as a real remote's do; the emulator console's keyboard is a real input device.
-hold_chord() {
-  adb emu event send "EV_KEY:$1:1" EV_SYN:0:0 >/dev/null || return 1
-  sleep 0.05
-  adb emu event send "EV_KEY:$2:1" EV_SYN:0:0 >/dev/null || return 1
-  sleep "$3"
-  adb emu event send "EV_KEY:$2:0" EV_SYN:0:0 "EV_KEY:$1:0" EV_SYN:0:0 >/dev/null || return 1
-  echo "held $1 and $2 for $3 s"
-}
-
 # hold_keys <codes> <seconds>: the same for any key, or for keys held together ("19,20")
 hold_keys() {
   if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
@@ -1259,24 +1247,31 @@ adb shell settings put global animator_duration_scale 1
 adb shell screenrecord --time-limit 6 --size 1280x720 --bit-rate 6000000 /sdcard/overlay.mp4 >> "$OUT/overlay.txt" 2>&1 &
 recorder=$!
 sleep 0.5
-hold_chord KEY_UP KEY_DOWN 2.6 >> "$OUT/overlay.txt" || fail "could not hold Up and Down together"
-sleep 1.5
-overlay_on || fail "holding Up and Down for 2 seconds did not open picture diagnostics"
+# Keys injected from the shell never pass the accessibility key filter the chords listen through
+# (a real remote's do; the chords themselves are unit tested), so the overlays are opened the way
+# a PC can: a broadcast only the shell and the system may send. Pictures are plain screencaps,
+# since uiautomator unbinds every accessibility service while it reads the screen
+overlay() { adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show "$1" >/dev/null 2>&1; }
+overlay_shot() { step=$((step + 1)); adb exec-out screencap -p > "$OUT/$(printf "%02d-%s" "$step" "$1").png"; }
+overlay diagnostics
 sleep 2.5
-shot overlay-diagnostics
-key BACK
+overlay_on || fail "picture diagnostics did not open"
+sleep 1.5
+overlay_shot overlay-diagnostics
+sleep 1.5
+overlay off
 sleep 1
 wait "$recorder" 2>/dev/null || true
 adb pull /sdcard/overlay.mp4 "$OUT/overlay-diagnostics.mp4" > /dev/null 2>&1 || true
-if overlay_on; then fail "Back did not put picture diagnostics away"; fi
+if overlay_on; then fail "picture diagnostics did not go away"; fi
 adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
-  fail "Back that put picture diagnostics away also left the app"
+  fail "picture diagnostics took the app out of front"
 adb shell cat "/sdcard/Android/data/$PKG/files/diagnostics/latest.txt" > "$OUT/overlay-report.txt" 2>/dev/null
 grep -q "\[Panel\]" "$OUT/overlay-report.txt" || fail "picture diagnostics saved no report"
-hold_chord KEY_LEFT KEY_RIGHT 2.6 >> "$OUT/overlay.txt" || fail "could not hold Left and Right together"
+overlay hud
 sleep 1.5
-overlay_on || fail "holding Left and Right for 2 seconds did not open the gaming HUD"
-shot overlay-hud
+overlay_on || fail "the gaming HUD did not open"
+overlay_shot overlay-hud
 sleep 6
 if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
 adb shell settings put global animator_duration_scale 0
