@@ -295,7 +295,10 @@ video_from_phone() {
 # hold_ok <seconds>: holds OK down like a thumb on the remote. `input keyevent` can only tap or
 # long press, the shell may not write /dev/input, and the emulator console's keys never arrive
 # without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
-hold_ok() {
+hold_ok() { hold_keys 23 "$1"; }
+
+# hold_keys <codes> <seconds>: the same for any key, or for keys held together ("19,20")
+hold_keys() {
   if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
     local sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}" build tools
     build=$(mktemp -d)
@@ -305,8 +308,8 @@ hold_ok() {
       adb push "$build/classes.dex" /data/local/tmp/holdkey.dex >/dev/null || return 1
   fi
   local ms
-  ms=$(awk -v s="$1" 'BEGIN { printf "%d", s * 1000 }')
-  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey 23 "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
+  ms=$(awk -v s="$2" 'BEGIN { printf "%d", s * 1000 }')
+  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey "$1" "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
@@ -1106,6 +1109,51 @@ fi
 [ "$(resolve_home)" = "$stock_home" ] || fail "the stock home screen did not get the Home button back ($(resolve_home) instead of $stock_home)"
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3
+
+# --- Overlays: picture diagnostics and the gaming HUD over whatever shows ---------
+# The TV turns the overlay service on under Accessibility; the shell may do the same. Holding Up
+# and Down together opens diagnostics and Back puts it away; Left and Right bring the HUD, which
+# goes by itself. The windows draw over the app without taking its focus
+overlay_on() { adb shell dumpsys window windows 2>/dev/null | grep -q "NeonOverlay"; }
+overlay_me="$PKG/com.lumera.app.overlay.NeonOverlayService"
+overlay_before=$(adb shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')
+adb shell pm grant "$PKG" android.permission.DUMP > "$OUT/overlay.txt" 2>&1
+adb shell settings put secure enabled_accessibility_services "$overlay_me"
+adb shell settings put secure accessibility_enabled 1
+sleep 4
+adb shell dumpsys accessibility >> "$OUT/overlay.txt" 2>&1
+grep -q "NeonOverlayService" "$OUT/overlay.txt" || fail "the overlay service did not start once Accessibility turned it on"
+adb shell settings put global animator_duration_scale 1
+adb shell screenrecord --time-limit 6 --size 1280x720 --bit-rate 6000000 /sdcard/overlay.mp4 >> "$OUT/overlay.txt" 2>&1 &
+recorder=$!
+sleep 0.5
+hold_keys 19,20 2.6 >> "$OUT/overlay.txt" || fail "could not hold Up and Down together"
+sleep 1.5
+overlay_on || fail "holding Up and Down for 2 seconds did not open picture diagnostics"
+sleep 2.5
+shot overlay-diagnostics
+key BACK
+sleep 1
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/overlay.mp4 "$OUT/overlay-diagnostics.mp4" > /dev/null 2>&1 || true
+if overlay_on; then fail "Back did not put picture diagnostics away"; fi
+adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
+  fail "Back that put picture diagnostics away also left the app"
+adb shell cat "/sdcard/Android/data/$PKG/files/diagnostics/latest.txt" > "$OUT/overlay-report.txt" 2>/dev/null
+grep -q "\[Panel\]" "$OUT/overlay-report.txt" || fail "picture diagnostics saved no report"
+hold_keys 21,22 2.6 >> "$OUT/overlay.txt" || fail "could not hold Left and Right together"
+sleep 1.5
+overlay_on || fail "holding Left and Right for 2 seconds did not open the gaming HUD"
+shot overlay-hud
+sleep 6
+if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
+adb shell settings put global animator_duration_scale 0
+if [ -z "$overlay_before" ] || [ "$overlay_before" = null ]; then
+  adb shell settings delete secure enabled_accessibility_services > /dev/null 2>&1
+else
+  adb shell settings put secure enabled_accessibility_services "$overlay_before"
+fi
+sleep 1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------

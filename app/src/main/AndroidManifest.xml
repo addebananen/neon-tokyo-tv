@@ -13,6 +13,14 @@
     <!-- Neon Home asks the TV to uninstall an app; the TV asks to be sure itself -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- Only granted over ADB, by hand: lets Neon Tokyo switch its overlay service on itself -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Only granted over ADB, by hand: lets picture diagnostics ask the TV's compositor about
+         video in other apps. Without it diagnostics show what the public APIs know -->
+    <uses-permission android:name="android.permission.DUMP"
+        tools:ignore="ProtectedPermissions" />
+
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -91,6 +99,20 @@
             android:name="com.lumera.app.launcher.NeonHomeSwitch"
             android:exported="true"
             android:permission="android.permission.WRITE_SECURE_SETTINGS" />
+
+        <!-- Picture diagnostics and the gaming HUD over any app or console (Accessibility) -->
+        <service
+            android:name="com.lumera.app.overlay.NeonOverlayService"
+            android:exported="true"
+            android:label="@string/nt_overlay_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/neon_overlay" />
+        </service>
 
         <!-- Projectivy Launcher wallpaper provider: the skyline follows the focused app -->
         <service

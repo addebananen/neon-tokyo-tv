@@ -167,6 +167,8 @@ import androidx.tv.material3.Glow
 import androidx.tv.material3.Surface
 import com.lumera.app.data.update.UpdateState
 import com.lumera.app.projectivy.NeonWallpaper
+import com.lumera.app.overlay.ConsoleSession
+import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.neonPanel
 import kotlinx.coroutines.Dispatchers
@@ -496,13 +498,30 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (input == null) {
             linking = console
         } else {
-            HomeApps.start(context, TvInputs.openIntent(input.id))
+            val open = TvInputs.openIntent(input.id)
+            if (HomeApps.start(context, open)) {
+                ConsoleSession.started(context, console.name, console.color.toArgb().toLong() and 0xFFFFFFFFL, input.id, input.label, open)
+            }
         }
     }
 
     fun pickInput(input: TvInput?) {
         showInputs = false
-        if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
+        if (input != null) {
+            val open = TvInputs.openIntent(input.id)
+            if (HomeApps.start(context, open)) {
+                // A console linked to this input lends its name and colour
+                val console = HomeCatalog.consoles.firstOrNull { consoleInputs[it]?.id == input.id }
+                ConsoleSession.started(
+                    context,
+                    console?.name ?: input.label,
+                    (console?.color ?: NeonPalette.Magenta).toArgb().toLong() and 0xFFFFFFFFL,
+                    input.id,
+                    input.label,
+                    open
+                )
+            }
+        }
     }
 
     CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons)) {

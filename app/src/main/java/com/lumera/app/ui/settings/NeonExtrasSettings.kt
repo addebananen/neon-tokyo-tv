@@ -177,6 +177,11 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
             )
         }
     }
+    Spacer(Modifier.height(15.dp))
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+    Spacer(Modifier.height(15.dp))
+
+    OverlaySettings(onGoBack = onGoBack)
 }
 
 /** True when the Home button opens Neon Home, which only the TV setup script can arrange. */
