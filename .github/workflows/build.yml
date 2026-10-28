@@ -144,8 +144,11 @@ jobs:
           disable-animations: true
           script: bash .github/scripts/tv-smoke.sh neon-tokyo-test.apk tv-shots
 
+      # Screenshots are for reading, not a check: a push that loses a race with another run's
+      # screenshots must never hold back a release whose test passed
       - name: Publish screenshots to the ci-screens branch
         if: always()
+        continue-on-error: true
         run: |
           [ -d tv-shots ] || exit 0
           cd tv-shots
