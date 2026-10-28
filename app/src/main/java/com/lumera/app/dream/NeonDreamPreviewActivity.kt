@@ -7,6 +7,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import com.lumera.app.dream.drive.CityDriveView
+import com.lumera.app.launcher.DreamWidgetsView
 import com.lumera.app.launcher.HomeDream
 import com.lumera.app.launcher.StyleDreamView
 
@@ -22,7 +23,7 @@ class NeonDreamPreviewActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // A home style's own screensaver can be asked for by its key, as the emulator test does
         scene = intent.getStringExtra("style")?.let { HomeDream.preview(this, it) } ?: NeonDreamStyle.view(this)
-        setContentView(scene)
+        setContentView(DreamWidgetsView.wrap(this, scene))
         @Suppress("DEPRECATION")
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }

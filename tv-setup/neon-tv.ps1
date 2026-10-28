@@ -5,7 +5,9 @@ Neon Tokyo setup for a TCL Google TV, run from a Windows PC on the same network.
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step undo   # put it all back
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step launcher -HomeScreen projectivy   # Projectivy on the Home button instead of Neon Home
 
-Steps: connect, inventory, debloat, launcher, tune, art, app, dream, restart, report, undo.
+Steps: connect, inventory, debloat, launcher, tune, art, app, dream, extras, restart, report, undo.
+extras turns on picture diagnostics and the gaming HUD (Up+Down / Left+Right held 2 s), lets
+Neon Tokyo's own settings switch them, and lets the music widget see what plays.
 Nothing is uninstalled: apps are only disabled, and every change is written to
 %USERPROFILE%\NeonTV\undo.txt so -Step undo can reverse it. A factory reset also
 restores everything.
@@ -15,7 +17,7 @@ TVs with "Wireless debugging" instead of network ADB on port 5555: pair once wit
 using the address and code the TV shows under "Pair device with pairing code".
 #>
 param(
-    [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'restart', 'report', 'undo')]
+    [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'extras', 'restart', 'report', 'undo')]
     [string]$Step = 'all',
     # What the Home button opens: Neon Home, the home screen in the Neon Tokyo app, or Projectivy
     # Launcher. A Neon Tokyo too old to have Neon Home gets Projectivy.
@@ -40,6 +42,8 @@ $Projectivy = 'com.spocky.projengmenu'
 $NeonApp = 'com.neontokyo.tv'
 $NeonDream = "$NeonApp/com.lumera.app.dream.NeonDreamService"
 $NeonHome = "$NeonApp/$NeonApp.NeonHome"
+$NeonOverlay = "$NeonApp/com.lumera.app.overlay.NeonOverlayService"
+$NeonListener = "$NeonApp/com.lumera.app.launcher.NowPlayingListener"
 $NeonHomeSwitch = "$NeonApp/com.lumera.app.launcher.NeonHomeSwitch"
 New-Item -ItemType Directory -Force -Path $Work | Out-Null
 
@@ -393,6 +397,29 @@ function Set-Screensaver {
     Say 'Screensaver: Neon Tokyo night (skyline, neon clock, shooting stars). It starts after the TV''s usual idle time.'
 }
 
+# Picture diagnostics and the gaming HUD (an accessibility service that only watches the remote),
+# the permissions that let Neon Tokyo switch it itself and ask the TV about video, and the
+# listener the music widget reads what plays from
+function Set-Extras {
+    $services = Shell 'cmd package query-services --brief -a android.accessibilityservice.AccessibilityService'
+    if ($services -notmatch [regex]::Escape($NeonOverlay)) {
+        Say 'This Neon Tokyo version has no picture diagnostics yet. Run -Step app first.'
+        return
+    }
+    $saved = Join-Path $Before 'extras.txt'
+    if (-not (Test-Path $saved)) {
+        New-Item -ItemType Directory -Force -Path $Before | Out-Null
+        $settings = foreach ($k in 'enabled_accessibility_services', 'accessibility_enabled', 'enabled_notification_listeners') { "$k=$(Shell "settings get secure $k")" }
+        $settings | Set-Content $saved
+    }
+    foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP') { Shell "pm grant $NeonApp $p" | Out-Null }
+    $list = @((Shell 'settings get secure enabled_accessibility_services') -split ':' | Where-Object { $_ -and $_ -ne 'null' -and $_ -ne $NeonOverlay })
+    Shell "settings put secure enabled_accessibility_services $((@($list) + $NeonOverlay) -join ':')" | Out-Null
+    Shell 'settings put secure accessibility_enabled 1' | Out-Null
+    Shell "cmd notification allow_listener $NeonListener" | Out-Null
+    Say 'Picture diagnostics: hold Up and Down together for 2 seconds. Gaming HUD: hold Left and Right. Back or the same buttons put them away.'
+}
+
 function Show-Report {
     Say '--- Report ---'
     Say ('Home button opens: ' + ((Lines (Shell 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME')) | Select-Object -Last 1))
@@ -424,6 +451,11 @@ function Undo-All {
     }
     Restore-Settings 'global' (Join-Path $Before 'settings.txt')
     Restore-Settings 'secure' (Join-Path $Before 'screensaver.txt')
+    if (Test-Path (Join-Path $Before 'extras.txt')) {
+        Restore-Settings 'secure' (Join-Path $Before 'extras.txt')
+        Shell "cmd notification disallow_listener $NeonListener" | Out-Null
+        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP') { Shell "pm revoke $NeonApp $p" | Out-Null }
+    }
     # The Home button goes back to whatever it opened before, normally the Google TV home screen
     $was = Join-Path $Before 'home.txt'
     $original = if (Test-Path $was) { (Get-Content $was) | Where-Object { $_ -match '^\S+/\S+$' } | Select-Object -Last 1 } else { '' }
@@ -450,7 +482,7 @@ try {
     Banner
     Connect-Tv
     switch ($Step) {
-        'all'       { Save-Inventory; Remove-Bloat; Install-NeonApp; Set-Launcher; Set-Tuning; Push-Art; Set-Screensaver; Restart-Tv; Show-Report }
+        'all'       { Save-Inventory; Remove-Bloat; Install-NeonApp; Set-Launcher; Set-Tuning; Push-Art; Set-Screensaver; Set-Extras; Restart-Tv; Show-Report }
         'connect'   { }
         'inventory' { Save-Inventory }
         'debloat'   { Save-Inventory; Remove-Bloat }
@@ -459,6 +491,7 @@ try {
         'art'       { Push-Art }
         'app'       { Install-NeonApp }
         'dream'     { Set-Screensaver }
+        'extras'    { Set-Extras }
         'restart'   { Restart-Tv; Show-Report }
         'report'    { Show-Report }
         'undo'      { Undo-All }

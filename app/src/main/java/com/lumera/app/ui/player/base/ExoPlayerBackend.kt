@@ -54,6 +54,9 @@ import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import com.lumera.app.overlay.PlaybackSignal
+import com.lumera.app.overlay.withAudio
+import com.lumera.app.overlay.withVideo
 import io.github.assrender.AssExtractorsFactory
 import io.github.assrender.AssHandler
 import io.github.assrender.AssRenderersFactory
@@ -273,6 +276,7 @@ class ExoPlayerBackend(
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            PlaybackSignal.update { it.copy(playing = isPlaying) }
             _uiState.update { it.copy(isPlaying = isPlaying) }
             updateProgressLoopState()
             updateProgressState()
@@ -358,6 +362,47 @@ class ExoPlayerBackend(
     private var appliedVideoFrameRate: Float = 0f
 
     private val analyticsListener = object : AnalyticsListener {
+        // What reaches the decoders, for picture diagnostics
+        override fun onVideoInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
+        ) {
+            PlaybackSignal.update { it.withVideo(format) }
+        }
+
+        override fun onVideoDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long
+        ) {
+            PlaybackSignal.update { it.copy(videoDecoder = decoderName) }
+        }
+
+        override fun onAudioInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
+        ) {
+            PlaybackSignal.update { it.withAudio(format) }
+        }
+
+        override fun onAudioTrackInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            audioTrackConfig: androidx.media3.exoplayer.audio.AudioSink.AudioTrackConfig
+        ) {
+            val packed = audioTrackConfig.encoding != C.ENCODING_PCM_16BIT &&
+                audioTrackConfig.encoding != C.ENCODING_PCM_FLOAT &&
+                audioTrackConfig.encoding != C.ENCODING_PCM_24BIT &&
+                audioTrackConfig.encoding != C.ENCODING_PCM_32BIT
+            PlaybackSignal.update { it.copy(audioPassthrough = packed, tunneled = audioTrackConfig.tunneling) }
+        }
+
+        override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+            PlaybackSignal.update { it.copy(droppedFrames = it.droppedFrames + droppedFrames) }
+        }
+
         override fun onDownstreamFormatChanged(
             eventTime: AnalyticsListener.EventTime,
             mediaLoadData: MediaLoadData
@@ -862,6 +907,7 @@ class ExoPlayerBackend(
 
     override fun release() {
         released = true
+        PlaybackSignal.stop(this)
         frameRateManager?.restoreOriginalMode()
         assHandler?.release()
         assHandler = null
@@ -1100,6 +1146,7 @@ class ExoPlayerBackend(
         assHandler?.player = player
         player.addListener(playerListener)
         player.addAnalyticsListener(analyticsListener)
+        PlaybackSignal.start(this) { player.videoDecoderCounters?.renderedOutputBufferCount }
         exoPlayer = player
         _playerReady.value = player
         updateProgressLoopState()

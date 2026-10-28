@@ -296,6 +296,7 @@ private fun ProfileEditor(
     var takingBackground by remember { mutableStateOf(false) }
     var takingDreamVideo by remember { mutableStateOf(false) }
     var takingVideo by remember { mutableStateOf(false) }
+    var choosingWidgets by remember { mutableStateOf(false) }
     val styleList = remember { FocusRequester() }
     LaunchedEffect(profile.id) {
         withFrameNanos { }
@@ -373,6 +374,9 @@ private fun ProfileEditor(
                 }
             }
         }
+        OptionRow("Widgets", look) {
+            PanelButton("Under the clock", look) { choosingWidgets = true }
+        }
         OptionRow("From your phone", look) {
             PanelButton("Photo", look) { takingPhoto = true }
             PanelButton("Background", look) { takingBackground = true }
@@ -395,6 +399,9 @@ private fun ProfileEditor(
             Spacer(Modifier.weight(1f))
             PanelNote("Back closes", look)
         }
+    }
+    if (choosingWidgets) {
+        HomeWidgetsDialog(profile, onDismiss = { choosingWidgets = false })
     }
     if (takingPhoto) {
         ProfilePhotoDialog(
