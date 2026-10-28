@@ -90,6 +90,8 @@ class NeonOverlayService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         // The TV's volume bar and other system panels sit over the app, which stays in front
         if (pkg == "com.android.systemui" || pkg == "android") return
+        // The overlays' own windows and toasts don't change what is in front
+        if (pkg == packageName && (diagnostics != null || hud != null || event.className?.contains("Toast") == true)) return
         foreground = pkg
         val console = ConsoleSession.last
         if (hudWhenConsole > 0 && console?.tvApp == pkg) {
@@ -198,7 +200,8 @@ class NeonOverlayService : AccessibilityService() {
             var tick = 0
             while (isActive) {
                 probe.sampleFrames()
-                if (probe.hasDump() && tick % 2 == 0 && PlaybackSignal.current == null) {
+                // Only for diagnostics: asking the compositor costs it a little, and a game deserves every frame
+                if (diagnostics != null && probe.hasDump() && tick % 3 == 0 && PlaybackSignal.current == null) {
                     val skip = packageName
                     layer = withContext(Dispatchers.IO) { Dumps.videoLayer(skip) }
                 }

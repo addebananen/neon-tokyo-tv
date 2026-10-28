@@ -140,7 +140,7 @@ internal class SignalProbe(private val context: Context) {
         audioMs: Int?,
         keyMs: Int?
     ): SignalReport {
-        val playing = PlaybackSignal.current?.takeIf { foreground == context.packageName }
+        val playing = PlaybackSignal.current?.takeIf { foreground == null || foreground == context.packageName }
         val panel = panelMode()
         val rates = panelRates()
         val hdrCaps = panelHdr()
