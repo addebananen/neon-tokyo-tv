@@ -297,6 +297,18 @@ video_from_phone() {
 # without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
 hold_ok() { hold_keys 23 "$1"; }
 
+# hold_chord <linux key> <linux key> <seconds>: two buttons held on the emulator's own keyboard.
+# Keys injected from the shell never pass the accessibility key filter the overlays listen
+# through, as a real remote's do; the emulator console's keyboard is a real input device.
+hold_chord() {
+  adb emu event send "EV_KEY:$1:1" EV_SYN:0:0 >/dev/null || return 1
+  sleep 0.05
+  adb emu event send "EV_KEY:$2:1" EV_SYN:0:0 >/dev/null || return 1
+  sleep "$3"
+  adb emu event send "EV_KEY:$2:0" EV_SYN:0:0 "EV_KEY:$1:0" EV_SYN:0:0 >/dev/null || return 1
+  echo "held $1 and $2 for $3 s"
+}
+
 # hold_keys <codes> <seconds>: the same for any key, or for keys held together ("19,20")
 hold_keys() {
   if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
@@ -1138,7 +1150,7 @@ adb shell settings put global animator_duration_scale 1
 adb shell screenrecord --time-limit 6 --size 1280x720 --bit-rate 6000000 /sdcard/overlay.mp4 >> "$OUT/overlay.txt" 2>&1 &
 recorder=$!
 sleep 0.5
-hold_keys 19,20 2.6 >> "$OUT/overlay.txt" || fail "could not hold Up and Down together"
+hold_chord KEY_UP KEY_DOWN 2.6 >> "$OUT/overlay.txt" || fail "could not hold Up and Down together"
 sleep 1.5
 overlay_on || fail "holding Up and Down for 2 seconds did not open picture diagnostics"
 sleep 2.5
@@ -1152,7 +1164,7 @@ adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|to
   fail "Back that put picture diagnostics away also left the app"
 adb shell cat "/sdcard/Android/data/$PKG/files/diagnostics/latest.txt" > "$OUT/overlay-report.txt" 2>/dev/null
 grep -q "\[Panel\]" "$OUT/overlay-report.txt" || fail "picture diagnostics saved no report"
-hold_keys 21,22 2.6 >> "$OUT/overlay.txt" || fail "could not hold Left and Right together"
+hold_chord KEY_LEFT KEY_RIGHT 2.6 >> "$OUT/overlay.txt" || fail "could not hold Left and Right together"
 sleep 1.5
 overlay_on || fail "holding Left and Right for 2 seconds did not open the gaming HUD"
 shot overlay-hud

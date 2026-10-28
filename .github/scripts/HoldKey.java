@@ -1,6 +1,7 @@
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.InputEvent;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 
 import java.lang.reflect.Method;
@@ -25,29 +26,20 @@ public final class HoldKey {
         Method inject = managerClass.getMethod("injectInputEvent", InputEvent.class, int.class);
         int async = 0;
         int waitForFinish = 2;
-        // A real device id: the accessibility key filter skips events from no device (-1)
-        int device = 0;
-        for (int id : InputDevice.getDeviceIds()) {
-            InputDevice d = InputDevice.getDevice(id);
-            if (d != null && id >= 0 && (d.supportsSource(InputDevice.SOURCE_DPAD) || d.supportsSource(InputDevice.SOURCE_KEYBOARD))) {
-                device = id;
-                break;
-            }
-        }
 
         // The other keys of a chord, down first and held without repeats
         KeyEvent[] others = new KeyEvent[codes.length - 1];
         for (int i = 0; i < others.length; i++) {
             long at = SystemClock.uptimeMillis();
             others[i] = new KeyEvent(at, at, KeyEvent.ACTION_DOWN, Integer.parseInt(codes[i]), 0, 0,
-                    device, 0, 0, InputDevice.SOURCE_KEYBOARD);
+                    KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD);
             inject.invoke(manager, others[i], waitForFinish);
             Thread.sleep(40);
         }
 
         long downAt = SystemClock.uptimeMillis();
         KeyEvent down = new KeyEvent(downAt, downAt, KeyEvent.ACTION_DOWN, code, 0, 0,
-                device, 0, 0, InputDevice.SOURCE_KEYBOARD);
+                KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD);
         inject.invoke(manager, down, waitForFinish);
         Thread.sleep(500);
         int repeat = 0;
@@ -59,7 +51,7 @@ public final class HoldKey {
             Thread.sleep(50);
         }
         KeyEvent up = new KeyEvent(downAt, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, code, 0, 0,
-                device, 0, 0, InputDevice.SOURCE_KEYBOARD);
+                KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD);
         inject.invoke(manager, up, waitForFinish);
         for (KeyEvent other : others) {
             inject.invoke(manager, KeyEvent.changeAction(KeyEvent.changeTimeRepeat(other, SystemClock.uptimeMillis(), 0), KeyEvent.ACTION_UP), waitForFinish);
