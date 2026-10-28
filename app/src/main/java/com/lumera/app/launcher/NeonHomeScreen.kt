@@ -215,7 +215,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewWake: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -490,7 +490,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons)) {
+    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons), LocalIconTint provides (previewTint ?: profile.tint)) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -852,10 +852,12 @@ private fun HomeRows(
                         lift = liftOf(lifted, HomeOrder.Row.Favourites, appKey),
                         // Not on the TV yet: dimmed, and opening it goes to its Play Store page
                         dimmed = !isInstalled(slot),
-                        onFocusRect = { onSpot(Spot(it, slot.color)) }
+                        onFocusRect = { onSpot(Spot(it, slot.color)) },
+                        behind = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = true) },
+                        front = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = false) }
                     ) { focused ->
                         if (known != null && pack != IconPack.Banner) TileScene(known, color, focused, tileShape)
-                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp) {
+                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp, motion = IconMotion.of(known?.name ?: slot.name)) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1132,9 +1134,11 @@ private fun AllApps(
                     null -> Lift.None
                     app.packageName -> Lift.Lifted
                     else -> Lift.Other
-                }
+                },
+                behind = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = true) },
+                front = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = false) }
             ) { focused ->
-                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp) {
+                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp, motion = IconMotion.of(known?.name ?: app.name)) {
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
                         if (known != null) {
                             NeonGlyph(known.glyph, color, Modifier.size(26.dp))
@@ -1197,8 +1201,8 @@ private fun NeonTile(
     lift: Lift = Lift.None,
     dimmed: Boolean = false,
     onFocusRect: ((Rect) -> Unit)? = null,
-    behind: @Composable BoxScope.() -> Unit = {},
-    front: @Composable BoxScope.() -> Unit = {},
+    behind: @Composable BoxScope.(focused: Boolean) -> Unit = {},
+    front: @Composable BoxScope.(focused: Boolean) -> Unit = {},
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
     val look = LocalHomeLook.current
@@ -1312,7 +1316,7 @@ private fun NeonTile(
                 alpha = faded
             }
     ) {
-        behind()
+        behind(focused)
         Surface(
             onClick = onClick,
             // With a hold the keys are read above, so the Surface never sees a long press
@@ -1355,7 +1359,7 @@ private fun NeonTile(
                     .graphicsLayer { alpha = if (dimmed) 0.5f else 1f }
             ) { content(focused) }
         }
-        front()
+        front(focused)
         TubeCore(shape, color, lit = { tube })
         if (onHold != null) HoldLight(shape, color, progress = { holdLight.value })
         if (isLifted) LiftArrows(color)

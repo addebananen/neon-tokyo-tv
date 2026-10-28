@@ -890,6 +890,22 @@ for pack in original banner glass; do
   key BACK; sleep 2
 done
 
+# Colour remixes of the apps' own icons, and the neon round Neon Tokyo's tile (fourth on Home)
+for tint in synthwave night; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tint "$tint" >/dev/null 2>&1
+  sleep 6
+  shot "tint-$tint"
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Neon Home with the $tint icons does not start on YouTube ($label has the focus)"
+  if [ "$tint" = synthwave ]; then
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 2
+    shot neon-aura
+    label=$(focused_label)
+    [ "$label" = "Neon Tokyo" ] || fail "the fourth tile on Home is not Neon Tokyo ($label has the focus)"
+  fi
+  key BACK; sleep 2
+done
+
 # The scenes the streaming apps play inside their tile in focus. The emulator has none of these
 # apps, so their tiles are dimmed, but the scene plays all the same
 n=0

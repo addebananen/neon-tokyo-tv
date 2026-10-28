@@ -26,6 +26,9 @@ class NeonHomeActivity : ComponentActivity() {
     // And with another pack of app icons
     private var previewIcons by mutableStateOf<IconPack?>(null)
 
+    // And in a remix of their colours
+    private var previewTint by mutableStateOf<IconTint?>(null)
+
     // And with other apps on the Home row, without changing the ones Adrian put there
     private var previewTiles by mutableStateOf<List<String>?>(null)
 
@@ -37,6 +40,7 @@ class NeonHomeActivity : ComponentActivity() {
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
         if (preview) previewStyle = intent.getStringExtra(EXTRA_STYLE)?.let(HomeStyle::of)
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
+        if (preview) previewTint = intent.getStringExtra(EXTRA_TINT)?.let(IconTint::of)
         if (preview) previewTiles = tilesOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         setContent {
@@ -45,6 +49,7 @@ class NeonHomeActivity : ComponentActivity() {
                 onLeave = if (preview) ({ finish() }) else null,
                 previewStyle = previewStyle,
                 previewIcons = previewIcons,
+                previewTint = previewTint,
                 previewTiles = previewTiles,
                 previewWake = previewWake
             )
@@ -58,12 +63,14 @@ class NeonHomeActivity : ComponentActivity() {
             preview = false
             previewStyle = null
             previewIcons = null
+            previewTint = null
             previewTiles = null
             homePresses.intValue++
         } else {
             // Asked to show a style while already open, as from Settings again: show it
             intent.getStringExtra(EXTRA_STYLE)?.let { previewStyle = HomeStyle.of(it) }
             intent.getStringExtra(EXTRA_ICONS)?.let { previewIcons = IconPack.of(it) }
+            intent.getStringExtra(EXTRA_TINT)?.let { previewTint = IconTint.of(it) }
             tilesOf(intent)?.let { previewTiles = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
         }
@@ -78,6 +85,9 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The key of an [IconPack] to show a preview with. */
         const val EXTRA_ICONS = "icons"
+
+        /** The key of an [IconTint] to show the icons of a preview in. */
+        const val EXTRA_TINT = "tint"
 
         /** The packages of the apps to show on the Home row of a preview, separated by commas. */
         const val EXTRA_TILES = "tiles"
