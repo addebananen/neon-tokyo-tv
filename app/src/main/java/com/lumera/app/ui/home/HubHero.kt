@@ -27,23 +27,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
 import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.ui.components.NeonAccents
 import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import com.lumera.app.ui.components.NoiseOverlay
-import com.lumera.app.ui.components.ServiceArt
+import com.lumera.app.ui.components.SceneLayers
+import com.lumera.app.ui.components.rememberSceneMotion
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -95,20 +93,18 @@ fun HubHeroGlow(title: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * A streaming service's scene as the hero backdrop while its card has focus, at the top right
- * where a film's backdrop goes. The scene settles in from a little closer and its subject
- * rises into place on a soft spring, the depth the card itself shows on focus.
+ * A streaming service's or genre's scene as the hero backdrop while its card has focus, at the
+ * top right where a film's backdrop goes. The scene settles in from a little closer and its
+ * subject rises into place on a soft spring, the depth the card itself shows on focus. The
+ * hero holds still: the card below it is the one that moves, which keeps the big picture cheap.
  */
 @Composable
 fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
-    val scene = remember(code) { ServiceArt.request(context, ServiceArt.heroLayer(code, subject = false), crossfade = false) }
-    val subject = remember(code) { ServiceArt.request(context, ServiceArt.heroLayer(code, subject = true), crossfade = false) }
-    val subjectBox = ServiceArt.heroSubjects[code]
+    val motion = rememberSceneMotion(code, "hero")
     // The entrance waits for both layers, so the subject never shows before its scene
     var sceneDone by remember { mutableStateOf(false) }
-    var subjectDone by remember { mutableStateOf(subjectBox == null) }
+    var subjectDone by remember { mutableStateOf(false) }
     val settle = remember { Animatable(0f) }
     val rise = remember { Animatable(0f) }
     LaunchedEffect(sceneDone, subjectDone) {
@@ -128,37 +124,33 @@ fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
                     clip = true
                 }
         ) {
-            AsyncImage(
-                model = scene,
-                contentDescription = null,
-                onSuccess = { sceneDone = true },
-                onError = { sceneDone = true },
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
+            // The subject layer is cut to where it sits, so the scene waits to know where that is
+            if (motion != null) {
+                SceneLayers(
+                    code = code,
+                    frame = "hero",
+                    motion = motion,
+                    clock = null,
+                    crossfade = false,
+                    fgBox = motion.fgBox,
+                    modifier = Modifier.placedInScene(FULL_SCENE),
+                    sceneLayer = {
                         val scale = 1.05f - 0.05f * settle.value
                         scaleX = scale
                         scaleY = scale
-                    }
-            )
-            if (subjectBox != null) {
-                AsyncImage(
-                    model = subject,
-                    contentDescription = null,
-                    onSuccess = { subjectDone = true },
-                    onError = { subjectDone = true },
-                    contentScale = ContentScale.FillBounds,
-                    modifier = Modifier
-                        .placedInScene(subjectBox)
-                        .graphicsLayer {
-                            transformOrigin = TransformOrigin(0.5f, 1f)
-                            val scale = 0.94f + 0.06f * rise.value
-                            scaleX = scale
-                            scaleY = scale
-                            translationY = (1f - rise.value) * 22.dp.toPx()
-                            alpha = (rise.value * 2.5f).coerceIn(0f, 1f)
-                        }
+                    },
+                    subjectLayer = {
+                        // Rises from where the subject stands
+                        val box = motion.fgBox
+                        transformOrigin = if (box != null) TransformOrigin((box[0] + box[2]) / 2f, box[3]) else TransformOrigin(0.5f, 1f)
+                        val scale = 0.94f + 0.06f * rise.value
+                        scaleX = scale
+                        scaleY = scale
+                        translationY = (1f - rise.value) * 22.dp.toPx()
+                        alpha = (rise.value * 2.5f).coerceIn(0f, 1f)
+                    },
+                    onScene = { sceneDone = true },
+                    onSubject = { subjectDone = true }
                 )
             }
             Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
@@ -167,10 +159,11 @@ fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
     }
 }
 
+private val FULL_SCENE = listOf(0f, 0f, 1f, 1f)
+
 /**
- * Lays a hero's subject layer out over the part of the 16:9 scene it was cut from
- * ([box] is left, top, right and bottom as fractions), with the scene scaled to cover
- * the space and centred the way ContentScale.Crop draws it.
+ * Lays out the part of the 16:9 scene given by [box] (left, top, right and bottom as fractions),
+ * with the scene scaled to cover the space and centred the way ContentScale.Crop draws it.
  */
 private fun Modifier.placedInScene(box: List<Float>): Modifier = layout { measurable, constraints ->
     val width = constraints.maxWidth.toFloat()

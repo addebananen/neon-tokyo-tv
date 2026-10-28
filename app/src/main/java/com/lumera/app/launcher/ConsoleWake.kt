@@ -244,7 +244,7 @@ private fun BootRing(color: Color, progress: () -> Float, breath: () -> Float) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun WakeButton(text: String, color: Color, primary: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun WakeButton(text: String, color: Color, primary: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(

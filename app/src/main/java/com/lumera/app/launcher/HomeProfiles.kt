@@ -25,7 +25,9 @@ data class HomeProfile(
     /** A video file the screensaver plays while this profile shows, or null for its style's own. */
     val dreamVideo: String? = null,
     /** How the apps on its tiles look: neon, or their own icons. */
-    val icons: IconPack = IconPack.Neon
+    val icons: IconPack = IconPack.Neon,
+    /** The colours those icons are shown in: their own, or a remix. */
+    val tint: IconTint = IconTint.Own
 )
 
 /**
@@ -115,6 +117,7 @@ class HomeProfiles private constructor(private val context: Context) {
                 put("name", p.name)
                 put("style", p.style.key)
                 put("icons", p.icons.key)
+                put("tint", p.tint.key)
                 p.photo?.let { put("photo", it) }
                 p.background?.let { put("background", it) }
                 p.dreamVideo?.let { put("dreamVideo", it) }
@@ -135,7 +138,8 @@ class HomeProfiles private constructor(private val context: Context) {
                     photo = o.optString("photo").ifEmpty { null }?.takeIf { File(it).exists() },
                     background = o.optString("background").ifEmpty { null }?.takeIf { File(it).exists() },
                     dreamVideo = o.optString("dreamVideo").ifEmpty { null }?.takeIf { File(it).exists() },
-                    icons = IconPack.of(o.optString("icons"))
+                    icons = IconPack.of(o.optString("icons")),
+                    tint = IconTint.of(o.optString("tint"))
                 )
             }
         }.getOrDefault(emptyList())

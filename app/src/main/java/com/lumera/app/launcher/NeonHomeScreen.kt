@@ -34,7 +34,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
@@ -192,6 +194,9 @@ private val Gap = 13.dp
 private val Side = 55.dp
 
 /** The keys a TV Surface clicks on. */
+/** The made-up device a preview's Bluetooth card shows. */
+private const val PREVIEW_DEVICE = "preview"
+
 private val SelectKeys = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 private val ArrowKeys = setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)
 
@@ -221,7 +226,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -235,6 +240,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val sounds = remember { HomeSounds(appContext) }
     DisposableEffect(sounds) { onDispose { sounds.release() } }
     val updates = remember { homeUpdates(appContext) }
+    val bt = remember { HomeBluetooth(appContext) }
     // What the Neon Tokyo profile of the same name has left to watch, for the row under the apps
     val watching = rememberHomeWatching(appContext, profile.name)
     // The same profile's favourite Live TV channels, read from what the app keeps on the TV
@@ -245,6 +251,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     }
     val updateState by updates.state.collectAsState()
     var showUpdates by remember { mutableStateOf(false) }
+    var showMotion by remember { mutableStateOf(false) }
+    remember { HomeMotion.load(appContext) }
     // A quiet look for a newer version once the home screen is up; the pill at the top says so
     LaunchedEffect(Unit) {
         delay(4000)
@@ -266,13 +274,17 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             when (event) {
                 Lifecycle.Event.ON_START -> {
                     inputs.start()
+                    bt.start()
                     appsVersion++
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     resumes++
                     channelsTick++
                 }
-                Lifecycle.Event.ON_STOP -> inputs.stop()
+                Lifecycle.Event.ON_STOP -> {
+                    inputs.stop()
+                    bt.stop()
+                }
                 else -> Unit
             }
         }
@@ -280,6 +292,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         onDispose {
             lifecycle.removeObserver(observer)
             inputs.stop()
+            bt.stop()
         }
     }
     // Apps put on or taken off the TV while the home screen is open
@@ -373,6 +386,50 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         }
     }
     LaunchedEffect(woke) { if (woke != null) sounds.wake() }
+
+    // A paired device of this profile switched on near the TV gets its card in the corner; one
+    // nobody here took as theirs never does, so a sister's home screen doesn't offer his headphones
+    val btDevices by bt.devices.collectAsState()
+    val btNearby by bt.nearby.collectAsState()
+    val btOwners by bt.owners.collectAsState()
+    val btMine = remember(btOwners, profile.id) { BtRules.mine(btOwners, profile.id) }
+    LaunchedEffect(btMine) { bt.watch(btMine) }
+    var btCard by remember { mutableStateOf<BtDevice?>(null) }
+    val btOn by bt.on.collectAsState()
+    val btPermitted by bt.permitted.collectAsState()
+    // Home pressed twice opens the Bluetooth corner: this profile's devices with Connect
+    var btCorner by remember { mutableStateOf(false) }
+    val lastHome = remember { longArrayOf(0L) }
+    val previewCorner = remember(previewBluetoothList) {
+        previewBluetoothList?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.mapIndexed { i, name ->
+            BtDevice("$PREVIEW_DEVICE$i", name, BtRules.previewKind(name), connected = false)
+        }
+    }
+    LaunchedEffect(previewCorner) { if (previewCorner != null) btCorner = true }
+    val ownCorner = remember(btDevices, btOwners, profile.id) { BtRules.corner(btDevices, btOwners, profile.id) }
+    val cornerDevices = previewCorner ?: ownCorner
+    var showBluetooth by remember { mutableStateOf(false) }
+    val btBefore = remember { arrayOf<Set<String>>(emptySet()) }
+    LaunchedEffect(btNearby, btMine, btDevices) {
+        val connected = btDevices.filter { it.connected }.map { it.address }.toSet()
+        val fresh = BtRules.arrived(btDevices.map { it.address }, btBefore[0], btNearby, btMine, connected, bt.snoozes(), bt.clock())
+        btBefore[0] = btNearby
+        val shown = btCard
+        when {
+            fresh != null -> btCard = btDevices.first { it.address == fresh }
+            shown != null && shown.address != PREVIEW_DEVICE &&
+                (shown.address !in btMine || shown.address in connected || shown.address !in btNearby) -> btCard = null
+        }
+    }
+    LaunchedEffect(btCard?.address) { if (btCard != null) sounds.wake() }
+    LaunchedEffect(previewBluetooth) {
+        previewBluetooth?.let { btCard = BtDevice(PREVIEW_DEVICE, it, BtRules.previewKind(it), connected = false) }
+    }
+    fun connectBluetooth(device: BtDevice) {
+        if (device.address.startsWith(PREVIEW_DEVICE)) return
+        val result = bt.connect(device.address)
+        btConnectNote(result, device.name)?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
     LaunchedEffect(previewWake) {
         previewWake?.let { id -> HomeCatalog.consoles.firstOrNull { it.id == id }?.let { woke = it } }
     }
@@ -442,8 +499,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         // A tab that just opened is only there after a frame or two
         repeat(10) {
             withFrameNanos { }
-            // A console's card that just came has the focus, and keeps it
-            if (woke != null) return@LaunchedEffect
+            // A console's or a device's card that just came has the focus, and keeps it
+            if (woke != null || btCard != null || btCorner) return@LaunchedEffect
             val target = when (tab) {
                 HomeTab.Home -> firstFavourite
                 HomeTab.Apps -> firstApp
@@ -457,10 +514,12 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val profilePill = remember { FocusRequester() }
     val inputsPill = remember { FocusRequester() }
     val versionPill = remember { FocusRequester() }
+    val bluetoothPill = remember { FocusRequester() }
+    val motionPill = remember { FocusRequester() }
     var reopen by remember { mutableStateOf<FocusRequester?>(null) }
-    LaunchedEffect(showProfiles, showInputs, showUpdates) {
+    LaunchedEffect(showProfiles, showInputs, showUpdates, showMotion, showBluetooth) {
         val back = reopen ?: return@LaunchedEffect
-        if (showProfiles || showInputs || showUpdates) return@LaunchedEffect
+        if (showProfiles || showInputs || showUpdates || showMotion || showBluetooth) return@LaunchedEffect
         reopen = null
         repeat(10) {
             withFrameNanos { }
@@ -470,17 +529,25 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     // Home pressed while the home screen shows: back to the start, as on other TV home screens
     LaunchedEffect(homePresses) {
         if (homePresses == 0) return@LaunchedEffect
+        val now = SystemClock.uptimeMillis()
+        val twice = now - lastHome[0] < BtRules.DOUBLE_HOME_MS
+        // A third press starts over rather than closing what the second opened
+        lastHome[0] = if (twice) 0L else now
+        btCorner = twice
         reopen = null
         drop()
         linking = null
         woke = null
+        btCard = null
+        showBluetooth = false
         showUpdates = false
+        showMotion = false
         showInputs = false
         showProfiles = false
         pinning = null
         changing = null
         tab = HomeTab.Home
-        focusFirst++
+        if (!twice) focusFirst++
     }
     BackHandler {
         if (tab == HomeTab.Home && onLeave != null) {
@@ -505,7 +572,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (input != null) HomeApps.start(context, TvInputs.openIntent(input.id))
     }
 
-    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons)) {
+    CompositionLocalProvider(LocalHomeLook provides look, LocalIconPack provides (previewIcons ?: profile.icons), LocalIconTint provides (previewTint ?: profile.tint)) {
         BoxWithConstraints(
             Modifier
                 .fillMaxSize()
@@ -538,8 +605,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     true
                 }
         ) {
-            val leanX = with(LocalDensity.current) { 12.dp.toPx() }
-            val leanY = with(LocalDensity.current) { 5.dp.toPx() }
+            // As far as the Motion panel says: by default a gentle few dp
+            val leanX = with(LocalDensity.current) { HomeMotion.lean.across.dp.toPx() }
+            val leanY = with(LocalDensity.current) { HomeMotion.lean.down.dp.toPx() }
             val tabsTop = maxHeight * 0.415f
             val rowsTop = maxHeight * 0.485f
             // The picture lies a little further back than the tiles: it leans gently away from
@@ -593,6 +661,14 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         wallpaper = NeonWallpaper.OCEAN
                         spotOn = false
                     })
+                    Pill("Bluetooth", Glyph.Bluetooth, Modifier.focusRequester(bluetoothPill), onClick = {
+                        reopen = bluetoothPill
+                        showBluetooth = true
+                    }, onFocus = {
+                        focusMoved()
+                        wallpaper = NeonWallpaper.OCEAN
+                        spotOn = false
+                    })
                     Pill(
                         if (updateState is UpdateState.UpdateAvailable) "Update" else shortVersion(),
                         Glyph.Update,
@@ -607,6 +683,14 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             spotOn = false
                         }
                     )
+                    Pill("Motion", Glyph.Sparkle, Modifier.focusRequester(motionPill), onClick = {
+                        reopen = motionPill
+                        showMotion = true
+                    }, onFocus = {
+                        focusMoved()
+                        wallpaper = NeonWallpaper.TOKYO
+                        spotOn = false
+                    })
                     Pill("Settings", Glyph.Gear, onClick = { HomeApps.start(context, Intent(Settings.ACTION_SETTINGS)) }, onFocus = {
                         focusMoved()
                         wallpaper = NeonWallpaper.TOKYO
@@ -737,7 +821,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             val wakeShown = remember { arrayOfNulls<Console>(1) }
             woke?.let { wakeShown[0] = it }
             AnimatedVisibility(
-                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && pinning == null && changing == null,
+                visible = woke != null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && !showMotion && pinning == null && changing == null,
                 enter = fadeIn(tween(260)) + slideInVertically(tween(420, easing = FastOutSlowInEasing)) { -it / 2 },
                 exit = fadeOut(tween(220)) + slideOutVertically(tween(260)) { -it / 3 },
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 64.dp, end = Side)
@@ -757,6 +841,73 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         }
                     )
                 }
+            }
+
+            // The card of a Bluetooth device that was just switched on, in the bottom corner;
+            // a console's card goes first
+            val btShown = remember { arrayOfNulls<BtDevice>(1) }
+            btCard?.let { btShown[0] = it }
+            AnimatedVisibility(
+                visible = btCard != null && !btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && !showMotion && pinning == null && changing == null,
+                enter = fadeIn(tween(260)) + slideInHorizontally(tween(420, easing = FastOutSlowInEasing)) { it / 2 },
+                exit = fadeOut(tween(220)) + slideOutHorizontally(tween(260)) { it / 3 },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 34.dp, end = Side)
+            ) {
+                val device = btShown[0] ?: return@AnimatedVisibility
+                key(device.address) {
+                    BluetoothCard(
+                        device = device,
+                        onConnect = {
+                            btCard = null
+                            bt.snooze(device.address, BtRules.QUIET_MS)
+                            connectBluetooth(device)
+                            focusFirst++
+                        },
+                        onDismiss = { hadFocus, pressed ->
+                            btCard = null
+                            bt.snooze(device.address, if (pressed) BtRules.SNOOZE_MS else BtRules.QUIET_MS)
+                            if (hadFocus) focusFirst++
+                        }
+                    )
+                }
+            }
+
+            // The Bluetooth corner, after Home pressed twice
+            AnimatedVisibility(
+                visible = btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && !showMotion && pinning == null && changing == null,
+                enter = fadeIn(tween(240)) + slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { it / 2 },
+                exit = fadeOut(tween(200)) + slideOutHorizontally(tween(240)) { it / 3 },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 34.dp, end = Side)
+            ) {
+                BluetoothCorner(
+                    devices = cornerDevices,
+                    nearby = btNearby,
+                    note = when {
+                        previewCorner != null -> null
+                        !bt.available -> "This TV has no Bluetooth."
+                        !btPermitted -> "Open All devices to let Neon Tokyo see them."
+                        !btOn -> "Bluetooth is off on the TV."
+                        cornerDevices.isEmpty() -> "No headphones or speakers of yours yet."
+                        else -> null
+                    },
+                    onConnect = { device ->
+                        btCorner = false
+                        if (device.address.startsWith(PREVIEW_DEVICE)) return@BluetoothCorner
+                        if (btOwners[device.address].isNullOrEmpty()) bt.take(device.address, profile.id, true)
+                        if (device.connected) HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                        else connectBluetooth(device)
+                        focusFirst++
+                    },
+                    onAll = {
+                        btCorner = false
+                        reopen = bluetoothPill
+                        showBluetooth = true
+                    },
+                    onDismiss = { hadFocus ->
+                        btCorner = false
+                        if (hadFocus) focusFirst++
+                    }
+                )
             }
         }
 
@@ -794,6 +945,12 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         }
         if (showUpdates) {
             HomeUpdatesDialog(updates, onDismiss = { showUpdates = false })
+        }
+        if (showBluetooth) {
+            HomeBluetoothDialog(bt, profile, profileList, onConnect = { connectBluetooth(it) }, onDismiss = { showBluetooth = false })
+        }
+        if (showMotion) {
+            HomeMotionDialog(appContext, onDismiss = { showMotion = false })
         }
         pinning?.let { app ->
             PinToHomeDialog(app, slots, onPick = { index ->
@@ -885,10 +1042,12 @@ private fun HomeRows(
                         lift = liftOf(lifted, HomeOrder.Row.Favourites, appKey),
                         // Not on the TV yet: dimmed, and opening it goes to its Play Store page
                         dimmed = !isInstalled(slot),
-                        onFocusRect = { onSpot(Spot(it, slot.color)) }
+                        onFocusRect = { onSpot(Spot(it, slot.color)) },
+                        behind = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = true) },
+                        front = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = false) }
                     ) { focused ->
                         if (known != null && pack != IconPack.Banner) TileScene(known, color, focused, tileShape)
-                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp) {
+                        AppArtFace(pack, known?.packages ?: listOf(appKey), slot.name, tileShape, color, focused, big = true, nameSize = 15.sp, motion = IconMotion.of(known?.name ?: slot.name)) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1243,9 +1402,11 @@ private fun AllApps(
                     null -> Lift.None
                     app.packageName -> Lift.Lifted
                     else -> Lift.Other
-                }
+                },
+                behind = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = true) },
+                front = { if (known == HomeCatalog.NeonTokyo) NeonAura(tileShape, it, outer = false) }
             ) { focused ->
-                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp) {
+                AppArtFace(pack, listOf(app.packageName), app.name, tileShape, color, focused, big = false, nameSize = 11.5.sp, motion = IconMotion.of(known?.name ?: app.name)) {
                     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 8.dp)) {
                         if (known != null) {
                             NeonGlyph(known.glyph, color, Modifier.size(26.dp))
@@ -1308,8 +1469,8 @@ private fun NeonTile(
     lift: Lift = Lift.None,
     dimmed: Boolean = false,
     onFocusRect: ((Rect) -> Unit)? = null,
-    behind: @Composable BoxScope.() -> Unit = {},
-    front: @Composable BoxScope.() -> Unit = {},
+    behind: @Composable BoxScope.(focused: Boolean) -> Unit = {},
+    front: @Composable BoxScope.(focused: Boolean) -> Unit = {},
     content: @Composable BoxScope.(focused: Boolean) -> Unit
 ) {
     val look = LocalHomeLook.current
@@ -1324,10 +1485,10 @@ private fun NeonTile(
         targetValue = when {
             isLifted -> 1.13f
             pressed -> 1.03f
-            focused -> 1.07f
+            focused -> HomeMotion.pop.scale
             else -> 1f
         },
-        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = 0.55f, stiffness = 650f) else spring(stiffness = 900f),
+        animationSpec = if ((focused || isLifted) && !pressed) spring(dampingRatio = HomeMotion.pop.damping, stiffness = 650f) else spring(stiffness = 900f),
         label = "TileScale"
     )
     val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
@@ -1423,7 +1584,7 @@ private fun NeonTile(
                 alpha = faded
             }
     ) {
-        behind()
+        behind(focused)
         Surface(
             onClick = onClick,
             // With a hold the keys are read above, so the Surface never sees a long press
@@ -1466,7 +1627,7 @@ private fun NeonTile(
                     .graphicsLayer { alpha = if (dimmed) 0.5f else 1f }
             ) { content(focused) }
         }
-        front()
+        front(focused)
         TubeCore(shape, color, lit = { tube })
         if (onHold != null) HoldLight(shape, color, progress = { holdLight.value })
         if (isLifted) LiftArrows(color)
