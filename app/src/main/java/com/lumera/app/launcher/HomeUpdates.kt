@@ -160,7 +160,7 @@ internal fun HomeUpdatesDialog(updates: AppUpdateManager, onDismiss: () -> Unit)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun UpdateButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun UpdateButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     Surface(
