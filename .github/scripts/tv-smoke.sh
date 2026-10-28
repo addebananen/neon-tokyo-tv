@@ -582,14 +582,15 @@ else
     key DPAD_CENTER
     sleep 3
     shot livetv-player
-    screen_has "Neon One" || fail "the player shows no banner with the channel"
+    # uiautomator cannot read the player's dialog over the video, so the player says what it tuned to
+    adb logcat -d -s LiveTvPlayer:I | grep -q "tuned to Neon One" || fail "the player did not tune to Neon One"
     sleep 3
     shot livetv-playing
     if adb logcat -d 2>/dev/null | grep -q "ExoPlaybackException"; then fail "the test stream did not play (ExoPlayer error in the log)"; fi
     key DPAD_DOWN
     sleep 2
     shot livetv-zap
-    screen_has "Neon Two" || fail "Down in the player did not zap to the next channel"
+    adb logcat -d -s LiveTvPlayer:I | grep -q "tuned to Neon Two" || fail "Down in the player did not zap to the next channel"
     key BACK
     sleep 3
     shot livetv-back

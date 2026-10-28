@@ -1,5 +1,6 @@
 package com.lumera.app.livetv
 
+import android.util.Log
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -197,6 +198,8 @@ fun LiveTvPlayer(
         triedHls[0] = false
         tune(channel)
         onChannel(channel)
+        // The name only, never the stream address: the smoke test reads this to see a zap land
+        Log.i("LiveTvPlayer", "tuned to ${channel.name}")
         banner = true
         poke = System.currentTimeMillis()
     }
