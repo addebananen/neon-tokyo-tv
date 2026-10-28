@@ -556,11 +556,21 @@ else
     shot livetv-list
     screen_has "6 channels" || fail "Live TV does not count the six channels"
     screen_has "Popular in Sweden" || fail "Live TV has no Popular in Sweden group for SVT1 and TV4"
-    # From Favourites (empty) past Popular in Sweden to All channels, then across into the channels
+    # From Favourites (empty) past Popular in Sweden and the sport groups to All channels, then across into the channels
     key DPAD_DOWN
     sleep 2
     shot livetv-popular
     screen_has "SE: SVT1 FHD" || fail "Popular in Sweden does not show SVT1"
+    # The sport groups: Neon Two has an SHL match next in the guide, Neon Sport shows Allsvenskan now
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-hockey
+    screen_has "Swedish hockey" || fail "Live TV has no Swedish hockey group for the SHL match in the guide"
+    screen_has "SHL: Fr" || fail "Swedish hockey does not show the channel with the SHL match"
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-football
+    screen_has "Allsvenskan Live" || fail "the Football group does not show the channel with Allsvenskan on"
     key DPAD_DOWN
     sleep 2
     screen_has "Morning Neon" || fail "the guide shows no programme on Neon One"
@@ -598,7 +608,7 @@ else
     # Search: up to the Search entry, type, and the list narrows to what matches
     key DPAD_LEFT
     sleep 1
-    key DPAD_UP DPAD_UP DPAD_UP DPAD_UP
+    key DPAD_UP DPAD_UP DPAD_UP DPAD_UP DPAD_UP DPAD_UP
     sleep 1
     key DPAD_CENTER
     sleep 2

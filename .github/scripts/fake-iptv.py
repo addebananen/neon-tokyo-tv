@@ -29,7 +29,7 @@ STREAMS = [
 def guide():
     now = int(time.time()) // 1800 * 1800
     fmt = lambda t: time.strftime("%Y%m%d%H%M%S +0000", time.gmtime(t))
-    shows = {"one.neon": ["Morning Neon", "City Pop Hour"], "two.neon": ["Tokyo Drive", "Night Market"],
+    shows = {"one.neon": ["Morning Neon", "City Pop Hour"], "two.neon": ["Tokyo Drive", "SHL: Frölunda – Färjestad"],
              "sport.neon": ["Allsvenskan Live", "Studio"]}
     out = ['<?xml version="1.0" encoding="UTF-8"?>', '<tv>']
     for cid, (first, second) in shows.items():

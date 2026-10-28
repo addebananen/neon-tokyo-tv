@@ -87,6 +87,7 @@ private const val ALL = "\u0000all"
 private const val SEARCH = "\u0000search"
 private const val POPULAR = "\u0000popular"
 private const val LIST = "\u0000list:"
+private const val SPORT = "\u0000sport:"
 
 /**
  * Live TV: the household's IPTV channels in their groups, with each profile's favourites first.
@@ -185,9 +186,13 @@ fun LiveTvScreen(
             val shownGroups = groups.filter { it !in hidden }
             val hiddenGroups = groups.filter { it in hidden }
             val popular = remember(channels) { PopularChannels.sweden(channels) }
+            // Rebuilt every ten minutes, so a match that has started moves to the top
+            val sports = remember(channels, guide, now / 600_000) {
+                SportChannels.all.associate { it.key to SportChannels.find(it, channels, guide, now) }
+            }
             val searchable = remember(channels) { channels.map { PopularChannels.normalize(it.name) + " " + it.name.lowercase() } }
             val selected = group ?: if (favouriteChannels.isNotEmpty()) FAVOURITES else ALL
-            val list = remember(selected, channels, favouriteChannels, lists, query) {
+            val list = remember(selected, channels, favouriteChannels, lists, query, sports) {
                 when {
                     selected == FAVOURITES -> favouriteChannels
                     selected == ALL -> channels.filter { it.group !in hidden }
@@ -198,6 +203,7 @@ fun LiveTvScreen(
                         else channels.filterIndexed { i, _ -> words.all { it in searchable[i] } }.take(400)
                     }
                     selected.startsWith(LIST) -> lists[selected.removePrefix(LIST)].orEmpty().mapNotNull { byId[it] }
+                    selected.startsWith(SPORT) -> sports[selected.removePrefix(SPORT)].orEmpty()
                     else -> channels.filter { it.group == selected }
                 }
             }
@@ -262,6 +268,12 @@ fun LiveTvScreen(
                         if (popular.size >= 2) item(key = POPULAR) {
                             GroupItem("Popular in Sweden", popular.size, selected == POPULAR, onFocus = { group = POPULAR })
                         }
+                        for (sport in SportChannels.all) {
+                            val found = sports[sport.key].orEmpty()
+                            if (found.isNotEmpty()) item(key = SPORT + sport.key) {
+                                GroupItem(sport.title, found.size, selected == SPORT + sport.key, onFocus = { group = SPORT + sport.key })
+                            }
+                        }
                         item(key = ALL) {
                             GroupItem("All channels", channels.count { it.group !in hidden }, selected == ALL, onFocus = { group = ALL })
                         }
@@ -316,6 +328,7 @@ fun LiveTvScreen(
                             selected == POPULAR -> "Popular in Sweden"
                             selected == SEARCH -> if (query.isBlank()) "Search" else "“$query”"
                             selected.startsWith(LIST) -> selected.removePrefix(LIST)
+                            selected.startsWith(SPORT) -> SportChannels.all.first { SPORT + it.key == selected }.title
                             else -> selected
                         },
                         style = NeonType.headline(28.sp),
@@ -327,6 +340,7 @@ fun LiveTvScreen(
                             selected in groups -> "Hold OK on a channel to add it to a list · hold OK on a group to hide it"
                             selected.startsWith(LIST) -> "Hold OK on a channel to add or remove it · hold OK on the list to delete it"
                             selected == SEARCH -> "Press OK on Search to type, by name, in any language the provider uses"
+                            selected.startsWith(SPORT) -> "Channels with a match on now come first, then the next match from the guide"
                             else -> "Hold OK on a channel to add it to Favourites or a list of your own"
                         },
                         color = NeonPalette.Lilac.copy(alpha = 0.8f),
