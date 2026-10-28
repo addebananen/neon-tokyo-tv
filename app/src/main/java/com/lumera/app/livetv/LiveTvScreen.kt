@@ -25,6 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -90,6 +94,7 @@ private const val LIST = "\u0000list:"
  * shows each one's channels at once; holding OK on a channel makes it a favourite, and holding
  * it on a group hides that group for this profile.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LiveTvScreen(
     currentProfile: ProfileEntity?,
@@ -218,7 +223,7 @@ fun LiveTvScreen(
                     .padding(start = startPadding, top = topPadding, end = 48.dp)
             ) {
                 // Groups
-                Column(Modifier.width(270.dp).fillMaxHeight()) {
+                Column(Modifier.width(250.dp).fillMaxHeight()) {
                     NeonText("LIVE TV", style = NeonType.eyebrow(13.sp))
                     Spacer(Modifier.height(4.dp))
                     Text(
@@ -342,15 +347,21 @@ fun LiveTvScreen(
                         )
                     }
                     val listState = rememberLazyListState()
+                    val firstRow = remember { FocusRequester() }
                     LaunchedEffect(selected) { if (list.isNotEmpty()) listState.scrollToItem(0) }
                     LazyColumn(
                         state = listState,
+                        // Across from the groups lands on the top of the list, not on whichever row is level with the group
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusProperties { enter = { if (listState.firstVisibleItemIndex == 0) firstRow else FocusRequester.Default } }
+                            .focusGroup(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp),
-                        modifier = Modifier.weight(1f)
+                        contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp, start = 4.dp, end = 4.dp)
                     ) {
-                        items(list, key = { it.id }) { channel ->
+                        itemsIndexed(list, key = { _, it -> it.id }) { index, channel ->
                             ChannelRow(
+                                modifier = if (index == 0) Modifier.focusRequester(firstRow) else Modifier,
                                 channel = channel,
                                 programmes = guide[channel.epgId],
                                 now = now,
@@ -563,6 +574,7 @@ internal fun hhmm(time: Long): String = clock.format(Date(time))
 
 @Composable
 private fun ChannelRow(
+    modifier: Modifier = Modifier,
     channel: IptvChannel,
     programmes: List<Programme>?,
     now: Long,
@@ -576,7 +588,7 @@ private fun ChannelRow(
     val shape = RoundedCornerShape(14.dp)
     val nowNext = remember(programmes, now) { programmes?.nowNext(now) }
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .height(78.dp)
             .graphicsLayer {
@@ -639,6 +651,7 @@ private fun ChannelRow(
                 if (last) Text("  · last watched", color = NeonPalette.Cyan.copy(alpha = 0.8f), fontSize = 12.sp)
             }
             val on = nowNext?.now
+            val next = nowNext?.next
             if (on != null) {
                 Text(
                     "${hhmm(on.start)}  ${on.title}",
@@ -647,16 +660,25 @@ private fun ChannelRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(5.dp))
-                Progress(on.progress(now), Modifier.widthIn(max = 360.dp).fillMaxWidth())
+                Spacer(Modifier.height(4.dp))
             }
-        }
-        val next = nowNext?.next
-        if (next != null) {
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.width(240.dp)) {
-                Text("NEXT ${hhmm(next.start)}", color = NeonPalette.Cyan.copy(alpha = 0.75f), fontSize = 11.sp, letterSpacing = 2.sp)
-                Text(next.title, color = NeonPalette.Lilac, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // How far into the programme, and what comes after it, on one line under the name
+            if (on != null || next != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (on != null) {
+                        Progress(on.progress(now), Modifier.width(120.dp))
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    if (next != null) {
+                        Text(
+                            "NEXT ${hhmm(next.start)}  ${next.title}",
+                            color = NeonPalette.Cyan.copy(alpha = 0.75f),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }
