@@ -12,6 +12,15 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Neon Home asks the TV to uninstall an app; the TV asks to be sure itself -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Neon Home's Bluetooth corner: which paired headphones and speakers are on, and connecting
+         them. Android 12 and later ask once; older ones need the two legacy permissions -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Only granted over ADB, by hand: lets Neon Tokyo turn BluetoothHelper on for a press -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -91,6 +100,21 @@
             android:name="com.lumera.app.launcher.NeonHomeSwitch"
             android:exported="true"
             android:permission="android.permission.WRITE_SECURE_SETTINGS" />
+
+        <!-- Presses Connect on the TV's own Bluetooth page, which Android 13 and later keep for
+             the system. Off until Neon Tokyo turns it on for a press; it turns itself off after -->
+        <service
+            android:name="com.lumera.app.launcher.BluetoothHelper"
+            android:exported="true"
+            android:label="@string/nt_bluetooth_helper_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/bluetooth_helper" />
+        </service>
 
         <!-- Projectivy Launcher wallpaper provider: the skyline follows the focused app -->
         <service

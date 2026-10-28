@@ -32,6 +32,9 @@ class NeonHomeActivity : ComponentActivity() {
     // A console's card shown as if it had just been switched on, to see how it looks
     private var previewWake by mutableStateOf<String?>(null)
 
+    // A Bluetooth device's card shown as if it had just been switched on, by a made-up name
+    private var previewBluetooth by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
@@ -39,6 +42,7 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
         if (preview) previewTiles = tilesOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
+        if (preview) previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
         setContent {
             NeonHome(
                 homePresses = homePresses.intValue,
@@ -46,7 +50,8 @@ class NeonHomeActivity : ComponentActivity() {
                 previewStyle = previewStyle,
                 previewIcons = previewIcons,
                 previewTiles = previewTiles,
-                previewWake = previewWake
+                previewWake = previewWake,
+                previewBluetooth = previewBluetooth
             )
         }
     }
@@ -66,6 +71,7 @@ class NeonHomeActivity : ComponentActivity() {
             intent.getStringExtra(EXTRA_ICONS)?.let { previewIcons = IconPack.of(it) }
             tilesOf(intent)?.let { previewTiles = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
+            previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
         }
     }
 
@@ -84,5 +90,8 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The id of a console whose card to show, as if it had just been switched on. */
         const val EXTRA_WAKE = "wake"
+
+        /** The name of a Bluetooth device whose card to show, as if it had just been switched on. */
+        const val EXTRA_BLUETOOTH = "bluetooth"
     }
 }

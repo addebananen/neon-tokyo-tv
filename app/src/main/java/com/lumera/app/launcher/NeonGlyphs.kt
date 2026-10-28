@@ -86,7 +86,12 @@ enum class Glyph(pathData: String) {
     Search(circle(43, 43, 25) + "M62 62 L84 84"),
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
     Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
-    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68");
+    Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68"),
+    Bluetooth("M30 34 L68 66 L50 84 V16 L68 34 L30 66"),
+
+    // Bluetooth devices
+    Headphones("M20 64 V52 A30 30 0 0 1 80 52 V64 " + rect(14, 58, 18, 28, 7) + rect(68, 58, 18, 28, 7)),
+    Speaker(rect(24, 10, 52, 80, 10) + circle(50, 60, 16) + circle(50, 60, 4) + circle(50, 28, 6));
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }

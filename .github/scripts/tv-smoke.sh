@@ -838,7 +838,7 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    case "$label" in N|Neon|Search|Inputs|Bluetooth|Update|nt.*|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
     for _ in 1 2 3 4; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
@@ -854,10 +854,20 @@ for style in "${styles[@]}"; do
     # The panel gives the focus back to the pill that opened it
     label=$(focused_label)
     case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
-    # The pill with the version number, three along, says which version this is and looks for a newer one
+    # Bluetooth, three along, lists the paired headphones and speakers of this profile
     key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    case "$label" in nt.*|Update) ;; *) fail "three along from the profile pill is $label, not the version pill" ;; esac
+    [ "$label" = "Bluetooth" ] || fail "three along from the profile pill is $label, not Bluetooth"
+    key DPAD_CENTER; sleep 3
+    shot "style-$style-bluetooth"
+    screen_has "devices" || screen_has "no Bluetooth" || fail "the Bluetooth pill did not open the Bluetooth panel"
+    key BACK; sleep 2
+    label=$(focused_label)
+    [ "$label" = "Bluetooth" ] || fail "the focus did not go back to Bluetooth when its panel closed ($label has it)"
+    # The pill with the version number, next along, says which version this is and looks for a newer one
+    key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    case "$label" in nt.*|Update) ;; *) fail "four along from the profile pill is $label, not the version pill" ;; esac
     key DPAD_CENTER; sleep 4
     shot "style-$style-updates"
     screen_has "This version" || fail "the version pill did not open the updates panel"
@@ -928,6 +938,20 @@ shot console-wake-away
 if screen_has "Switch 2 is on"; then fail "Back did not put the console's card away"; fi
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "the focus did not go back to YouTube when the console's card went ($label has it)"
+# A paired headphone switched on near the TV: its card slides in at the bottom corner with the
+# focus on Connect, and Back puts it away. The emulator has no Bluetooth devices, so the preview
+# shows the card for a made-up pair of AirPods
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es bluetooth "AirPods Pro" >/dev/null 2>&1
+sleep 2
+shot bluetooth-card
+bt_xml="$OUT/$(printf "%02d" "$step")-bluetooth-card.xml"
+grep -q "AirPods Pro turned on" "$bt_xml" 2>/dev/null || fail "the card of a Bluetooth device that was just switched on did not show"
+label=$(focused_text < "$bt_xml" 2>/dev/null)
+case "$label" in *Connect*) ;; *) fail "the Bluetooth card does not have the focus on Connect ($label has it)" ;; esac
+key BACK
+sleep 2
+shot bluetooth-card-away
+if screen_has "AirPods Pro turned on"; then fail "Back did not put the Bluetooth card away"; fi
 adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
