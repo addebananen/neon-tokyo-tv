@@ -525,12 +525,8 @@ shot series-rows
 
 # --- Live TV: a pretend Xtream provider on the runner, added from "the phone" -------------
 IPTV_PORT=8765
-iptv_stream="-"
-if command -v ffmpeg >/dev/null 2>&1 &&
-  ffmpeg -loglevel error -y -f lavfi -i testsrc=size=1280x720:rate=25 -f lavfi -i sine=frequency=440 -t 20 \
-    -c:v libx264 -pix_fmt yuv420p -c:a aac -f mpegts "$OUT/iptv-stream.ts"; then
-  iptv_stream="$OUT/iptv-stream.ts"
-fi
+# A six second test card in MPEG-TS, as a live channel sends it
+iptv_stream="$(dirname "$0")/iptv-test.ts"
 python3 "$(dirname "$0")/fake-iptv.py" "$IPTV_PORT" "$iptv_stream" &
 IPTV_PID=$!
 menu_go "Live TV"
@@ -558,8 +554,13 @@ else
   adb forward --remove tcp:18082 >/dev/null 2>&1
   if wait_for "Sverige" 30; then
     shot livetv-list
-    screen_has "4 channels" || fail "Live TV does not count the four channels"
-    # From Favourites (empty) down to All channels, then across into the channels
+    screen_has "6 channels" || fail "Live TV does not count the six channels"
+    screen_has "Popular in Sweden" || fail "Live TV has no Popular in Sweden group for SVT1 and TV4"
+    # From Favourites (empty) past Popular in Sweden to All channels, then across into the channels
+    key DPAD_DOWN
+    sleep 2
+    shot livetv-popular
+    screen_has "SE: SVT1 FHD" || fail "Popular in Sweden does not show SVT1"
     key DPAD_DOWN
     sleep 2
     screen_has "Morning Neon" || fail "the guide shows no programme on Neon One"
@@ -571,27 +572,45 @@ else
       fail "the first channel did not take the focus, focus on: $(focused_label)"
     hold_ok 1.2 >/dev/null || fail "could not hold OK on a channel"
     sleep 2
-    screen_has 'text="  ★"' || fail "holding OK did not make Neon One a favourite"
-    shot livetv-favourite
+    shot livetv-channel-menu
+    screen_has "Add to Favourites" || fail "holding OK on a channel did not offer Add to Favourites"
     key DPAD_CENTER
-    sleep 8
+    sleep 2
+    screen_has 'text="  ★"' || fail "Add to Favourites did not make Neon One a favourite"
+    shot livetv-favourite
+    adb logcat -c
+    key DPAD_CENTER
+    sleep 3
     shot livetv-player
     screen_has "Neon One" || fail "the player shows no banner with the channel"
+    sleep 3
+    shot livetv-playing
+    if adb logcat -d 2>/dev/null | grep -q "ExoPlaybackException"; then fail "the test stream did not play (ExoPlayer error in the log)"; fi
     key DPAD_DOWN
-    sleep 6
+    sleep 2
     shot livetv-zap
     screen_has "Neon Two" || fail "Down in the player did not zap to the next channel"
-    if adb logcat -d -s ExoPlayerImplInternal:E 2>/dev/null | grep -q "Playback error"; then
-      [ "$iptv_stream" = "-" ] || fail "the test stream did not play (ExoPlayer error in the log)"
-    fi
     key BACK
     sleep 3
     shot livetv-back
     screen_has "Sverige" || fail "Back from the player did not return to the channel list"
-    key DPAD_LEFT DPAD_UP DPAD_UP
+    # Search: up to the Search entry, type, and the list narrows to what matches
+    key DPAD_LEFT
+    sleep 1
+    key DPAD_UP DPAD_UP DPAD_UP DPAD_UP
+    sleep 1
+    key DPAD_CENTER
     sleep 2
-    shot livetv-favourites
-    screen_has "Tokyo Drive" && fail "Favourites shows a channel that was not added" || true
+    adb shell input text sport
+    sleep 2
+    shot livetv-search-typing
+    key BACK
+    sleep 1
+    screen_has "Search channels" && key BACK
+    sleep 2
+    shot livetv-search
+    screen_has "Neon Sport" || fail "searching for sport did not find Neon Sport"
+    screen_has "Morning Neon" && fail "searching for sport still lists Neon One" || true
   else
     fail "the Live TV channels did not load from the pretend provider"
     shot livetv-failed

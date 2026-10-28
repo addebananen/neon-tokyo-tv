@@ -245,6 +245,20 @@ object LiveTv {
         prefs?.edit()?.putString("fav.$profileId", next.joinToString("\n"))?.apply()
     }
 
+    /** A profile's own channel lists ("Sport", "Kids"), by name in the order they were made. */
+    fun lists(context: Context, profileId: Int): LinkedHashMap<String, List<String>> {
+        init(context)
+        val json = prefs?.getString("lists.$profileId", null) ?: return LinkedHashMap()
+        return runCatching {
+            gson.fromJson<LinkedHashMap<String, List<String>>>(json, object : TypeToken<LinkedHashMap<String, List<String>>>() {}.type)
+        }.getOrNull() ?: LinkedHashMap()
+    }
+
+    fun setLists(context: Context, profileId: Int, lists: Map<String, List<String>>) {
+        init(context)
+        prefs?.edit()?.putString("lists.$profileId", gson.toJson(LinkedHashMap(lists)))?.apply()
+    }
+
     fun hiddenGroups(context: Context, profileId: Int): Set<String> {
         init(context)
         return prefs?.getString("hidden.$profileId", null)?.split('\n')?.filterTo(HashSet()) { it.isNotBlank() } ?: emptySet()

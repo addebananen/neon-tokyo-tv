@@ -21,6 +21,8 @@ STREAMS = [
     {"num": 2, "name": "Neon Two", "stream_id": 12, "stream_icon": "", "epg_channel_id": "two.neon", "category_id": "1"},
     {"num": 3, "name": "Neon Nyheter", "stream_id": 13, "stream_icon": "", "epg_channel_id": "", "category_id": "1"},
     {"num": 10, "name": "Neon Sport", "stream_id": 21, "stream_icon": "", "epg_channel_id": "sport.neon", "category_id": "2"},
+    {"num": 101, "name": "SE: TV4 HD", "stream_id": 31, "stream_icon": "", "epg_channel_id": "", "category_id": "1"},
+    {"num": 102, "name": "SE: SVT1 FHD", "stream_id": 32, "stream_icon": "", "epg_channel_id": "", "category_id": "1"},
 ]
 
 

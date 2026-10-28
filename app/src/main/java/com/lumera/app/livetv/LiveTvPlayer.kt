@@ -58,6 +58,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -164,6 +165,12 @@ fun LiveTvPlayer(
                         triedHls[0] = true
                         tune(current, asHls = true)
                     }
+                    // The provider said no (a channel not in the package, a login used up): retrying will not help
+                    refusal(error) != null -> {
+                        buffering = false
+                        problem = "Your provider refused this channel (${refusal(error)})"
+                        banner = true
+                    }
                     attempt[0] < RETRIES -> {
                         attempt[0]++
                         problem = null
@@ -197,7 +204,7 @@ fun LiveTvPlayer(
     LaunchedEffect(index, problem) {
         if (problem == null) return@LaunchedEffect
         delay(8_000)
-        if (problem != null) { attempt[0] = 0; tune(channel, triedHls[0]) }
+        if (problem != null && problem?.startsWith("Your provider refused") != true) { attempt[0] = 0; tune(channel, triedHls[0]) }
     }
     LaunchedEffect(banner, poke) {
         if (!banner) return@LaunchedEffect
@@ -381,3 +388,11 @@ private fun Banner(
         }
     }
 }
+
+/** The HTTP status when the provider refused the stream outright (4xx), else null. */
+private fun refusal(error: PlaybackException): Int? =
+    generateSequence<Throwable>(error) { it.cause }
+        .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+        .firstOrNull()
+        ?.responseCode
+        ?.takeIf { it in 400..499 }

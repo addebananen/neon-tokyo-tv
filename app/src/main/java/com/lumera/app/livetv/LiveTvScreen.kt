@@ -80,6 +80,9 @@ import java.util.Locale
 
 private const val FAVOURITES = "\u0000fav"
 private const val ALL = "\u0000all"
+private const val SEARCH = "\u0000search"
+private const val POPULAR = "\u0000popular"
+private const val LIST = "\u0000list:"
 
 /**
  * Live TV: the household's IPTV channels in their groups, with each profile's favourites first.
@@ -101,6 +104,12 @@ fun LiveTvScreen(
 
     var favourites by remember(profileId) { mutableStateOf(LiveTv.favourites(context, profileId)) }
     var hidden by remember(profileId) { mutableStateOf(LiveTv.hiddenGroups(context, profileId)) }
+    var lists by remember(profileId) { mutableStateOf<Map<String, List<String>>>(LiveTv.lists(context, profileId)) }
+    var query by remember { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
+    var channelMenu by remember { mutableStateOf<IptvChannel?>(null) }
+    var listMenu by remember { mutableStateOf<String?>(null) }
+    var naming by remember { mutableStateOf<IptvChannel?>(null) }
     var showHidden by remember { mutableStateOf(false) }
     var group by remember(profileId) { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf<Pair<List<IptvChannel>, Int>?>(null) }
@@ -170,11 +179,20 @@ fun LiveTvScreen(
             val favouriteChannels = remember(favourites, byId) { favourites.mapNotNull { byId[it] } }
             val shownGroups = groups.filter { it !in hidden }
             val hiddenGroups = groups.filter { it in hidden }
+            val popular = remember(channels) { PopularChannels.sweden(channels) }
+            val searchable = remember(channels) { channels.map { PopularChannels.normalize(it.name) + " " + it.name.lowercase() } }
             val selected = group ?: if (favouriteChannels.isNotEmpty()) FAVOURITES else ALL
-            val list = remember(selected, channels, favouriteChannels) {
-                when (selected) {
-                    FAVOURITES -> favouriteChannels
-                    ALL -> channels.filter { it.group !in hidden }
+            val list = remember(selected, channels, favouriteChannels, lists, query) {
+                when {
+                    selected == FAVOURITES -> favouriteChannels
+                    selected == ALL -> channels.filter { it.group !in hidden }
+                    selected == POPULAR -> popular
+                    selected == SEARCH -> {
+                        val words = query.lowercase().split(' ').filter { it.isNotBlank() }
+                        if (words.isEmpty()) emptyList()
+                        else channels.filterIndexed { i, _ -> words.all { it in searchable[i] } }.take(400)
+                    }
+                    selected.startsWith(LIST) -> lists[selected.removePrefix(LIST)].orEmpty().mapNotNull { byId[it] }
                     else -> channels.filter { it.group == selected }
                 }
             }
@@ -214,12 +232,30 @@ fun LiveTvScreen(
                         contentPadding = PaddingValues(bottom = 40.dp, end = 12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
+                        item(key = SEARCH) {
+                            GroupItem(
+                                if (query.isBlank()) "⌕  Search channels" else "⌕  “$query”",
+                                null, selected == SEARCH,
+                                onFocus = { group = SEARCH },
+                                onClick = { searching = true }
+                            )
+                        }
                         item(key = FAVOURITES) {
                             GroupItem(
                                 "★  Favourites", favouriteChannels.size, selected == FAVOURITES,
                                 modifier = Modifier.focusRequester(entryRequester),
                                 onFocus = { group = FAVOURITES }
                             )
+                        }
+                        items(lists.keys.toList(), key = { "l:$it" }) { name ->
+                            GroupItem(
+                                "✦  $name", lists[name]?.count { it in byId } ?: 0, selected == LIST + name,
+                                onFocus = { group = LIST + name },
+                                onHold = { listMenu = name }
+                            )
+                        }
+                        if (popular.size >= 2) item(key = POPULAR) {
+                            GroupItem("Popular in Sweden", popular.size, selected == POPULAR, onFocus = { group = POPULAR })
                         }
                         item(key = ALL) {
                             GroupItem("All channels", channels.count { it.group !in hidden }, selected == ALL, onFocus = { group = ALL })
@@ -269,22 +305,37 @@ fun LiveTvScreen(
                 // Channels
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     NeonText(
-                        when (selected) { FAVOURITES -> "Favourites"; ALL -> "All channels"; else -> selected },
+                        when {
+                            selected == FAVOURITES -> "Favourites"
+                            selected == ALL -> "All channels"
+                            selected == POPULAR -> "Popular in Sweden"
+                            selected == SEARCH -> if (query.isBlank()) "Search" else "“$query”"
+                            selected.startsWith(LIST) -> selected.removePrefix(LIST)
+                            else -> selected
+                        },
                         style = NeonType.headline(28.sp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        if (selected in groups) "Hold OK on a channel to make it a favourite · hold OK on a group to hide it"
-                        else "Hold OK on a channel to make it a favourite",
+                        when {
+                            selected in groups -> "Hold OK on a channel to add it to a list · hold OK on a group to hide it"
+                            selected.startsWith(LIST) -> "Hold OK on a channel to add or remove it · hold OK on the list to delete it"
+                            selected == SEARCH -> "Press OK on Search to type, by name, in any language the provider uses"
+                            else -> "Hold OK on a channel to add it to Favourites or a list of your own"
+                        },
                         color = NeonPalette.Lilac.copy(alpha = 0.8f),
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
                     )
                     if (list.isEmpty()) {
                         Text(
-                            if (selected == FAVOURITES) "No favourites yet. Hold OK on a channel to add it here."
-                            else "No channels here.",
+                            when {
+                                selected == FAVOURITES -> "No favourites yet. Hold OK on a channel to add it here."
+                                selected == SEARCH && query.isBlank() -> "Press OK on Search channels and type a name."
+                                selected == SEARCH -> "No channel is called anything like that."
+                                else -> "No channels here."
+                            },
                             color = NeonPalette.Lilac,
                             fontSize = 16.sp,
                             modifier = Modifier.padding(top = 24.dp)
@@ -306,11 +357,7 @@ fun LiveTvScreen(
                                 favourite = channel.id in favourites,
                                 last = channel.id == lastPlayed,
                                 onClick = { playing = list to list.indexOf(channel) },
-                                onHold = {
-                                    val on = channel.id !in favourites
-                                    LiveTv.setFavourite(context, profileId, channel.id, on)
-                                    favourites = LiveTv.favourites(context, profileId)
-                                }
+                                onHold = { channelMenu = channel }
                             )
                         }
                     }
@@ -336,6 +383,69 @@ fun LiveTvScreen(
                 lastPlayed = channel.id
             },
             onClose = { playing = null }
+        )
+    }
+
+    if (searching) {
+        TextDialog(
+            title = "Search channels",
+            initial = query,
+            onChange = { query = it; group = SEARCH },
+            onDone = { searching = false },
+            action = "Show"
+        )
+    }
+
+    channelMenu?.let { channel ->
+        fun toggleIn(name: String) {
+            val now = lists[name].orEmpty()
+            val next = lists.toMutableMap().apply { put(name, if (channel.id in now) now - channel.id else now + channel.id) }
+            LiveTv.setLists(context, profileId, next)
+            lists = LiveTv.lists(context, profileId)
+        }
+        ChoiceDialog(
+            title = channel.name,
+            choices = buildList<Pair<String, () -> Unit>> {
+                add((if (channel.id in favourites) "Remove from Favourites" else "Add to Favourites") to {
+                    LiveTv.setFavourite(context, profileId, channel.id, channel.id !in favourites)
+                    favourites = LiveTv.favourites(context, profileId)
+                })
+                lists.forEach { (name, ids) ->
+                    add((if (channel.id in ids) "Remove from $name" else "Add to $name") to { toggleIn(name) })
+                }
+                add("New list with this channel" to { naming = channel })
+            },
+            onDismiss = { channelMenu = null }
+        )
+    }
+
+    naming?.let { channel ->
+        TextDialog(
+            title = "Name the new list",
+            initial = "",
+            onChange = {},
+            onDone = { name ->
+                val clean = name.trim().take(30)
+                if (clean.isNotEmpty()) {
+                    val next = lists.toMutableMap().apply { put(clean, (get(clean).orEmpty() - channel.id) + channel.id) }
+                    LiveTv.setLists(context, profileId, next)
+                    lists = LiveTv.lists(context, profileId)
+                }
+                naming = null
+            },
+            action = "Make list"
+        )
+    }
+
+    listMenu?.let { name ->
+        ChoiceDialog(
+            title = name,
+            choices = listOf<Pair<String, () -> Unit>>("Delete this list" to {
+                LiveTv.setLists(context, profileId, lists - name)
+                lists = LiveTv.lists(context, profileId)
+                if (group == LIST + name) group = FAVOURITES
+            }),
+            onDismiss = { listMenu = null }
         )
     }
 
@@ -715,3 +825,81 @@ private fun qrCode(url: String, size: Int = 512): Bitmap? = runCatching {
     }
     Bitmap.createBitmap(pixels, matrix.width, matrix.height, Bitmap.Config.RGB_565)
 }.getOrNull()
+
+/** A short menu of choices, each closing it; Back or Cancel closes it with nothing done. */
+@Composable
+private fun ChoiceDialog(title: String, choices: List<Pair<String, () -> Unit>>, onDismiss: () -> Unit) {
+    val first = remember { FocusRequester() }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .width(460.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(NeonPalette.Night)
+                .border(1.dp, NeonPalette.Magenta.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            NeonText(title, style = NeonType.headline(22.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(4.dp))
+            choices.forEachIndexed { index, (label, action) ->
+                NeonButton(
+                    label,
+                    Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(first) else Modifier),
+                    { onDismiss(); action() },
+                    quiet = index > 0
+                )
+            }
+            NeonButton("Cancel", Modifier.fillMaxWidth(), onDismiss, quiet = true)
+        }
+    }
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { first.requestFocus() }
+    }
+}
+
+/** A line of text typed with the TV's keyboard (or a phone's Google TV remote). */
+@Composable
+private fun TextDialog(title: String, initial: String, onChange: (String) -> Unit, onDone: (String) -> Unit, action: String) {
+    var text by remember { mutableStateOf(initial) }
+    val field = remember { FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    Dialog(onDismissRequest = { onDone(text) }) {
+        Column(
+            Modifier
+                .width(520.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(NeonPalette.Night)
+                .border(1.dp, NeonPalette.Magenta.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            NeonText(title, style = NeonType.headline(22.sp))
+            androidx.compose.foundation.text.BasicTextField(
+                value = text,
+                onValueChange = { text = it; onChange(it) },
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = NeonPalette.Text, fontSize = 20.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(NeonPalette.Cyan),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { keyboard?.hide(); onDone(text) }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .border(1.5.dp, NeonPalette.Cyan.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                    .focusRequester(field)
+                    .semantics { contentDescription = title }
+            )
+            NeonButton(action, Modifier.fillMaxWidth(), { keyboard?.hide(); onDone(text) })
+        }
+    }
+    LaunchedEffect(Unit) {
+        delay(120)
+        runCatching { field.requestFocus() }
+        keyboard?.show()
+    }
+}
