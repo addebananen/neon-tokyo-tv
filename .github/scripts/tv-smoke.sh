@@ -970,8 +970,8 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Bluetooth|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
-    for _ in 1 2 3 4 5 6 7; do
+    case "$label" in N|Neon|Search|AirPlay|Inputs|Bluetooth|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3 4 5 6 7 8; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
@@ -986,10 +986,15 @@ for style in "${styles[@]}"; do
     # The panel gives the focus back to the pill that opened it
     label=$(focused_label)
     case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
-    # Bluetooth, three along, lists the paired headphones and speakers of this profile
-    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    # Two along is the AirPlay button, for sharing from an iPhone through a receiver app
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    [ "$label" = "Bluetooth" ] || fail "three along from the profile pill is $label, not Bluetooth"
+    [ "$label" = "AirPlay" ] || fail "two along from the profile pill is $label, not the AirPlay pill"
+    shot "style-$style-airplay"
+    # Bluetooth, two further along, lists the paired headphones and speakers of this profile
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    [ "$label" = "Bluetooth" ] || fail "four along from the profile pill is $label, not Bluetooth"
     key DPAD_CENTER; sleep 3
     shot "style-$style-bluetooth"
     screen_has "devices" || screen_has "no Bluetooth" || fail "the Bluetooth pill did not open the Bluetooth panel"
@@ -999,7 +1004,7 @@ for style in "${styles[@]}"; do
     # The pill with the version number, next along, says which version this is and looks for a newer one
     key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    case "$label" in nt.*|Update) ;; *) fail "four along from the profile pill is $label, not the version pill" ;; esac
+    case "$label" in nt.*|Update) ;; *) fail "five along from the profile pill is $label, not the version pill" ;; esac
     key DPAD_CENTER; sleep 4
     shot "style-$style-updates"
     screen_has "This version" || fail "the version pill did not open the updates panel"

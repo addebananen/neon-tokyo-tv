@@ -648,6 +648,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         wallpaper = NeonWallpaper.TOKYO
                         spotOn = false
                     })
+                    Pill("AirPlay", Glyph.AirPlay, onClick = { startAirPlay(context) }, onFocus = {
+                        focusMoved()
+                        wallpaper = NeonWallpaper.OCEAN
+                        spotOn = false
+                    })
                     Pill("Inputs", Glyph.Hdmi, Modifier.focusRequester(inputsPill), onClick = {
                         reopen = inputsPill
                         showInputs = true
@@ -2978,6 +2983,18 @@ private fun PickerRow(
 internal fun Modifier.homePanel(look: HomeLook, shape: RoundedCornerShape): Modifier =
     if (look.glowingText) neonPanel(shape)
     else background(lerp(look.tileBottom, look.tileTop, 0.4f).copy(alpha = 0.98f), shape).border(1.dp, look.accent.copy(alpha = 0.45f), shape)
+
+/**
+ * Gets the TV ready to take AirPlay from an iPhone: opens the receiver app, which shows the TV's
+ * name to pick under Screen Mirroring or the AirPlay button. Without one, the Play Store page for
+ * AirScreen, after which the same button opens it.
+ */
+private fun startAirPlay(context: Context) {
+    if (!HomeApps.isInstalled(context, HomeCatalog.AirPlay)) {
+        Toast.makeText(context, "Install AirScreen once, then this button turns AirPlay on", Toast.LENGTH_LONG).show()
+    }
+    HomeApps.open(context, HomeCatalog.AirPlay)
+}
 
 /** Google's search where the TV has it, otherwise the assistant. */
 private fun openSearch(context: Context) {
