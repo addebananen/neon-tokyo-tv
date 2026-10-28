@@ -35,6 +35,9 @@ class NeonHomeActivity : ComponentActivity() {
     // A Bluetooth device's card shown as if it had just been switched on, by a made-up name
     private var previewBluetooth by mutableStateOf<String?>(null)
 
+    // The Bluetooth corner, as Home pressed twice opens it, listing made-up devices by name
+    private var previewBluetoothList by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
@@ -43,6 +46,7 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewTiles = tilesOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         if (preview) previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
+        if (preview) previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
         setContent {
             NeonHome(
                 homePresses = homePresses.intValue,
@@ -51,7 +55,8 @@ class NeonHomeActivity : ComponentActivity() {
                 previewIcons = previewIcons,
                 previewTiles = previewTiles,
                 previewWake = previewWake,
-                previewBluetooth = previewBluetooth
+                previewBluetooth = previewBluetooth,
+                previewBluetoothList = previewBluetoothList
             )
         }
     }
@@ -72,6 +77,7 @@ class NeonHomeActivity : ComponentActivity() {
             tilesOf(intent)?.let { previewTiles = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
             previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
+            previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
         }
     }
 
@@ -93,5 +99,8 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The name of a Bluetooth device whose card to show, as if it had just been switched on. */
         const val EXTRA_BLUETOOTH = "bluetooth"
+
+        /** Names of made-up Bluetooth devices, separated by commas, for the Bluetooth corner. */
+        const val EXTRA_BLUETOOTH_LIST = "bluetoothlist"
     }
 }

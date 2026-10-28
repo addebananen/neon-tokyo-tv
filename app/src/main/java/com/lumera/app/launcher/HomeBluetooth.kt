@@ -40,6 +40,7 @@ import org.json.JSONObject
 /** What a paired device is, for the mark beside its name. */
 enum class BtKind(val glyph: Glyph) {
     Headphones(Glyph.Headphones),
+    Earbuds(Glyph.Earbuds),
     Speaker(Glyph.Speaker),
     Other(Glyph.Bluetooth)
 }
@@ -70,6 +71,31 @@ internal object BtRules {
 
     /** A card that went by itself, without a press, comes back sooner. */
     const val QUIET_MS = 10 * 60_000L
+
+    /** Two presses of Home this close together open the Bluetooth corner. */
+    const val DOUBLE_HOME_MS = 700L
+
+    /** How long the Bluetooth corner stays while nothing is pressed. */
+    const val CORNER_MS = 12_000
+
+    /** AirPods and other earbuds call themselves headphones; their names tell them apart. */
+    private val EARBUDS = Regex("airpods|earpods|earbud|buds|wf-|tws", RegexOption.IGNORE_CASE)
+
+    fun kindOf(name: String, deviceClass: Int, majorClass: Int): BtKind =
+        if (EARBUDS.containsMatchIn(name)) BtKind.Earbuds else kindOf(deviceClass, majorClass)
+
+    /** A made-up device for a preview, by its name alone. */
+    fun previewKind(name: String): BtKind = if (EARBUDS.containsMatchIn(name)) BtKind.Earbuds else BtKind.Speaker
+
+    /**
+     * The devices the Bluetooth corner lists for [profileId]: its own first, then the ones nobody
+     * took. Someone else's stay out, as they do from the cards.
+     */
+    fun corner(devices: List<BtDevice>, owners: Map<String, Set<String>>, profileId: String): List<BtDevice> {
+        val mine = devices.filter { profileId in owners[it.address].orEmpty() }
+        val free = devices.filter { owners[it.address].isNullOrEmpty() }
+        return mine + free
+    }
 
     fun kindOf(deviceClass: Int, majorClass: Int): BtKind = when (deviceClass) {
         BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES,
@@ -275,7 +301,7 @@ class HomeBluetooth(private val context: Context) {
                 BtDevice(
                     address = device.address,
                     name = nameOf(device),
-                    kind = BtRules.kindOf(bluetoothClass.deviceClass, bluetoothClass.majorDeviceClass),
+                    kind = BtRules.kindOf(nameOf(device), bluetoothClass.deviceClass, bluetoothClass.majorDeviceClass),
                     connected = device.address in connected
                 )
             }

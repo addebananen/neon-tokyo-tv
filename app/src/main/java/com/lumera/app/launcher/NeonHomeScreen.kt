@@ -220,7 +220,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null, previewBluetooth: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTiles: List<String>? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -378,6 +378,19 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val btMine = remember(btOwners, profile.id) { BtRules.mine(btOwners, profile.id) }
     LaunchedEffect(btMine) { bt.watch(btMine) }
     var btCard by remember { mutableStateOf<BtDevice?>(null) }
+    val btOn by bt.on.collectAsState()
+    val btPermitted by bt.permitted.collectAsState()
+    // Home pressed twice opens the Bluetooth corner: this profile's devices with Connect
+    var btCorner by remember { mutableStateOf(false) }
+    val lastHome = remember { longArrayOf(0L) }
+    val previewCorner = remember(previewBluetoothList) {
+        previewBluetoothList?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.mapIndexed { i, name ->
+            BtDevice("$PREVIEW_DEVICE$i", name, BtRules.previewKind(name), connected = false)
+        }
+    }
+    LaunchedEffect(previewCorner) { if (previewCorner != null) btCorner = true }
+    val ownCorner = remember(btDevices, btOwners, profile.id) { BtRules.corner(btDevices, btOwners, profile.id) }
+    val cornerDevices = previewCorner ?: ownCorner
     var showBluetooth by remember { mutableStateOf(false) }
     val btBefore = remember { arrayOf<Set<String>>(emptySet()) }
     LaunchedEffect(btNearby, btMine, btDevices) {
@@ -393,10 +406,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     }
     LaunchedEffect(btCard?.address) { if (btCard != null) sounds.wake() }
     LaunchedEffect(previewBluetooth) {
-        previewBluetooth?.let { btCard = BtDevice(PREVIEW_DEVICE, it, BtKind.Headphones, connected = false) }
+        previewBluetooth?.let { btCard = BtDevice(PREVIEW_DEVICE, it, BtRules.previewKind(it), connected = false) }
     }
     fun connectBluetooth(device: BtDevice) {
-        if (device.address == PREVIEW_DEVICE) return
+        if (device.address.startsWith(PREVIEW_DEVICE)) return
         val result = bt.connect(device.address)
         btConnectNote(result, device.name)?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     }
@@ -470,7 +483,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         repeat(10) {
             withFrameNanos { }
             // A console's or a device's card that just came has the focus, and keeps it
-            if (woke != null || btCard != null) return@LaunchedEffect
+            if (woke != null || btCard != null || btCorner) return@LaunchedEffect
             val target = when (tab) {
                 HomeTab.Home -> firstFavourite
                 HomeTab.Apps -> firstApp
@@ -498,6 +511,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     // Home pressed while the home screen shows: back to the start, as on other TV home screens
     LaunchedEffect(homePresses) {
         if (homePresses == 0) return@LaunchedEffect
+        val now = SystemClock.uptimeMillis()
+        val twice = now - lastHome[0] < BtRules.DOUBLE_HOME_MS
+        // A third press starts over rather than closing what the second opened
+        lastHome[0] = if (twice) 0L else now
+        btCorner = twice
         reopen = null
         drop()
         linking = null
@@ -510,7 +528,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         pinning = null
         changing = null
         tab = HomeTab.Home
-        focusFirst++
+        if (!twice) focusFirst++
     }
     BackHandler {
         if (tab == HomeTab.Home && onLeave != null) {
@@ -795,7 +813,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
             val btShown = remember { arrayOfNulls<BtDevice>(1) }
             btCard?.let { btShown[0] = it }
             AnimatedVisibility(
-                visible = btCard != null && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && pinning == null && changing == null,
+                visible = btCard != null && !btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && pinning == null && changing == null,
                 enter = fadeIn(tween(260)) + slideInHorizontally(tween(420, easing = FastOutSlowInEasing)) { it / 2 },
                 exit = fadeOut(tween(220)) + slideOutHorizontally(tween(260)) { it / 3 },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 34.dp, end = Side)
@@ -817,6 +835,44 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         }
                     )
                 }
+            }
+
+            // The Bluetooth corner, after Home pressed twice
+            AnimatedVisibility(
+                visible = btCorner && woke == null && lifted == null && linking == null && !showInputs && !showProfiles && !showUpdates && !showBluetooth && pinning == null && changing == null,
+                enter = fadeIn(tween(240)) + slideInHorizontally(tween(380, easing = FastOutSlowInEasing)) { it / 2 },
+                exit = fadeOut(tween(200)) + slideOutHorizontally(tween(240)) { it / 3 },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 34.dp, end = Side)
+            ) {
+                BluetoothCorner(
+                    devices = cornerDevices,
+                    nearby = btNearby,
+                    note = when {
+                        previewCorner != null -> null
+                        !bt.available -> "This TV has no Bluetooth."
+                        !btPermitted -> "Open All devices to let Neon Tokyo see them."
+                        !btOn -> "Bluetooth is off on the TV."
+                        cornerDevices.isEmpty() -> "No headphones or speakers of yours yet."
+                        else -> null
+                    },
+                    onConnect = { device ->
+                        btCorner = false
+                        if (device.address.startsWith(PREVIEW_DEVICE)) return@BluetoothCorner
+                        if (btOwners[device.address].isNullOrEmpty()) bt.take(device.address, profile.id, true)
+                        if (device.connected) HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                        else connectBluetooth(device)
+                        focusFirst++
+                    },
+                    onAll = {
+                        btCorner = false
+                        reopen = bluetoothPill
+                        showBluetooth = true
+                    },
+                    onDismiss = { hadFocus ->
+                        btCorner = false
+                        if (hadFocus) focusFirst++
+                    }
+                )
             }
         }
 

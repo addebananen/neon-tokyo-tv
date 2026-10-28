@@ -952,6 +952,18 @@ key BACK
 sleep 2
 shot bluetooth-card-away
 if screen_has "AirPods turned on"; then fail "Back did not put the Bluetooth card away"; fi
+# Home pressed twice opens the Bluetooth corner: this profile's devices, each with its own mark
+# and Connect, the first with the focus. The preview lists made-up devices
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es bluetoothlist "AirPods,JBL" >/dev/null 2>&1
+sleep 2
+shot bluetooth-corner
+corner_xml="$OUT/$(printf "%02d" "$step")-bluetooth-corner.xml"
+grep -q 'text="JBL"' "$corner_xml" 2>/dev/null || fail "the Bluetooth corner did not list the devices"
+label=$(focused_text < "$corner_xml" 2>/dev/null)
+case "$label" in *AirPods*) ;; *) fail "the Bluetooth corner does not have the focus on its first device ($label has it)" ;; esac
+key BACK
+sleep 2
+if screen_has "All devices"; then fail "Back did not put the Bluetooth corner away"; fi
 adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2

@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -415,5 +416,171 @@ private fun DeviceRow(
             }
         }
         UpdateButton(if (mine) "Mine ✓" else "Make mine", onClick = onMine)
+    }
+}
+
+/**
+ * The Bluetooth corner, opened by pressing Home twice: this profile's devices, each with its
+ * mark and Connect, for the times a device was on but its card never came. The first device
+ * takes the focus; Back or a while without a press put it away.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+internal fun BluetoothCorner(
+    devices: List<BtDevice>,
+    nearby: Set<String>,
+    note: String?,
+    onConnect: (BtDevice) -> Unit,
+    onAll: () -> Unit,
+    onDismiss: (hadFocus: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val look = LocalHomeLook.current
+    val color = look.accent2
+    val shape = RoundedCornerShape(16.dp)
+    val first = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
+    val dismiss by rememberUpdatedState(onDismiss)
+    // Each press starts the time again
+    var presses by remember { mutableStateOf(0) }
+    val left = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        for (attempt in 0 until 10) {
+            withFrameNanos { }
+            if (focused || runCatching { first.requestFocus() }.isSuccess) break
+        }
+    }
+    LaunchedEffect(presses) {
+        left.snapTo(1f)
+        left.animateTo(0f, tween(BtRules.CORNER_MS, easing = LinearEasing))
+        dismiss(focused)
+    }
+    BackHandler(enabled = focused) { dismiss(true) }
+
+    Column(
+        modifier = modifier
+            .width(330.dp)
+            .homePanel(look, shape)
+            .onFocusChanged { focused = it.hasFocus }
+            .onPreviewKeyEvent {
+                presses++
+                false
+            }
+            .focusGroup()
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)) {
+            NeonGlyph(Glyph.Bluetooth, color, Modifier.size(15.dp))
+            Spacer(Modifier.width(7.dp))
+            NeonText(
+                text = "Bluetooth",
+                style = TextStyle(
+                    fontFamily = look.font,
+                    fontWeight = if (look.glowingText) FontWeight.SemiBold else look.weight,
+                    fontStyle = look.fontStyle,
+                    fontSize = 15.sp,
+                    color = look.text,
+                    shadow = if (look.glowingText) Shadow(color.copy(alpha = 0.6f), blurRadius = 14f) else null
+                )
+            )
+        }
+        if (note != null) {
+            BasicText(
+                note,
+                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 11.5.sp, color = look.dim),
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+        devices.take(4).forEachIndexed { index, device ->
+            val lit = device.connected || device.address in nearby
+            CornerRow(
+                device = device,
+                status = when {
+                    device.connected -> "Connected"
+                    device.address in nearby -> "On, nearby"
+                    else -> null
+                },
+                lit = lit,
+                onClick = {
+                    presses++
+                    onConnect(device)
+                },
+                modifier = if (index == 0) Modifier.focusRequester(first) else Modifier
+            )
+        }
+        Row(Modifier.padding(top = 2.dp, start = 2.dp)) {
+            WakeButton(
+                "All devices",
+                color,
+                primary = false,
+                onClick = onAll,
+                modifier = if (devices.isEmpty()) Modifier.focusRequester(first) else Modifier
+            )
+        }
+        Spacer(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp)
+                .padding(top = 2.dp, bottom = 9.dp)
+                .height(2.dp)
+                .graphicsLayer {
+                    scaleX = left.value
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                }
+                .drawBehind {
+                    drawRect(Brush.horizontalGradient(listOf(color.copy(alpha = 0.15f), color, lerp(color, Color.White, 0.5f))))
+                }
+        )
+    }
+}
+
+/** A device in the corner: its mark, its name and what it is doing, and Connect. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun CornerRow(device: BtDevice, status: String?, lit: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val look = LocalHomeLook.current
+    val color = look.accent2
+    val shape = RoundedCornerShape(11.dp)
+    var focused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().height(52.dp).onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(shape = shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = look.text.copy(alpha = 0.06f),
+            contentColor = look.text,
+            focusedContainerColor = color.copy(alpha = 0.2f),
+            focusedContentColor = look.text
+        ),
+        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(1.5.dp, color), shape = shape))
+    ) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            NeonGlyph(device.kind.glyph, if (lit || focused) color else look.dim, Modifier.size(28.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                BasicText(
+                    device.name,
+                    style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = look.text),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (status != null) {
+                    BasicText(status, style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = color), maxLines = 1)
+                }
+            }
+            if (!device.connected) {
+                Box(
+                    Modifier
+                        .background(if (focused) color.copy(alpha = 0.45f) else color.copy(alpha = 0.16f), RoundedCornerShape(50))
+                        .padding(horizontal = 11.dp, vertical = 5.dp)
+                ) {
+                    BasicText("Connect", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = look.text))
+                }
+            } else {
+                Box(Modifier.size(7.dp).background(color, CircleShape))
+            }
+        }
     }
 }

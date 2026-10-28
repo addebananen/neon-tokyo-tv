@@ -65,6 +65,25 @@ class HomeBluetoothTest {
     }
 
     @Test
+    fun airPodsAndSpeakersGetTheirOwnMark() {
+        val headphones = BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES
+        val audio = BluetoothClass.Device.Major.AUDIO_VIDEO
+        assertEquals(BtKind.Earbuds, BtRules.kindOf("Adrian's AirPods Pro", headphones, audio))
+        assertEquals(BtKind.Earbuds, BtRules.kindOf("Galaxy Buds2", headphones, audio))
+        assertEquals(BtKind.Headphones, BtRules.kindOf("WH-1000XM5", headphones, audio))
+        assertEquals(BtKind.Speaker, BtRules.kindOf("JBL Flip 6", BluetoothClass.Device.AUDIO_VIDEO_LOUDSPEAKER, audio))
+    }
+
+    @Test
+    fun theCornerListsMineThenNobodysNeverHers() {
+        val free = "CC:00"
+        val devices = listOf(airpods, speaker, free).map { BtDevice(it, it, BtKind.Speaker, connected = false) }
+        val hers = mapOf(airpods to setOf("sara"), speaker to setOf("adrian"))
+        assertEquals(listOf(speaker, free), BtRules.corner(devices, hers, "adrian").map { it.address })
+        assertEquals(listOf(airpods, free), BtRules.corner(devices, hers, "sara").map { it.address })
+    }
+
+    @Test
     fun theCardSaysWhatCameOn() {
         assertEquals("AirPods turned on", btTitle("AirPods"))
         assertNull(btConnectNote(BtConnect.Helper, "AirPods"))
