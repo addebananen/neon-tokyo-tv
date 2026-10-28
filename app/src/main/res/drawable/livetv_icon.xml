@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <!-- A set with its two aerials, and a live dot on the screen -->
+  <path
+      android:pathData="M8,3L12,7L16,3M6.8,7H17.2C18.88,7 19.72,7 20.362,7.327C20.927,7.615 21.385,8.073 21.673,8.638C22,9.28 22,10.12 22,11.8V15.2C22,16.88 22,17.72 21.673,18.362C21.385,18.927 20.927,19.385 20.362,19.673C19.72,20 18.88,20 17.2,20H6.8C5.12,20 4.28,20 3.638,19.673C3.073,19.385 2.615,18.927 2.327,18.362C2,17.72 2,16.88 2,15.2V11.8C2,10.12 2,9.28 2.327,8.638C2.615,8.073 3.073,7.615 3.638,7.327C4.28,7 5.12,7 6.8,7Z"
+      android:strokeLineJoin="round"
+      android:strokeWidth="2"
+      android:fillColor="#00000000"
+      android:strokeColor="#ffffff"
+      android:strokeLineCap="round"/>
+  <path
+      android:pathData="M12,13.5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+      android:fillColor="#ffffff"/>
+</vector>
