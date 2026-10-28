@@ -107,3 +107,55 @@ enum class Glyph(pathData: String) {
     Offline("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67 M18 18 L82 82"),
     Note("M40 72 V22 L78 14 V64" + circle(30, 72, 10) + circle(68, 64, 10) + "M40 34 L78 26"),
     Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54");
+
+    /** The icon's outline on the 100 by 100 grid, made once. */
+    val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
+}
+
+private fun rect(x: Number, y: Number, w: Number, h: Number, r: Number): String {
+    val l = x.toFloat(); val t = y.toFloat(); val rx = r.toFloat()
+    val right = l + w.toFloat(); val bottom = t + h.toFloat()
+    return "M${l + rx} $t H${right - rx} A$rx $rx 0 0 1 $right ${t + rx} V${bottom - rx} " +
+        "A$rx $rx 0 0 1 ${right - rx} $bottom H${l + rx} A$rx $rx 0 0 1 $l ${bottom - rx} V${t + rx} " +
+        "A$rx $rx 0 0 1 ${l + rx} $t Z "
+}
+
+/** A cog wheel with [teeth] square teeth between radius [inner] and [outer]. */
+internal fun gear(cx: Float, cy: Float, outer: Float, inner: Float, teeth: Int): String {
+    val corners = teeth * 4
+    return (0 until corners).joinToString(" ", postfix = " Z ") { k ->
+        // Two corners out on a tooth, two in between, turned so a tooth points straight up
+        val angle = 2.0 * Math.PI * (k - 0.5) / corners - Math.PI / 2
+        val r = if (k % 4 < 2) outer else inner
+        val x = cx + r * Math.cos(angle)
+        val y = cy + r * Math.sin(angle)
+        (if (k == 0) "M" else "L") + String.format(Locale.ROOT, "%.2f %.2f", x, y)
+    }
+}
+
+private fun circle(cx: Number, cy: Number, r: Number): String {
+    val x = cx.toFloat(); val y = cy.toFloat(); val radius = r.toFloat()
+    return "M${x - radius} $y A$radius $radius 0 1 0 ${x + radius} $y A$radius $radius 0 1 0 ${x - radius} $y Z "
+}
+
+/** A neon icon filling its size: a 4 unit tube with a 10 unit glow at a fifth of its strength. */
+@Composable
+fun NeonGlyph(glyph: Glyph, color: Color, modifier: Modifier = Modifier) {
+    Spacer(
+        modifier.drawWithCache {
+            val k = size.minDimension / 100f
+            val left = (size.width - 100f * k) / 2f
+            val top = (size.height - 100f * k) / 2f
+            val glow = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val tube = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            onDrawBehind {
+                scale(k, k, pivot = Offset.Zero) {
+                    translate(left / k, top / k) {
+                        drawPath(glyph.path, color, alpha = 0.22f, style = glow)
+                        drawPath(glyph.path, color, style = tube)
+                    }
+                }
+            }
+        }
+    )
+}
