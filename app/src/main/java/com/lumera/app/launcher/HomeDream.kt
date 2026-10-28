@@ -126,8 +126,8 @@ class DreamFrame internal constructor(
                             minute = System.currentTimeMillis() / 60_000L
                         }
                     }
-                    val driftX by animateDpAsState((minute % 5 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsX")
-                    val driftY by animateDpAsState((minute / 5 % 4 * 4).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsY")
+                    val driftX by animateDpAsState((minute % 5 * 5).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsX")
+                    val driftY by animateDpAsState((minute / 5 % 4 * 4).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsY")
                     DreamWidgets(Modifier.padding(start = start, top = top).offset(driftX, driftY))
                 }
             }
@@ -255,7 +255,7 @@ private fun DreamClock(look: HomeLook) {
     )
     // A few dp further each minute, eased over seconds, so nothing stands still on the panel for hours
     val minute = (now / 60_000L).toInt()
-    val driftX by animateDpAsState((minute % 5 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockX")
+    val driftX by animateDpAsState((minute % 5 * 5).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockX")
     val driftY by animateDpAsState((minute / 5 % 4 * 5).dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamClockY")
     val locale = Locale.getDefault()
     val time = remember(now) { SimpleDateFormat(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm", locale).format(Date(now)) }
