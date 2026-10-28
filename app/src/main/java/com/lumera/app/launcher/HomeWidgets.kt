@@ -39,6 +39,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -263,11 +264,11 @@ internal fun WidgetStrip(
     val track = rememberTrack(WidgetKind.Music in shown)
     val net = rememberNetLink(WidgetKind.Network in shown)
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        shown.forEachIndexed { index, kind ->
-            Arrive(index) {
+        // Weather waits for its first reading rather than showing a blank, then slides in
+        shown.filter { it != WidgetKind.Weather || weather != null }.forEachIndexed { index, kind ->
+            key(kind) { Arrive(index) {
                 when (kind) {
                     WidgetKind.Weather -> weather?.let { w -> InfoChip(weatherGlyph(w), "${w.celsius}°", w.place) }
-                        ?: InfoChip(Glyph.Cloud, "–", null)
                     WidgetKind.Calendar -> InfoChip(Glyph.Calendar, "Week $week", null)
                     WidgetKind.Music -> track?.let { t -> InfoChip(Glyph.Note, t.title, t.artist, dim = !t.playing, wide = true) }
                         ?: InfoChip(Glyph.Note, "Nothing playing", null, dim = true)
@@ -279,7 +280,7 @@ internal fun WidgetStrip(
                         }
                     }
                 }
-            }
+            } }
         }
     }
 }
