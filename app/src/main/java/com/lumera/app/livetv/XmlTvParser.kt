@@ -9,17 +9,22 @@ import javax.xml.parsers.SAXParserFactory
 
 /**
  * Reads an XMLTV guide as it streams in. A provider's guide covers every channel for days and
- * can be a hundred megabytes, so only the channels in the list and the next hours are kept.
+ * can be a hundred megabytes, so only the channels in the list and the next hours are kept, and
+ * only the programmes before [detailUntil] keep their description: a big provider's guide with
+ * every description in it does not fit in the TV's memory.
  */
 object XmlTvParser {
 
     const val MAX_PER_CHANNEL = 16
+    /** Enough for the two lines the player shows under what is on now. */
+    const val MAX_DESCRIPTION = 240
 
     fun parse(
         input: InputStream,
         wanted: Set<String>,
         from: Long,
-        until: Long
+        until: Long,
+        detailUntil: Long = until
     ): Map<String, List<Programme>> {
         val out = HashMap<String, MutableList<Programme>>()
         val handler = object : DefaultHandler() {
@@ -31,6 +36,9 @@ object XmlTvParser {
             private var field: StringBuilder? = null
             private var title = ""
             private var desc = ""
+            private var detailed = false
+            // Many channels repeat the same titles ("News", "No information"); keep one copy of each
+            private val titles = HashMap<String, String>()
 
             override fun startElement(uri: String?, localName: String?, qName: String, attributes: Attributes) {
                 when (qName) {
@@ -43,11 +51,12 @@ object XmlTvParser {
                         if (stop <= from || start >= until) return
                         if ((out[id]?.size ?: 0) >= MAX_PER_CHANNEL) return
                         channel = id
+                        detailed = start < detailUntil
                         title = ""
                         desc = ""
                     }
                     "title" -> if (channel != null && title.isEmpty()) field = StringBuilder()
-                    "desc" -> if (channel != null && desc.isEmpty()) field = StringBuilder()
+                    "desc" -> if (channel != null && detailed && desc.isEmpty()) field = StringBuilder()
                 }
             }
 
@@ -57,8 +66,8 @@ object XmlTvParser {
 
             override fun endElement(uri: String?, localName: String?, qName: String) {
                 when (qName) {
-                    "title" -> field?.let { title = it.toString().trim(); field = null }
-                    "desc" -> field?.let { desc = it.toString().trim().take(400); field = null }
+                    "title" -> field?.let { title = it.toString().trim().let { t -> titles.getOrPut(t) { t } }; field = null }
+                    "desc" -> field?.let { desc = it.toString().trim().take(MAX_DESCRIPTION); field = null }
                     "programme" -> {
                         val id = channel ?: return
                         out.getOrPut(id) { ArrayList() } += Programme(start, stop, title.ifBlank { "No information" }, desc)

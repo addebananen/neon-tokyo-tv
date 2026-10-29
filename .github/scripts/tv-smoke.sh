@@ -653,6 +653,64 @@ else
     shot livetv-search
     screen_has "Neon Sport" || fail "searching for sport did not find Neon Sport"
     screen_has "Morning Neon" && fail "searching for sport still lists Neon One" || true
+    # A provider the size of a real one (40 000 channels, a 15 000 channel guide) froze the TV on
+    # "Tuning in the channels": change to it from Service settings and check the TV keeps up
+    key DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN
+    sleep 2
+    label=$(focused_label)
+    if [ "$label" != "Service settings" ]; then
+      fail "could not reach Service settings in Live TV, focus on: $label"
+    else
+      key DPAD_CENTER
+      sleep 2
+      key DPAD_DOWN
+      sleep 1
+      key DPAD_CENTER
+      sleep 3
+      shot livetv-big-setup
+      read -r ip port token < <(photo_address)
+      if [ -z "${token:-}" ]; then
+        fail "Change service did not open the setup dialog"
+      else
+        adb forward tcp:18082 tcp:"$port" >/dev/null
+        adb logcat -c
+        big_started=$(date +%s)
+        big=$(curl -s -m 30 -d kind=xtream -d server="10.0.2.2:$IPTV_PORT" -d user=big -d pass=tokyo "http://127.0.0.1:18082/$token")
+        echo "big login: $big"
+        adb forward --remove tcp:18082 >/dev/null 2>&1
+        sleep 4
+        shot livetv-big-loading
+        if wait_for "40000 channels" 240; then
+          echo "big provider: list shown after $(( $(date +%s) - big_started )) s" | tee "$OUT/livetv-big.txt"
+          shot livetv-big-list
+          # The guide comes in after the list; wait for it, then the list must still answer the remote
+          t=0
+          until adb logcat -d -s LiveTv:I | grep -q "Guide for"; do
+            [ "$t" -ge 240 ] && break
+            sleep 5
+            t=$((t + 5))
+          done
+          adb logcat -d -s LiveTv:I LiveTv:W | tee -a "$OUT/livetv-big.txt"
+          adb logcat -d -s LiveTv:I | grep -q "Guide for" || fail "the big provider's guide did not load (see livetv-big.txt)"
+          before=$(focused_label)
+          key DPAD_DOWN DPAD_DOWN DPAD_DOWN
+          sleep 2
+          after=$(focused_label)
+          echo "focus moved from '$before' to '$after'" | tee -a "$OUT/livetv-big.txt"
+          [ -n "$after" ] && [ "$after" != "$before" ] || fail "Live TV did not answer the remote with 40 000 channels"
+          key DPAD_RIGHT
+          sleep 2
+          shot livetv-big-channels
+          adb shell dumpsys meminfo "$PKG" 2>/dev/null | grep -E "TOTAL|Java Heap" | tee -a "$OUT/livetv-big.txt"
+        else
+          fail "40 000 channels from the big provider did not show within four minutes"
+          shot livetv-big-failed
+        fi
+        adb logcat -d 2>/dev/null | grep -E "ANR in $PKG|FATAL EXCEPTION|OutOfMemoryError" | tee -a "$OUT/livetv-big.txt" | grep -q . &&
+          fail "the big provider made the app stop answering or crash (see livetv-big.txt)" || true
+        alive livetv-big
+      fi
+    fi
   else
     fail "the Live TV channels did not load from the pretend provider"
     shot livetv-failed

@@ -10,6 +10,9 @@ import java.text.Normalizer
  */
 object SportChannels {
 
+    // First, so the sports below can use it while they are made
+    private val marks = Regex("""\p{M}""")
+
     class Sport(val key: String, val title: String, names: List<String>, programmes: List<String>, avoid: List<String> = emptyList()) {
         internal val names = words(names)
         internal val programmes = words(programmes)
@@ -45,13 +48,32 @@ object SportChannels {
 
     val all = listOf(hockey, football)
 
-    fun find(sport: Sport, channels: List<IptvChannel>, guide: Map<String, List<Programme>>, now: Long): List<IptvChannel> {
+    fun find(sport: Sport, channels: List<IptvChannel>, guide: Map<String, List<Programme>>, now: Long): List<IptvChannel> =
+        find(sport, channels, channels.map { PopularChannels.normalize(it.name) }, guide, now)
+
+    /**
+     * The same, with each channel's name already put through [PopularChannels.normalize]. A big
+     * provider lists tens of thousands of channels, many sharing one guide, so each guide's
+     * answer and each programme title is worked out once.
+     */
+    fun find(
+        sport: Sport,
+        channels: List<IptvChannel>,
+        normalized: List<String>,
+        guide: Map<String, List<Programme>>,
+        now: Long
+    ): List<IptvChannel> {
+        val titles = HashMap<String, Boolean>()
+        val byGuide = HashMap<String, Long?>()
         val ranked = ArrayList<Pair<Long, IptvChannel>>()
-        for (channel in channels) {
-            val match = guide[channel.epgId].orEmpty().filter { it.stop > now && sport.matches(it.title) }.minOfOrNull { it.start }
+        for (i in channels.indices) {
+            val channel = channels[i]
+            val match = if (channel.epgId.isEmpty()) null else byGuide.getOrPut(channel.epgId) {
+                guide[channel.epgId]?.filter { it.stop > now && titles.getOrPut(it.title) { sport.matches(it.title) } }?.minOfOrNull { it.start }
+            }
             when {
                 match != null -> ranked += maxOf(match, now) to channel
-                sport.namedIn(channel.name) -> ranked += Long.MAX_VALUE to channel
+                sport.namedInNormalized(normalized[i]) -> ranked += Long.MAX_VALUE to channel
             }
         }
         // Stable: within the same start time the provider's own order stays
@@ -63,13 +85,13 @@ object SportChannels {
         return programmes.any { it.containsMatchIn(text) } && avoid.none { it.containsMatchIn(text) }
     }
 
-    internal fun Sport.namedIn(name: String): Boolean {
-        val text = PopularChannels.normalize(name)
-        return names.any { it.containsMatchIn(text) } && avoid.none { it.containsMatchIn(text) }
-    }
+    internal fun Sport.namedIn(name: String): Boolean = namedInNormalized(PopularChannels.normalize(name))
+
+    private fun Sport.namedInNormalized(text: String): Boolean =
+        names.any { it.containsMatchIn(text) } && avoid.none { it.containsMatchIn(text) }
 
     private fun plain(text: String) =
-        Normalizer.normalize(text.lowercase(), Normalizer.Form.NFKD).replace(Regex("""\p{M}"""), "")
+        Normalizer.normalize(text.lowercase(), Normalizer.Form.NFKD).replace(marks, "")
 
     /** Whole words only, so "Hockeyallsvenskan" is not Allsvenskan and "Schlager" is not SHL. */
     private fun words(list: List<String>) = list.map { Regex("""(?<![a-z0-9])""" + Regex.escape(plain(it)) + """(?![a-z0-9])""") }
