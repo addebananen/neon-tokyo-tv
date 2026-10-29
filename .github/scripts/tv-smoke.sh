@@ -1421,6 +1421,26 @@ if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity
   fail "two quick presses of Back did not close the app"
 fi
 
+# --- Siri Remote bridge: runs as the shell user, sees Bluetooth, injects keys --
+# The emulator has no remote to pair, so this checks everything up to the remote itself
+if [ -n "${SIRI_LIB:-}" ] && [ -f "$SIRI_LIB" ]; then
+  adb shell mkdir -p /data/local/tmp/neon-siri
+  adb push "$SIRI_LIB" /data/local/tmp/neon-siri/libneon_siri.so > /dev/null
+  APK_PATH=$(adb shell pm path "$PKG" | head -1 | cut -d: -f2 | tr -d '\r')
+  adb shell "CLASSPATH=$APK_PATH app_process /system/bin com.lumera.app.siri.SiriBridge $PKG check" > "$OUT/siri-check.txt" 2>&1
+  cat "$OUT/siri-check.txt"
+  grep -q "rust engine: loaded" "$OUT/siri-check.txt" || fail "Siri Remote bridge: the Rust engine did not load as shell"
+  grep -q "package com.android.shell" "$OUT/siri-check.txt" || fail "Siri Remote bridge: does not speak for com.android.shell"
+  grep -q "key injection: true" "$OUT/siri-check.txt" || fail "Siri Remote bridge: cannot inject keys"
+  adb shell "CLASSPATH=$APK_PATH setsid app_process /system/bin com.lumera.app.siri.SiriBridge $PKG debug > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &"
+  sleep 4
+  adb shell "echo status | nc -w 2 127.0.0.1 47391" > "$OUT/siri-status.txt" 2>&1 || true
+  adb shell cat /data/local/tmp/neon-siri.log > "$OUT/siri-log.txt" 2>&1 || true
+  cat "$OUT/siri-status.txt" "$OUT/siri-log.txt"
+  grep -q '"version"' "$OUT/siri-status.txt" || fail "Siri Remote bridge: no status on 127.0.0.1:47391"
+  adb shell "echo stop | nc -w 2 127.0.0.1 47391" > /dev/null 2>&1 || true
+fi
+
 # --- Results ----------------------------------------------------------------
 adb shell dumpsys gfxinfo "$PKG" > "$OUT/gfxinfo.txt" 2>&1
 adb shell dumpsys meminfo "$PKG" > "$OUT/meminfo.txt" 2>&1

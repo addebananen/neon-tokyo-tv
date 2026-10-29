@@ -115,7 +115,8 @@ object SiriBridge : SiriLink.Listener {
         if (!ok) {
             SiriConfig.DIR.mkdirs()
             val copy = File(SiriConfig.DIR, "libneon_siri.so")
-            lib.inputStream().use { input -> copy.outputStream().use { input.copyTo(it) } }
+            // no library in the app (the emulator test strips it): one pushed there beforehand
+            if (lib.exists()) lib.inputStream().use { input -> copy.outputStream().use { input.copyTo(it) } }
             System.load(copy.absolutePath)
         }
     }
