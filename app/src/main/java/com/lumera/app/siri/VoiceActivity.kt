@@ -68,6 +68,11 @@ class VoiceActivity : ComponentActivity() {
     private val hint = mutableStateOf("Lyssnar …")
     private val level = mutableFloatStateOf(0f)
     private var recognizer: SpeechRecognizer? = null
+    /**
+     * The recognizer's end of the sound pipe. startListening only queues the request, so this
+     * stays open until the recognizer has it (closing it at once crashed with a bad descriptor).
+     */
+    private var sourceForRecognizer: ParcelFileDescriptor? = null
     private var tap = PcmTap()
     @Volatile private var socket: Socket? = null
     @Volatile private var done = false
@@ -133,6 +138,7 @@ class VoiceActivity : ComponentActivity() {
         attempt = n
         recognizer?.destroy()
         recognizer = null
+        closeSource()
         val rec = when (n) {
             0, 1 -> if (SpeechRecognizer.isRecognitionAvailable(this)) SpeechRecognizer.createSpeechRecognizer(this) else null
             2 -> if (SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) SpeechRecognizer.createOnDeviceSpeechRecognizer(this) else null
@@ -152,7 +158,7 @@ class VoiceActivity : ComponentActivity() {
         if (n != 1) intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "sv-SE")
         Log.i(TAG, "voice: recognizer ${listOf("TV, Swedish", "TV, its own language", "on-device")[n]}")
         rec.startListening(intent)
-        read.close()
+        sourceForRecognizer = read
         val out = ParcelFileDescriptor.AutoCloseOutputStream(write)
         val t = tap
         // what was said so far goes in first; a full pipe must not hold up the screen
@@ -214,7 +220,8 @@ class VoiceActivity : ComponentActivity() {
     }
 
     private val listener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {}
+        // the recognizer holds its own copy of the pipe now
+        override fun onReadyForSpeech(params: Bundle?) = closeSource()
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
@@ -236,6 +243,7 @@ class VoiceActivity : ComponentActivity() {
         }
 
         override fun onError(error: Int) {
+            closeSource()
             if (done) return
             Log.w(TAG, "voice recognizer error $error (attempt $attempt)")
             val next = when (error) {
@@ -264,6 +272,11 @@ class VoiceActivity : ComponentActivity() {
             // a Siri press always leads somewhere: when the voice cannot be understood, to search
             window.decorView.postDelayed({ if (searchInstead) openSearch(); if (!isFinishing) finish() }, 1800)
         }
+    }
+
+    private fun closeSource() {
+        runCatching { sourceForRecognizer?.close() }
+        sourceForRecognizer = null
     }
 
     /** The last voice search's outcome, for the Siri Remote settings page. */
@@ -344,6 +357,7 @@ class VoiceActivity : ComponentActivity() {
         tap.end()
         recognizer?.destroy()
         recognizer = null
+        closeSource()
     }
 
     override fun onDestroy() {
