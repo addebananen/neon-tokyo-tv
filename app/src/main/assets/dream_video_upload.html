@@ -114,7 +114,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   </section>
 
   <section id="check" class="view" hidden>
-    <div class="screen"><video id="clip" muted loop playsinline autoplay></video></div>
+    <div class="screen" id="screen"><video id="clip" muted loop playsinline autoplay></video></div>
     <div class="facts"><span id="name"></span><span id="size"></span></div>
     <button class="btn primary" id="send">Send to TV</button>
     <button class="btn link" id="again">Choose another</button>
@@ -123,9 +123,10 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
 
   <section id="sending" class="view" hidden>
     <h2>Sending to the TV</h2>
+    <div id="screenHere"></div>
     <div class="bar"><div id="bar"></div></div>
     <p class="pct" id="pct">0 %</p>
-    <p id="sendingText">Keep this page open until it's there.</p>
+    <p id="sendingText">Keep this page open until it's there. The screen stays on by itself.</p>
   </section>
 
   <section id="done" class="view" hidden>
@@ -141,6 +142,10 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     <p>Open it again on the TV, under Settings › Personalization › Screensaver.</p>
   </section>
 </main>
+<!-- Keeps the phone's screen on while it sends: a page from the TV's own address isn't allowed the
+     wake lock (that needs https), but a phone stays awake while a video plays on the page -->
+<video id="awake" muted loop playsinline preload="auto" aria-hidden="true"
+  style="position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none"></video>
 
 <script>
 (function () {
@@ -211,13 +216,31 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   var STALL = 45000;
   var bar = document.getElementById("bar"), pct = document.getElementById("pct");
   var sendingText = document.getElementById("sendingText");
-  var sendId = 0, wakeLock = null, waking = null, reached = 0;
+  var sendId = 0, wakeLock = null, waking = null, reached = 0, inflight = null, moved = 0;
+  var screenBox = document.getElementById("screen"), awake = document.getElementById("awake");
+  // Which video this is, so a page opened again (or the same video picked again) carries on where
+  // the TV has got to rather than starting over
+  var fileId = "";
+  function idOf(file) { return encodeURIComponent((file.name || "video") + ":" + file.size + ":" + (file.lastModified || 0)).slice(0, 200); }
+  // The video being sent plays above the bar while it goes, which keeps the phone awake too
+  function placeScreen(sending) {
+    var to = sending ? document.getElementById("screenHere") : document.getElementById("check");
+    if (screenBox.parentNode !== to) to.insertBefore(screenBox, sending ? null : to.firstChild);
+  }
+  function playQuietly(video) {
+    try { var p = video.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  }
   function progress(done, total) {
     var p = Math.min(100, Math.floor(done / total * 100));
     bar.style.width = p + "%";
     pct.textContent = p + " %  ·  " + megabytes(done) + " of " + megabytes(total);
   }
   function keepAwake() {
+    // A phone's screen goes dark after half a minute or so without a touch, and then it stops
+    // sending: a video playing on the page keeps it on, whatever the browser
+    if (!awake.src) awake.src = BASE + "/awake.mp4";
+    playQuietly(awake);
+    if (!clip.error) playQuietly(clip);
     try {
       if (navigator.wakeLock && document.visibilityState === "visible" && !wakeLock) {
         navigator.wakeLock.request("screen").then(function (lock) {
@@ -230,12 +253,15 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   function letSleep() {
     try { if (wakeLock) wakeLock.release(); } catch (e) {}
     wakeLock = null;
+    try { awake.pause(); } catch (e) {}
   }
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible" || current !== "sending") return;
     keepAwake();
-    // Back on the page after the phone slept: carry on at once rather than after the wait
+    // Back on the page after the phone slept: carry on at once rather than after the wait. A
+    // piece that was frozen while it slept is given up now rather than after the watchdog's wait
     if (waking) { var go = waking; waking = null; go(); }
+    else if (inflight && Date.now() - moved > 3000) inflight.abort();
   });
   function send(file, from, id, tries) {
     if (id !== sendId) return;
@@ -243,12 +269,15 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     if (from > reached) { reached = from; tries = 0; }
     var to = Math.min(file.size, from + piece);
     var xhr = new XMLHttpRequest();
-    var started = Date.now(), moved = started, watch = null;
-    function stop() { clearInterval(watch); }
+    var started = Date.now(), watch = null;
+    moved = started;
+    inflight = xhr;
+    function stop() { clearInterval(watch); if (inflight === xhr) inflight = null; }
     xhr.open("POST", BASE + "/piece");
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.setRequestHeader("X-Offset", String(from));
     xhr.setRequestHeader("X-Total", String(file.size));
+    xhr.setRequestHeader("X-Id", fileId);
     xhr.upload.onprogress = function (e) {
       moved = Date.now();
       if (id === sendId) progress(from + e.loaded, file.size);
@@ -259,7 +288,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
       var answer = null;
       try { answer = JSON.parse(xhr.responseText); } catch (e) {}
       if (xhr.status === 200 && answer) {
-        sendingText.textContent = "Keep this page open until it's there.";
+        sendingText.textContent = "Keep this page open until it's there. The screen stays on by itself.";
         var got = answer.received - from;
         if (got > 0 && answer.received === to) {
           var seconds = Math.max(0.2, (Date.now() - started) / 1000);
@@ -297,7 +326,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
       }).then(function (s) {
         if (id !== sendId) return;
         if (s.state === "checking" || s.state === "done") { arrived(); return; }
-        if (s.state !== "receiving") { send(file, 0, id, tries); return; }
+        if (s.state !== "receiving" || (s.id && s.id !== fileId)) { send(file, 0, id, tries); return; }
         send(file, s.received || 0, id, tries);
       }).catch(function () { again(file, id, tries + 1); });
     };
@@ -314,13 +343,15 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   }
   document.getElementById("send").addEventListener("click", function () {
     if (!chosen) return;
-    clip.pause();
     bar.style.width = "0";
     pct.textContent = "0 %";
-    sendingText.textContent = "Keep this page open until it's there.";
+    sendingText.textContent = "Keep this page open until it's there. The screen stays on by itself.";
+    placeScreen(true);
     show("sending");
+    // Started here, from the tap, as a phone only lets a page play a video it was asked to
     keepAwake();
     var id = ++sendId, file = chosen;
+    fileId = idOf(file);
     reached = 0;
     // The TV says how much room it has; the TV makes more if it can, so this only stops a video
     // that is far too big, before it is sent for nothing
@@ -328,6 +359,13 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
       if (id !== sendId) return;
       if (typeof s.room === "number" && file.size > s.room * 1.5 + 200 * 1048576) {
         failed("The TV has " + megabytes(s.room) + " free and this video is " + megabytes(file.size) + ". Trim it on your phone, or free up space on the TV.");
+      } else if ((s.state === "checking" || s.state === "done") && s.id === fileId) {
+        // This very video is already there: follow the TV while it finishes
+        arrived();
+      } else if (s.state === "receiving" && s.id === fileId && s.received > 0 && s.received < file.size) {
+        // This video already got partway: on from there
+        progress(s.received, file.size);
+        send(file, s.received, id, 0);
       } else {
         send(file, 0, id, 0);
       }
@@ -336,6 +374,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   function failed(text) {
     sendId++;
     letSleep();
+    placeScreen(false);
     show("check");
     message("checkMsg", text, true);
   }
@@ -352,7 +391,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
       react(s.state);
     }).catch(function () {
       misses++;
-      if (misses >= 3 && current !== "done") show("closed");
+      if (misses >= 3 && current !== "done") { letSleep(); show("closed"); }
     }).then(function () {
       if (current === "sending") timer = setTimeout(poll, 1000);
     });
@@ -360,7 +399,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   function react(state) {
     if (state === lastState) return;
     lastState = state;
-    if (state === "done") { letSleep(); show("done"); }
+    if (state === "done") { letSleep(); clip.pause(); show("done"); }
     else if (state === "error") failed("The TV can't play that video. Try another one, like one filmed with your phone.");
   }
 })();
