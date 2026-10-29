@@ -76,7 +76,7 @@ internal fun PinToHomeDialog(app: InstalledApp, slots: List<HomeSlot>, onPick: (
             runCatching { first.requestFocus() }
         }
         Column(
-            modifier = Modifier.width(720.dp).homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
+            modifier = Modifier.width(720.dp).panelIn().homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             PanelNote("HOME", look)
@@ -148,7 +148,7 @@ internal fun ChangeHomeTileDialog(
             runCatching { first.requestFocus() }
         }
         Column(
-            modifier = Modifier.width(760.dp).homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
+            modifier = Modifier.width(760.dp).panelIn().homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             PanelNote("HOME", look)
@@ -239,7 +239,7 @@ internal fun HiddenAppsDialog(apps: List<InstalledApp>, onShow: (InstalledApp) -
             runCatching { first.requestFocus() }
         }
         Column(
-            modifier = Modifier.width(760.dp).homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
+            modifier = Modifier.width(760.dp).panelIn().homePanel(look, RoundedCornerShape(18.dp)).padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             PanelNote("ALL APPS", look)

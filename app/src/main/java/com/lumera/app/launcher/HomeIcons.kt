@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
@@ -88,7 +89,11 @@ internal val LocalIconPack = compositionLocalOf { IconPack.Neon }
 
 /** The apps' own icons and banners, read from the TV once and kept while the home screen runs. */
 internal object AppArt {
-    private val cache = LruCache<String, ImageBitmap>(96)
+    // Kept by size rather than by count: a pack of wide banners on All apps is a megabyte an app,
+    // and a TV with 2.4 GB has none to spare for pictures far off the screen
+    private val cache = object : LruCache<String, ImageBitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: ImageBitmap) = value.asAndroidBitmap().byteCount
+    }
 
     fun cached(packageName: String, banner: Boolean): ImageBitmap? = cache.get(key(packageName, banner))
 
@@ -112,10 +117,10 @@ internal object AppArt {
                     val whole = Bitmap.createBitmap(288, 288, Bitmap.Config.ARGB_8888)
                     front.setBounds(0, 0, 288, 288)
                     front.draw(Canvas(whole))
-                    Bitmap.createBitmap(whole, 48, 48, 192, 192)
+                    Bitmap.createBitmap(whole, 48, 48, 192, 192).also { whole.recycle() }
                 }.getOrNull()
             }
-            image?.asImageBitmap()?.also { cache.put("s:$packageName", it) }
+            image?.ready()?.also { cache.put("s:$packageName", it) }
         }
     }
 
@@ -130,8 +135,14 @@ internal object AppArt {
                 else pm.getApplicationIcon(packageName)
             }.getOrNull()
             val image = drawable?.let { runCatching { toBitmap(it, if (banner) 640 else 192, if (banner) 360 else 192) }.getOrNull() }
-            image?.asImageBitmap()?.also { cache.put(key, it) }
+            image?.ready()?.also { cache.put(key, it) }
         }
+    }
+
+    /** Sent to the graphics chip now, off the main thread, so the first frame that shows it doesn't wait for it. */
+    private fun Bitmap.ready(): ImageBitmap {
+        prepareToDraw()
+        return asImageBitmap()
     }
 
     private fun key(packageName: String, banner: Boolean) = if (banner) "b:$packageName" else "i:$packageName"
