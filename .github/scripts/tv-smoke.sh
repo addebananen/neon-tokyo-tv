@@ -292,6 +292,35 @@ video_from_phone() {
   return 0
 }
 
+# video_from_phone_page: a large phone video, sent by the real upload page in a real browser at an
+# address that, like the TV's own, is not "secure" (so the page gets no screen wake lock), thrown
+# away halfway and picked again. The TV must end up with it whole, made 1920x1080 for its screen
+video_from_phone_page() {
+  local ip port token video
+  read -r ip port token < <(photo_address)
+  if [ -z "${token:-}" ]; then fail "the video dialog shows no address the second time"; return 1; fi
+  adb forward tcp:18082 tcp:"$port" >/dev/null
+  if ! command -v ffmpeg >/dev/null; then fail "no ffmpeg on the test machine to make a large video"; return 1; fi
+  video="$OUT/phone-video.mp4"
+  # An upright phone film at 60 frames a second, about 250 MB: noise keeps it from squeezing
+  ffmpeg -loglevel error -y -f lavfi -i "testsrc2=s=720x1280:r=60,noise=alls=50:allf=t+u" \
+    -f lavfi -i "sine=frequency=440:sample_rate=48000" -t 5 -c:v libx264 -preset ultrafast -crf 6 \
+    -pix_fmt yuv420p -c:a aac -shortest "$video"
+  echo "large phone video: $(stat -c %s "$video") bytes"
+  adb logcat -c
+  NODE_PATH="${PHONE_NODE_PATH:-}" timeout 600 node "$(dirname "$0")/phone-page-test.js" \
+    "http://tv.lan:18082/$token" "$video" "http://127.0.0.1:18082/$token/status" 2>&1 | tee "$OUT/phone-page.txt"
+  grep -q "^FAIL" "$OUT/phone-page.txt" && sed -n 's/^FAIL: //p' "$OUT/phone-page.txt" | while read -r why; do fail "phone page: $why"; done
+  grep -q "page ends on \"done\"" "$OUT/phone-page.txt" || fail "the phone page never finished sending the large video"
+  if ! wait_for "Your video is on" 60; then fail "the TV never took the large video"; rm -f "$video"; return 1; fi
+  made=$(adb logcat -d -s DreamVideoShrink:I | grep -o "shrunk .*" | tail -n 1)
+  echo "large video made: ${made:-nothing}"
+  echo "$made" | grep -q "as 1920x1080" || fail "the large upright video was not made 1920x1080 for the TV (${made:-not made})"
+  rm -f "$video"
+  adb forward --remove tcp:18082 >/dev/null 2>&1
+  return 0
+}
+
 # hold_ok <seconds>: holds OK down like a thumb on the remote. `input keyevent` can only tap or
 # long press, the shell may not write /dev/input, and the emulator console's keys never arrive
 # without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
@@ -687,6 +716,23 @@ if focus_down_to "Preview" 8; then
         sleep 2
         screen_has "Change video" || fail "Settings offers no Change video once a video is on"
         shot settings-video
+        # The same, once more, with a large video from the real phone page
+        key DPAD_DOWN
+        sleep 1
+        # Down lands under the row's focused button: step left first, then along to Change video
+        for _ in 1 2; do [ "$(focused_label)" = "Change video" ] && break; key DPAD_LEFT; sleep 0.8; done
+        if focus_right_to "Change video" 3; then
+          key DPAD_CENTER
+          if wait_for "Your own video" 12; then
+            if video_from_phone_page; then shot video-large-ready; fi
+            key BACK
+            sleep 3
+          else
+            fail "Change video did not open the video dialog"
+          fi
+        else
+          fail "could not reach Change video"
+        fi
       fi
     else
       fail "Your video did not open the video dialog"

@@ -64,6 +64,7 @@ import com.lumera.app.dream.DreamVideo
 import com.lumera.app.dream.DreamVideoShrink
 import com.lumera.app.dream.NeonDreamPreviewActivity
 import com.lumera.app.dream.NeonDreamStyle
+import com.lumera.app.launcher.OwnVideos
 import com.lumera.app.remote_input.DreamVideoServerManager
 import com.lumera.app.remote_input.DreamVideoUploadServer
 import com.lumera.app.remote_input.ServerInfo
@@ -107,6 +108,7 @@ fun DreamVideoDialog(
     var shrinking by remember { mutableStateOf<Float?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
+    var removed by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         val info = serverManager.startServer(context, object : DreamVideoUploadServer.Listener {
@@ -150,6 +152,8 @@ fun DreamVideoDialog(
                         serverManager.state = DreamVideoUploadServer.STATE_DONE
                         frame = shown.asImageBitmap()
                         onVideoSet()
+                        // Never more than two of your own on the TV: older ones nothing plays go first
+                        removed = withContext(Dispatchers.IO) { OwnVideos.tidy(context, target ?: DreamVideo.file(context)) }
                     }
                 }
             }
@@ -201,6 +205,7 @@ fun DreamVideoDialog(
                     VideoReady(
                         frame = shown,
                         background = background,
+                        removed = removed,
                         onPreview = {
                             context.startActivity(Intent(context, NeonDreamPreviewActivity::class.java))
                         },
@@ -287,13 +292,19 @@ private fun VideoWaiting(
                 PhotoStepRow(1, "Scan the code with your phone's camera", done = phoneConnected)
                 PhotoStepRow(2, "Choose a video", done = arriving)
                 PhotoStepRow(3, "Send it to the TV", done = checking)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Made 1080p at up to 60 fps for the TV. It keeps two videos of your own; older ones go.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NeonPalette.Lilac.copy(alpha = 0.75f)
+                )
+                Spacer(Modifier.height(10.dp))
                 if (progress != null && !checking) {
                     UploadBar(progress)
                 } else {
                     StatusLine(
                         text = when {
-                            shrinking != null -> "Making it lighter for the TV…  ${(shrinking * 100).toInt()}%"
+                            shrinking != null -> "Making it right for the TV, 1080p at up to 60 fps…  ${(shrinking * 100).toInt()}%"
                             checking -> "Checking that it plays…"
                             note != null -> note
                             phoneConnected -> "Phone connected. Choose a video there."
@@ -344,7 +355,7 @@ private fun UploadBar(progress: Float) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            if (stalled) "Waiting for your phone… keep the video page open on it  ·  ${(shown * 100).toInt()} %"
+            if (stalled) "Waiting for your phone… if its screen went dark, wake it and it carries on  ·  ${(shown * 100).toInt()} %"
             else "Getting your video… ${(shown * 100).toInt()} %",
             style = MaterialTheme.typography.bodyMedium,
             color = if (stalled) NeonPalette.Sun else NeonPalette.Cyan
@@ -356,6 +367,7 @@ private fun UploadBar(progress: Float) {
 private fun VideoReady(
     frame: ImageBitmap,
     background: Boolean,
+    removed: Int,
     onPreview: () -> Unit,
     onDone: () -> Unit
 ) {
@@ -418,6 +430,15 @@ private fun VideoReady(
                 style = MaterialTheme.typography.bodyLarge,
                 color = NeonPalette.Lilac
             )
+            if (removed > 0) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    if (removed == 1) "The TV keeps two videos of your own, so an older one was removed."
+                    else "The TV keeps two videos of your own, so $removed older ones were removed.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NeonPalette.Lilac.copy(alpha = 0.8f)
+                )
+            }
             Spacer(Modifier.height(30.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 // A background shows as soon as the dialog closes, so it has nothing to preview
