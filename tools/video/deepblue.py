@@ -9,7 +9,7 @@ on as before and it is encoded in HEVC.
 At about 4 s a frame on four cores it was run in three parts of 1000 frames, joined with
 ffmpeg's concat demuxer (-c copy).
 
-grade.npz holds the shade as out = a * in + b per pixel (fitted at 240x135 against the old
+grade.npz (deepblue-grade.npz here) holds the shade as out = a * in + b per pixel (fitted at 240x135 against the old
 1080p film, smoothed here). Needs numpy, opencv-python-headless, onnx, onnxruntime and ffmpeg."""
 import sys, os, subprocess, time
 import numpy as np, cv2
