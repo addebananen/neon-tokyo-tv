@@ -36,6 +36,10 @@ class NeonHomeActivity : ComponentActivity() {
     // And in a remix of their colours
     private var previewTint by mutableStateOf<IconTint?>(null)
 
+    // And in another glass, and laid out otherwise
+    private var previewGlass by mutableStateOf<HomeGlass?>(null)
+    private var previewLayout by mutableStateOf<Set<String>?>(null)
+
     // And with other apps on the Home row, without changing the ones Adrian put there
     private var previewTiles by mutableStateOf<List<String>?>(null)
 
@@ -121,6 +125,8 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
         if (preview) previewTint = intent.getStringExtra(EXTRA_TINT)?.let(IconTint::of)
         if (preview) previewTiles = tilesOf(intent)
+        if (preview) previewGlass = HomeGlass.of(intent.getStringExtra(EXTRA_GLASS))
+        if (preview) previewLayout = layoutOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         HomeWidgets.preview(if (preview) widgetsOf(intent) else null)
         if (preview) previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
@@ -133,6 +139,8 @@ class NeonHomeActivity : ComponentActivity() {
                 previewIcons = previewIcons,
                 previewTint = previewTint,
                 previewTiles = previewTiles,
+                previewGlass = previewGlass,
+                previewLayout = previewLayout,
                 previewWake = previewWake,
                 previewBluetooth = previewBluetooth,
                 previewBluetoothList = previewBluetoothList
@@ -149,6 +157,8 @@ class NeonHomeActivity : ComponentActivity() {
             previewIcons = null
             previewTint = null
             previewTiles = null
+            previewGlass = null
+            previewLayout = null
             HomeWidgets.preview(null)
             homePresses.intValue++
         } else {
@@ -157,6 +167,8 @@ class NeonHomeActivity : ComponentActivity() {
             intent.getStringExtra(EXTRA_ICONS)?.let { previewIcons = IconPack.of(it) }
             intent.getStringExtra(EXTRA_TINT)?.let { previewTint = IconTint.of(it) }
             tilesOf(intent)?.let { previewTiles = it }
+            HomeGlass.of(intent.getStringExtra(EXTRA_GLASS))?.let { previewGlass = it }
+            layoutOf(intent)?.let { previewLayout = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
             widgetsOf(intent)?.let { HomeWidgets.preview(it) }
             previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
@@ -173,6 +185,9 @@ class NeonHomeActivity : ComponentActivity() {
     private fun tilesOf(intent: Intent): List<String>? =
         intent.getStringExtra(EXTRA_TILES)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
 
+    private fun layoutOf(intent: Intent): Set<String>? =
+        intent.getStringExtra(EXTRA_LAYOUT)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+
     companion object {
         /** The key of a [HomeStyle] to show a preview in. */
         const val EXTRA_STYLE = "style"
@@ -182,6 +197,15 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The key of an [IconTint] to show the icons of a preview in. */
         const val EXTRA_TINT = "tint"
+
+        /** The key of a [HomeGlass] to show a preview in. */
+        const val EXTRA_GLASS = "glass"
+
+        /**
+         * How to lay a preview out, separated by commas: down (Watch & listen at the foot),
+         * consoles (on Home too), square (icons) and names (all the time); a word left out is off.
+         */
+        const val EXTRA_LAYOUT = "layout"
 
         /** The packages of the apps to show on the Home row of a preview, separated by commas. */
         const val EXTRA_TILES = "tiles"

@@ -25,7 +25,8 @@ enum class Glyph(pathData: String) {
     YtMusic(circle(50, 50, 32) + circle(50, 50, 19) + "M45 42 L58 50 L45 58 Z"),
     Spotify(circle(50, 50, 33) + "M31 40 Q50 33 70 42 M34 51 Q50 45 66 53 M37 61 Q50 57 62 63"),
     Stremio("M50 15 L85 50 L50 85 L15 50 Z M44 38 L61 50 L44 62 Z"),
-    NeonTokyo("M24 60 A26 26 0 0 1 76 60 M29 49 H71 M26 55 H74 M12 66 H88 M44 66 L34 88 M56 66 L66 88 M24 80 H76"),
+    // Tokyo Tower: the mast, the legs bowing out to the arch at its foot, and its two decks
+    NeonTokyo("M50 8 V21 M50 21 Q46.7 56.4 30.2 89.6 M50 21 Q53.3 56.4 69.8 89.6 M41.7 41.7 H58.3 M34.6 64.6 H65.4 M38.5 89.6 Q50 75 61.5 89.6"),
     Tv(rect(16, 34, 68, 48, 12) + rect(24, 42, 40, 32, 7) + "M40 34 L30 16 M60 34 L70 16 M71 62 H77" + circle(74, 50, 2.5f)),
     Parcel("M20 50 L50 62 L80 50 V76 L50 88 L20 76 Z M50 62 V88 M20 50 L12 40 M80 50 L88 40" + circle(50, 28, 14) + "M46 21 L57 28 L46 35 Z"),
     Castle(
@@ -141,21 +142,30 @@ private fun circle(cx: Number, cy: Number, r: Number): String {
     return "M${x - radius} $y A$radius $radius 0 1 0 ${x + radius} $y A$radius $radius 0 1 0 ${x - radius} $y Z "
 }
 
-/** A neon icon filling its size: a 4 unit tube with a 10 unit glow at a fifth of its strength. */
+/**
+ * A neon icon filling its size: a 4 unit tube with a 10 unit glow at a fifth of its strength, or
+ * [plain], a firmer line with no glow, as signs on glass. [color] is read as the line is drawn.
+ */
 @Composable
-fun NeonGlyph(glyph: Glyph, color: Color, modifier: Modifier = Modifier) {
+fun NeonGlyph(glyph: Glyph, color: Color, modifier: Modifier = Modifier, plain: Boolean = false) {
+    NeonGlyph(glyph, { color }, modifier, plain)
+}
+
+@Composable
+fun NeonGlyph(glyph: Glyph, color: () -> Color, modifier: Modifier = Modifier, plain: Boolean = false) {
     Spacer(
         modifier.drawWithCache {
             val k = size.minDimension / 100f
             val left = (size.width - 100f * k) / 2f
             val top = (size.height - 100f * k) / 2f
             val glow = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            val tube = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val tube = Stroke(width = if (plain) 6.5f else 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             onDrawBehind {
+                val c = color()
                 scale(k, k, pivot = Offset.Zero) {
                     translate(left / k, top / k) {
-                        drawPath(glyph.path, color, alpha = 0.22f, style = glow)
-                        drawPath(glyph.path, color, style = tube)
+                        if (!plain) drawPath(glyph.path, c, alpha = 0.22f, style = glow)
+                        drawPath(glyph.path, c, style = tube)
                     }
                 }
             }

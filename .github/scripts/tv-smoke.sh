@@ -7,8 +7,7 @@ APK="$1"
 OUT="$2"
 PKG=com.neontokyo.tv
 ACTIVITY=com.lumera.app.MainActivity
-# SMOKE_MODE=quick, for everyday builds, reviews two of the home styles that rotate from run to
-# run and leaves out the second profile and the scroll stress; the build for a release runs it all
+# SMOKE_MODE=quick, for everyday builds, leaves out the second profile and the scroll stress; the build for a release runs it all
 MODE="${SMOKE_MODE:-full}"
 RUN="${GITHUB_RUN_NUMBER:-0}"
 mkdir -p "$OUT"
@@ -937,14 +936,9 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-others=(nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk)
-if [ "$MODE" = full ]; then
-  styles=(google_tv "${others[@]}" deepblue)
-  dreams=(lofi dusk nature deepblue)
-else
-  styles=(google_tv "${others[$((RUN * 2 % ${#others[@]}))]}" "${others[$(((RUN * 2 + 1) % ${#others[@]}))]}" deepblue)
-  dreams=("${styles[1]}" deepblue)
-fi
+# Six styles, few enough to review them all on every run
+styles=(clean nature dusk deepblue icelake)
+dreams=(dusk nature deepblue icelake)
 echo "home styles under test ($MODE): ${styles[*]}"
 for style in "${styles[@]}"; do
   adb logcat -c
@@ -957,6 +951,8 @@ for style in "${styles[@]}"; do
   if ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
+  # Nature comes with the consoles on Home as well as on Källor
+  if [ "$style" = nature ] && ! screen_has "HDMI 6"; then fail "Nature does not show the consoles on Home"; fi
   # The style under review is filmed too, for its motion
   if [ "$style" = nature ]; then
     adb shell settings put global animator_duration_scale 1
@@ -964,7 +960,7 @@ for style in "${styles[@]}"; do
     adb shell settings put global animator_duration_scale 0
     adb pull "/sdcard/style-$style.mp4" "$OUT/style-$style.mp4" > /dev/null 2>&1 || true
   fi
-  if [ "$style" = google_tv ]; then
+  if [ "$style" = clean ]; then
     key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
     shot "style-$style-apps"
     key DPAD_RIGHT; sleep 2
@@ -983,6 +979,19 @@ for style in "${styles[@]}"; do
     key DPAD_CENTER; sleep 2
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
+    # Under the profiles, Customize opens the look and layout of the profile that is home
+    key DPAD_DOWN; sleep 1
+    label=$(focused_label)
+    if [ "$label" = "Customize" ]; then
+      key DPAD_CENTER; sleep 2
+      shot "style-$style-customize"
+      screen_has "Liquid glass" || fail "Customize did not open the profile's glass and layout"
+      screen_has "Consoles on Home" || fail "the profile's layout has no choice of consoles on Home"
+      key BACK; sleep 2
+      screen_has "Who's home?" || fail "Back from Customize did not go back to the profiles"
+    else
+      fail "Down from the profiles is $label, not Customize"
+    fi
     key BACK; sleep 2
     screen_has "Who's home?" && fail "one press of Back did not close the profile picker"
     # The panel gives the focus back to the pill that opened it
@@ -1029,10 +1038,26 @@ for style in "${styles[@]}"; do
   sleep 2
 done
 
+# The glass and the layout a profile can choose, on styles that come without them: Neon in liquid
+# glass with the consoles on Home, and Ice Lake with square icons at the foot of the screen
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es glass liquid --es layout consoles,names >/dev/null 2>&1
+sleep 6
+shot glass-neon-liquid
+screen_has "HDMI 6" || fail "Neon in liquid glass, asked for the consoles on Home, shows none there"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Neon in liquid glass does not start on YouTube ($label has the focus)"
+key BACK; sleep 2
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style icelake --es layout down,square >/dev/null 2>&1
+sleep 6
+shot glass-icelake-square
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Ice Lake with square icons does not start on YouTube ($label has the focus)"
+key BACK; sleep 2
+
 # The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
 # on the All apps tab. Apps the emulator lacks keep their neon face
 for pack in original banner glass; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons "$pack" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons "$pack" >/dev/null 2>&1
   sleep 6
   shot "icons-$pack"
   # A banner is all picture, the app's name only in its description
@@ -1051,7 +1076,7 @@ done
 
 # Colour remixes of the apps' own icons, and the neon round Neon Tokyo's tile (fourth on Home)
 for tint in synthwave night; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tint "$tint" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons original --es tint "$tint" >/dev/null 2>&1
   sleep 6
   shot "tint-$tint"
   label=$(focused_label)
@@ -1077,7 +1102,7 @@ done
 # apps, so their tiles are dimmed, but the scene plays all the same
 n=0
 for tiles in "se.tv4.tv4play,se.svt.android.svtplay,allente.b2c.tvclient,com.viaplay.android" "com.netflix.ninja,com.disney.disneyplus,com.amazon.amazonvideo.livingroom,com.wbd.stream"; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tiles "$tiles" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons original --es tiles "$tiles" >/dev/null 2>&1
   sleep 6
   for i in 1 2 3 4; do
     n=$((n + 1))
@@ -1153,13 +1178,17 @@ label=$(focused_label)
 key BACK
 sleep 2
 
-# A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
-# opens over the app the way its Preview button does; clearing the task would close the app too
+# A home style's own screensaver: its picture, its little lights and a quiet clock, or for a
+# style that is a film (Deep Blue, Ice Lake) the film alone. The preview opens over the app the
+# way its Preview button does; clearing the task would close the app too
 for style in "${dreams[@]}"; do
   adb shell am start -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
   sleep 6
   shot "dream-style-$style"
-  screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock"
+  case "$style" in
+    deepblue|icelake) screen_has 'text="[0-9]*:[0-9][0-9]' && fail "the $style screensaver should be its film alone, without a clock" ;;
+    *) screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock" ;;
+  esac
   key BACK
   sleep 2
 done

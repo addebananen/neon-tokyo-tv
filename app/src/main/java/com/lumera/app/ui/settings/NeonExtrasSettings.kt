@@ -99,10 +99,10 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
     SettingRow("Screensaver") {
         Column {
             val scene = when (dreamStyle) {
-                NeonDreamStyle.HOME -> "Home style: the picture and motion of the style on Neon Home, under a quiet clock, or the video a home profile sent for it. Neon gets the city drive."
-                NeonDreamStyle.SKYLINE -> "Skyline: the Neon Tokyo night, a neon clock and shooting stars."
+                NeonDreamStyle.HOME -> "Home style: the picture and motion of the style on Neon Home, under a quiet clock, or the video a home profile sent for it. Deep Blue and Ice Lake play their film alone; Neon gets the city drive."
+                NeonDreamStyle.SKYLINE -> "Skyline: the Neon Tokyo night, a neon clock and shooting stars. Deep Blue and Ice Lake play their own film instead."
                 NeonDreamStyle.VIDEO -> "Your video: it plays on a loop, without sound, whenever the TV rests."
-                else -> "City drive: a car cruising an endless neon Tokyo, district after district, rain and all, under a clock that says you'll be back soon."
+                else -> "City drive: a car cruising an endless neon Tokyo, district after district, rain and all, under a clock that says you'll be back soon. Deep Blue and Ice Lake play their own film instead."
             }
             Text(
                 if (dreamActive) "$scene It is your screensaver." else "$scene The TV setup script makes it your screensaver.",
