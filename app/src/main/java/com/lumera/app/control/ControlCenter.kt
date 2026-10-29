@@ -236,6 +236,7 @@ class ControlCenter(private val service: AccessibilityService, private val actio
             return true
         }
         if (code == KeyEvent.KEYCODE_HOME) return onHome(event)
+        if (code == KeyEvent.KEYCODE_SETTINGS) return onSettings(event)
         // The last minute before the sleep timer turns the TV off: any button keeps it on
         if (warning != null && action == KeyEvent.ACTION_DOWN && !isOpen) {
             setSleep(0, quiet = true)
@@ -293,6 +294,21 @@ class ControlCenter(private val service: AccessibilityService, private val actio
                 true
             }
         }
+    }
+
+    /**
+     * The remote's Settings button opens and closes the Control Center, a press away: Google TV
+     * keeps a held Home for itself on some remotes. The TV's settings are one button on the panel.
+     */
+    private fun onSettings(event: KeyEvent): Boolean? {
+        if (!OverlayPrefs.controlCenter(service)) return null
+        if (power?.isInteractive == false) return null
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (model.poweringOff) return true
+            lastKey = SystemClock.uptimeMillis()
+            toggle()
+        }
+        return true
     }
 
     fun toggle() = if (isOpen) close() else open()
