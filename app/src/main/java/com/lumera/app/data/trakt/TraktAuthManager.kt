@@ -143,6 +143,12 @@ class TraktAuthManager @Inject constructor(
 
     // ── Device Code Auth Flow ──
 
+    // Trakt apps created since Oct 2026 get no client secret (the device code proves possession),
+    // and Trakt rejects an empty one, so only send it when the build carries one
+    private fun withClientSecret(vararg fields: Pair<String, String>): Map<String, String> =
+        if (BuildConfig.TRAKT_CLIENT_SECRET.isBlank()) mapOf(*fields)
+        else mapOf(*fields, "client_secret" to BuildConfig.TRAKT_CLIENT_SECRET)
+
     suspend fun startDeviceAuth() {
         _authState.value = DeviceAuthState.Idle
         try {
@@ -176,10 +182,9 @@ class TraktAuthManager @Inject constructor(
 
             try {
                 val response = traktApi.pollToken(
-                    mapOf(
+                    withClientSecret(
                         "code" to deviceCode.deviceCode,
-                        "client_id" to BuildConfig.TRAKT_CLIENT_ID,
-                        "client_secret" to BuildConfig.TRAKT_CLIENT_SECRET
+                        "client_id" to BuildConfig.TRAKT_CLIENT_ID
                     )
                 )
 
@@ -218,12 +223,9 @@ class TraktAuthManager @Inject constructor(
         val refreshToken = getRefreshToken() ?: return null
         return try {
             val response = traktApi.refreshToken(
-                mapOf(
+                withClientSecret(
                     "refresh_token" to refreshToken,
                     "client_id" to BuildConfig.TRAKT_CLIENT_ID,
-                    "client_secret" to BuildConfig.TRAKT_CLIENT_SECRET,
-                    // Must match the Trakt app's registered redirect; development apps only accept localhost
-                    "redirect_uri" to "http://localhost",
                     "grant_type" to "refresh_token"
                 )
             )
@@ -254,10 +256,9 @@ class TraktAuthManager @Inject constructor(
         if (token != null) {
             try {
                 traktApi.revokeToken(
-                    mapOf(
+                    withClientSecret(
                         "token" to token,
-                        "client_id" to BuildConfig.TRAKT_CLIENT_ID,
-                        "client_secret" to BuildConfig.TRAKT_CLIENT_SECRET
+                        "client_id" to BuildConfig.TRAKT_CLIENT_ID
                     )
                 )
             } catch (e: Exception) {
