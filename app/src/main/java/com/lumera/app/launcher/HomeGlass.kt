@@ -77,7 +77,7 @@ internal fun Modifier.glassShadow(shape: Shape, lift: () -> Float): Modifier = d
 /**
  * A pane of [glass] shaped [shape] behind what the modifier holds. [lit] runs from 0 at rest to 1
  * in focus: smoked glass brightens, or turns white with [white] as a button does, and liquid glass
- * catches more light at its rim. [panel] is the darker glass of a menu, which text sits on.
+ * lights up from inside, as brightly as [glow] says when given. [panel] is the darker glass of a menu, which text sits on.
  */
 internal fun Modifier.glassPane(
     glass: HomeGlass,
@@ -85,7 +85,8 @@ internal fun Modifier.glassPane(
     lit: () -> Float,
     white: Boolean = false,
     panel: Boolean = false,
-    dim: Boolean = false
+    dim: Boolean = false,
+    glow: (() -> Float)? = null
 ): Modifier = drawWithCache {
     val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
     val hair = Stroke(2.dp.toPx())
@@ -117,11 +118,19 @@ internal fun Modifier.glassPane(
         start = start, end = end
     )
     val bodyLit = Brush.linearGradient(
-        0f to Color.White.copy(alpha = 0.32f), 0.42f to Color.White.copy(alpha = 0.10f),
+        0f to Color.White.copy(alpha = 0.27f), 0.42f to Color.White.copy(alpha = 0.08f),
         0.7f to Color.White.copy(alpha = 0.05f), 1f to Color.White.copy(alpha = 0.16f),
         start = start, end = end
     )
     val foot = Brush.verticalGradient(0.72f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.14f))
+    // Liquid glass in focus glows from inside, brightest a little above its middle, not at its rim
+    val shine = Brush.radialGradient(
+        0f to Color.White.copy(alpha = 0.22f),
+        0.55f to Color.White.copy(alpha = 0.08f),
+        1f to Color.Transparent,
+        center = Offset(size.width * 0.5f, size.height * 0.38f),
+        radius = maxOf(size.width, size.height) * 0.62f
+    )
     val wide = Stroke(16.dp.toPx())
     val mid = Stroke(9.dp.toPx())
     val near = Stroke(4.dp.toPx())
@@ -145,14 +154,15 @@ internal fun Modifier.glassPane(
                 drawPath(path, body, alpha = 1f - l)
                 if (l > 0f) drawPath(path, bodyLit, alpha = l)
                 clipPath(path) {
-                    // The glass's thickness glowing at its edges
-                    val glow = 0.07f + 0.09f * l
-                    drawPath(path, Color.White, style = wide, alpha = glow / 3f)
-                    drawPath(path, Color.White, style = mid, alpha = glow / 3f)
-                    drawPath(path, Color.White, style = near, alpha = glow / 3f)
-                    drawRect(foot, alpha = 1f + 0.2f * l)
-                    drawPath(path, Color.White, style = hair, alpha = 0.10f + 0.06f * l)
-                    drawPath(path, rimBrush, style = rim, alpha = 0.55f + 0.25f * l)
+                    // The glass's thickness glowing at its edges, the same in focus as at rest
+                    drawPath(path, Color.White, style = wide, alpha = 0.07f / 3f)
+                    drawPath(path, Color.White, style = mid, alpha = 0.07f / 3f)
+                    drawPath(path, Color.White, style = near, alpha = 0.07f / 3f)
+                    drawRect(foot)
+                    val g = glow?.invoke()?.coerceIn(0f, 1f) ?: l
+                    if (g > 0f) drawRect(shine, alpha = g)
+                    drawPath(path, Color.White, style = hair, alpha = 0.10f)
+                    drawPath(path, rimBrush, style = rim, alpha = 0.55f)
                 }
                 drawPath(path, gloss)
             }

@@ -14,5 +14,5 @@ crop and grade.
 
 ## Videos
 
-- Deep Blue (`res/raw/home_style_deepblue.mp4`, poster `home_style_deepblue.webp`): animation made by Adrian, the app's owner, cropped, shaded where the clock and tiles sit and re-encoded for the home screen at its full 60 frames a second.
+- Deep Blue (`res/raw/home_style_deepblue.mp4`, poster `home_style_deepblue.webp`): animation made by Adrian, the app's owner, cropped, shaded where the clock and tiles sit, made 4K with Real-ESRGAN's anime video network (realesr-animevideov3, BSD-3; tools/video/deepblue.py) and re-encoded for the home screen at its full 60 frames a second.
 - Ice Lake (`res/raw/home_style_icelake.mp4`, poster `home_style_icelake.webp`): a frozen lake at sundown filmed from Adrian's own drone, scaled to 1080p, shaded where the clock and tiles sit and played forwards then backwards so the 12 second flight loops without a cut, at 60 frames a second.
