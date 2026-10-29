@@ -10,6 +10,7 @@ import android.provider.Settings
 
 /** The overlays' choices in Settings. */
 object OverlayPrefs {
+    private const val ACCESSIBILITY_DETAILS = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
     private const val PREFS = "neon_overlay"
     private const val GESTURES = "gestures"
     private const val HUD_SECONDS = "hud_seconds"
@@ -58,11 +59,12 @@ object OverlayPrefs {
 
     /**
      * The TV's Accessibility page, where the service is switched on by hand: the service's own
-     * page where the TV has one (Android 12 and later), else the list it sits in.
+     * page where the TV has one (Android 12 and later), else the list it sits in. The SDK hides
+     * the action's name, so it is spelled out.
      */
     fun openAccessibility(context: Context): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val own = Intent(Settings.ACTION_ACCESSIBILITY_DETAILS_SETTINGS)
+            val own = Intent(ACCESSIBILITY_DETAILS)
                 .putExtra(Intent.EXTRA_COMPONENT_NAME, ComponentName(context, NeonOverlayService::class.java).flattenToString())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (own.resolveActivity(context.packageManager) != null && runCatching { context.startActivity(own) }.isSuccess) return true
