@@ -210,6 +210,14 @@ class SiriLink(
 
     // ------------------------------------------------------------------ GATT
 
+    @Volatile private var discovering = false
+
+    private fun discover(g: BluetoothGatt) {
+        if (g != gatt || discovering) return
+        discovering = true
+        g.discoverServices()
+    }
+
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             if (g != gatt) return
@@ -225,7 +233,10 @@ class SiriLink(
                         Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
                     ).invoke(g, 6, 12, 80, 600, 0, 0)
                 }
-                handler.postDelayed({ if (g == gatt) g.discoverServices() }, 150)
+                // the microphone's 99-byte frames do not fit the default 23-byte MTU
+                discovering = false
+                if (!runCatching { g.requestMtu(185) }.getOrDefault(false)) discover(g)
+                handler.postDelayed({ discover(g) }, 800)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 val wasReady = ready
                 ready = false
@@ -246,6 +257,11 @@ class SiriLink(
                 gatt = null
                 handler.postDelayed({ if (!closed && gatt == null) connect(d) }, 250)
             }
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            Log.i(TAG, "mtu $mtu ($status)")
+            handler.postDelayed({ discover(g) }, 100)
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {

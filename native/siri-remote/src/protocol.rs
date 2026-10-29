@@ -244,9 +244,37 @@ pub fn parse_gen1(data: &[u8]) -> Report {
     }
 }
 
+/// One microphone report (gen 2/3, id 0xFA, 99 bytes): two zero bytes, a 16-bit little-endian
+/// sequence number, the Opus frame's length, then the frame (CELT wideband, 20 ms, TOC 0xB8).
+/// Returns the sequence number and the frame.
+pub fn parse_audio(data: &[u8]) -> Option<(u16, &[u8])> {
+    if data.len() < 6 {
+        return None;
+    }
+    let seq = u16::from_le_bytes([data[2], data[3]]);
+    let len = data[4] as usize;
+    if len == 0 || 5 + len > data.len() {
+        return None;
+    }
+    Some((seq, &data[5..5 + len]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn audio_frames_come_out_whole() {
+        let mut d = vec![0u8; 99];
+        d[2] = 0x34;
+        d[3] = 0x12;
+        d[4] = 3;
+        d[5..8].copy_from_slice(&[0xB8, 1, 2]);
+        assert_eq!(parse_audio(&d), Some((0x1234, &[0xB8u8, 1, 2][..])));
+        d[4] = 200;
+        assert_eq!(parse_audio(&d), None, "a length past the end is refused");
+        assert_eq!(parse_audio(&[0, 0, 1]), None);
+    }
 
     #[test]
     fn gen23_buttons_decode_every_bit() {

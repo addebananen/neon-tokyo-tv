@@ -15,6 +15,9 @@
     <!-- Neon Home's Bluetooth corner: which paired headphones and speakers are on, and connecting
          them. Android 12 and later ask once; older ones need the two legacy permissions -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Voice search through the Siri Remote: the speech recognizer asks its caller for this,
+         though the sound comes from the remote, never the TV's own microphone -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- Only granted over ADB, by hand: lets Neon Tokyo turn BluetoothHelper on for a press -->
@@ -193,6 +196,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
+
+        <!-- Opened by the Siri Remote bridge (shell) when Siri is held -->
+        <activity
+            android:name=".siri.VoiceActivity"
+            android:exported="true"
+            android:taskAffinity="com.neontokyo.voice"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.NeonVoice" />
 
         <activity
             android:name=".dream.NeonDreamPreviewActivity"

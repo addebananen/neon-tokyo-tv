@@ -11,6 +11,7 @@ import kotlin.concurrent.thread
  *
  *   status                 -> one line of JSON
  *   pair | forget | stop   -> ok
+ *   voice                  -> the microphone of the current Siri press, `f <hex>` lines, then `end`
  *   config k=v k=v ...     -> ok
  *
  * Only the TV itself can reach it, and nothing it accepts presses keys.
@@ -40,6 +41,10 @@ object SiriStatusServer {
                 val reply = when (val cmd = line.substringBefore(' ')) {
                     "status" -> status(bridge)
                     "pair" -> { bridge.pair(); "ok" }
+                    "voice" -> {
+                        VoiceRelay.stream { writer.write(it); writer.newLine(); writer.flush() }
+                        continue
+                    }
                     "forget" -> { bridge.forget(); "ok" }
                     "stop" -> { bridge.stop(); "ok" }
                     "config" -> {

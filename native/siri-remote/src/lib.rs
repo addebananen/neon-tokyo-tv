@@ -155,6 +155,25 @@ pub extern "system" fn Java_com_lumera_app_siri_SiriNative_nativeTick(
     step(&mut env, e, secs(t))
 }
 
+/// The Opus frame in a microphone report, prefixed with its sequence number (2 bytes, little
+/// endian), or null when the report is not audio.
+#[no_mangle]
+pub extern "system" fn Java_com_lumera_app_siri_SiriNative_nativeAudioFrame<'a>(
+    env: JNIEnv<'a>,
+    _class: JClass,
+    data: JByteArray,
+) -> jni::sys::jbyteArray {
+    let bytes = env.convert_byte_array(&data).unwrap_or_default();
+    match protocol::parse_audio(&bytes) {
+        Some((seq, frame)) => {
+            let mut v = seq.to_le_bytes().to_vec();
+            v.extend_from_slice(frame);
+            env.byte_array_from_slice(&v).map(|a| a.into_raw()).unwrap_or(std::ptr::null_mut())
+        }
+        None => std::ptr::null_mut(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

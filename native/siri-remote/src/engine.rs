@@ -391,7 +391,10 @@ impl Engine {
             Button::PlayPause => self.hold(b, key::MEDIA_PLAY_PAUSE, false, t),
             Button::Mute => self.hold(b, key::VOLUME_MUTE, false, t),
             Button::Siri => {
-                self.hold(b, self.cfg.siri_key, false, t);
+                // 0: no key, the voice search takes the press
+                if self.cfg.siri_key != 0 {
+                    self.hold(b, self.cfg.siri_key, false, t);
+                }
                 self.out.push(Out::VoiceStart);
             }
             Button::Power => self.out.push(Out::PowerToggle),

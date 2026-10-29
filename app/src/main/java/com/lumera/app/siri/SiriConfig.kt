@@ -16,7 +16,8 @@ data class SiriConfig(
     /** Light taps on the pad's edges step (always on for the gen 1 remote, which has no ring). */
     val edgeTaps: Boolean = false,
     val backHoldHome: Boolean = true,
-    val siriKey: Int = KeyEvent.KEYCODE_SEARCH,
+    /** A key for the Siri button besides voice search; 0 = voice search only. */
+    val siriKey: Int = 0,
     val tvDoubleKey: Int = KeyEvent.KEYCODE_APP_SWITCH,
     val tvHoldKey: Int = KeyEvent.KEYCODE_SETTINGS,
     /** Keep the TV from sleeping deeply, so the Power button can wake it again. */

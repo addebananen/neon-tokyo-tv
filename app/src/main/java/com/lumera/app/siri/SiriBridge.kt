@@ -51,6 +51,7 @@ object SiriBridge : SiriLink.Listener {
     @JvmStatic
     fun main(args: Array<String>) {
         val pkg = args.firstOrNull() ?: "com.neontokyo.tv"
+        VoiceRelay.packageName = pkg
         Looper.prepareMainLooper()
         handler = Handler(Looper.getMainLooper())
         Thread.setDefaultUncaughtExceptionHandler { _, e ->
@@ -196,6 +197,10 @@ object SiriBridge : SiriLink.Listener {
     override fun onReport(reportId: Int, data: ByteArray) {
         if (debug) println("report %02x %s".format(reportId, data.joinToString(" ") { "%02x".format(it) }))
         if (engine == 0L) return
+        if (reportId == 0xFA) {
+            SiriNative.nativeAudioFrame(data)?.let { VoiceRelay.frame(it) }
+            return
+        }
         apply(SiriNative.nativeReport(engine, reportId, data, now()))
     }
 
@@ -236,7 +241,8 @@ object SiriBridge : SiriLink.Listener {
                 SiriOut.KEY_DOWN -> key(code, true, repeat, false)
                 SiriOut.KEY_UP -> key(code, false, 0, flags and SiriOut.FLAG_CANCELED != 0)
                 SiriOut.POWER -> power()
-                SiriOut.VOICE_START, SiriOut.VOICE_STOP -> {}
+                SiriOut.VOICE_START -> VoiceRelay.start()
+                SiriOut.VOICE_STOP -> VoiceRelay.stop()
             }
             i += 4
         }

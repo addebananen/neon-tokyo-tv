@@ -22,6 +22,8 @@ object SiriNative {
     @JvmStatic external fun nativeDisconnected(handle: Long, uptimeMs: Long): IntArray
     @JvmStatic external fun nativeReport(handle: Long, reportId: Int, data: ByteArray, uptimeMs: Long): IntArray
     @JvmStatic external fun nativeTick(handle: Long, uptimeMs: Long): IntArray
+    /** A microphone report's Opus frame with its 2-byte sequence number in front, or null. */
+    @JvmStatic external fun nativeAudioFrame(data: ByteArray): ByteArray?
 }
 
 /** Kinds in the engine's output. */

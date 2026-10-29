@@ -433,6 +433,9 @@ function Start-Siri {
         Say 'This Neon Tokyo version has no Siri Remote support yet. Run -Step app first.'
         return
     }
+    # Talking through Siri: the TV's speech recognizer asks Neon Tokyo for this, though the sound
+    # comes from the remote
+    Shell "pm grant $NeonApp android.permission.RECORD_AUDIO" | Out-Null
     Shell 'pkill -f com.lumera.app.siri.SiriBridge' | Out-Null
     Start-Sleep -Milliseconds 500
     Shell "CLASSPATH=$apk setsid app_process /system/bin com.lumera.app.siri.SiriBridge $NeonApp > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &" | Out-Null
@@ -441,7 +444,7 @@ function Start-Siri {
     if ($log -match 'running') {
         Say 'Siri Remote bridge is running.'
         Say 'Pair the remote once: hold Back and Volume Up on it for 5 seconds, then pick Pair in Neon Tokyo > Settings > Personalization > Siri Remote (or the TV''s Settings > Remotes & accessories > Pair).'
-        Say 'Press any button on it afterwards and the TV is yours: swipe to scroll, click to pick, Power turns the TV off and on.'
+        Say 'Press any button on it afterwards and the TV is yours: swipe to scroll, click to pick, Power turns the TV off and on, hold Siri and talk to search or open apps.'
     } else {
         Say "The bridge did not start: $log"
     }

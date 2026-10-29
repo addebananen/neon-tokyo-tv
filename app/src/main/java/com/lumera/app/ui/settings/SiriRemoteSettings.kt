@@ -50,7 +50,7 @@ fun SiriRemoteSettings(onGoBack: () -> Unit) {
                 status.connected ->
                     "Connected to ${status.remote.ifEmpty { "your Siri Remote" }}" +
                         (if (status.battery >= 0) ", battery ${status.battery}%." else ".") +
-                        " Swipe on the clickpad to move, click to pick. TV button: Home, twice for recent apps, hold for quick settings. Hold Back for Home."
+                        " Swipe on the clickpad to move, click to pick. TV button: Home, twice for recent apps, hold for quick settings. Hold Back for Home. Hold Siri and talk: \"open YouTube\", \"play city pop on Spotify\" or just what to search for."
                 pairing ->
                     "Hold Back and Volume Up on the remote for 5 seconds, close to the TV. It pairs by itself."
                 status.problem.isNotEmpty() && status.state != "waiting" -> status.problem + "."

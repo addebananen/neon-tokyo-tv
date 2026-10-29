@@ -15,4 +15,13 @@
     <style name="Theme.NeonHome" parent="Theme.Lumera">
         <item name="android:windowBackground">@drawable/nt_wall_tokyo</item>
     </style>
+
+    <!-- Voice search with the Siri Remote: drawn over whatever is on screen -->
+    <style name="Theme.NeonVoice" parent="Theme.Lumera">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+    </style>
 </resources>

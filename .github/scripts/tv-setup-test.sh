@@ -71,6 +71,7 @@ check "running extras twice lists the overlays once" '[ "$(setting secure/enable
 
 run -Ip 192.168.1.77:41234 -Step siri
 check "the Siri Remote bridge runs as shell from the installed APK" 'grep -q "CLASSPATH=/system/app/com.neontokyo.tv.apk setsid app_process" "$FAKE_ADB_STATE/siri"'
+check "voice search may use the speech recognizer" 'grep -q "android.permission.RECORD_AUDIO" "$FAKE_ADB_STATE/granted"'
 check "and says how to pair the remote" 'grep -q "hold Back and Volume Up" "$WORK/out.txt"'
 run -Ip 192.168.1.77:41234 -Step siri
 check "starting it again leaves one bridge" '[ -f "$FAKE_ADB_STATE/siri" ] && [ "$(grep -c "pkill -f com.lumera.app.siri.SiriBridge" "$FAKE_ADB_STATE/calls")" -ge 2 ]'
