@@ -34,9 +34,12 @@ fun SiriRemoteSettings(onGoBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf(SiriStatus(running = false)) }
     var pairing by remember { mutableStateOf(false) }
+    var voiceLast by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
+        val voicePrefs = context.getSharedPreferences(com.lumera.app.siri.VoiceActivity.PREFS, android.content.Context.MODE_PRIVATE)
         while (true) {
             status = SiriRemoteClient.status()
+            voiceLast = voicePrefs.getString(com.lumera.app.siri.VoiceActivity.LAST, null)
             if (status.connected) pairing = false
             delay(1_500L)
         }
@@ -63,6 +66,16 @@ fun SiriRemoteSettings(onGoBack: () -> Unit) {
                 color = Color.White.copy(0.6f),
                 modifier = Modifier.padding(bottom = 12.dp)
             )
+            // what the last Siri press led to, so a voice search that went wrong can be read here
+            val lastVoice = voiceLast
+            if (lastVoice != null) {
+                Text(
+                    "Last voice search: $lastVoice",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    color = Color.White.copy(0.45f),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
             if (status.running) {
                 VoidSegmentedControl(
                     options = listOf("Pair a remote" to 0, "TV Bluetooth settings" to 1, "Forget remote" to 2),

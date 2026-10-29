@@ -68,17 +68,20 @@ class VoiceActivity : ComponentActivity() {
     private val hint = mutableStateOf("Lyssnar …")
     private val level = mutableFloatStateOf(0f)
     private var recognizer: SpeechRecognizer? = null
-    private var pipeOut: OutputStream? = null
+    private var tap = PcmTap()
     @Volatile private var socket: Socket? = null
     @Volatile private var done = false
     /** Which Siri press this is: a stream from an earlier one leaves the screen alone. */
     @Volatile private var press = 0
+    /** Recognizers tried for this press, so a failing one hands over to the next. */
+    private var attempt = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent { VoiceOverlay(heard.value, hint.value, level.floatValue) }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            hint.value = "Neon Tokyo behöver mikrofonbehörighet en gång (kör TV-skriptets siri-steg)"
+            // Android asks once, on the TV; OK on the Siri Remote answers it
+            hint.value = "Tillåt mikrofonen en gång, så kan du prata med TV:n"
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
             return
         }
@@ -102,43 +105,63 @@ class VoiceActivity : ComponentActivity() {
 
     private fun begin() {
         if (Build.VERSION.SDK_INT < 33) {
+            remember("Android ${Build.VERSION.RELEASE} cannot take sound from the remote")
             hint.value = "Röststyrning med Siri Remote kräver Android 13 eller senare"
             finishSoon(3000)
             return
         }
-        val rec = when {
-            SpeechRecognizer.isRecognitionAvailable(this) -> SpeechRecognizer.createSpeechRecognizer(this)
-            SpeechRecognizer.isOnDeviceRecognitionAvailable(this) -> SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-            else -> null
-        }
-        if (rec == null) {
+        // the sound is kept, so a recognizer that fails can hand the same words to another
+        tap = PcmTap()
+        attempt = 0
+        val mine = ++press
+        val t = tap
+        thread(name = "siri-voice") { pump(t, mine) }
+        if (!listen(0)) {
+            remember("no speech recognizer on this TV")
             Log.w(TAG, "voice: no speech recognizer on this TV")
-            hint.value = "TV:n har ingen taligenkänning"
-            finishSoon(3000)
-            return
+            done = true
+            hint.value = "TV:n har ingen taligenkänning, öppnar sök"
+            window.decorView.postDelayed({ openSearch(); finish() }, 1200)
         }
+    }
+
+    /**
+     * Starts recognizer number [n]: the TV's own in Swedish, then the TV's own in its own
+     * language (Swedish may not be installed), then the on-device one.
+     */
+    private fun listen(n: Int): Boolean {
+        attempt = n
+        recognizer?.destroy()
+        recognizer = null
+        val rec = when (n) {
+            0, 1 -> if (SpeechRecognizer.isRecognitionAvailable(this)) SpeechRecognizer.createSpeechRecognizer(this) else null
+            2 -> if (SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) SpeechRecognizer.createOnDeviceSpeechRecognizer(this) else null
+            else -> null
+        } ?: return if (n < 2) listen(n + 1) else false
         recognizer = rec
         val (read, write) = ParcelFileDescriptor.createPipe()
-        pipeOut = ParcelFileDescriptor.AutoCloseOutputStream(write)
         rec.setRecognitionListener(listener)
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "sv-SE")
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, read)
             .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
             .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
             .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, OUT_RATE)
+        if (n != 1) intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "sv-SE")
+        Log.i(TAG, "voice: recognizer ${listOf("TV, Swedish", "TV, its own language", "on-device")[n]}")
         rec.startListening(intent)
         read.close()
-        val out = pipeOut!!
-        val mine = ++press
-        thread(name = "siri-voice") { pump(out, mine) }
+        val out = ParcelFileDescriptor.AutoCloseOutputStream(write)
+        val t = tap
+        // what was said so far goes in first; a full pipe must not hold up the screen
+        thread(name = "siri-voice-feed") { t.attach(out) }
+        return true
     }
 
-    /** Reads the utterance from the bridge, decodes it and writes 16 kHz PCM into the recognizer. */
-    private fun pump(out: OutputStream, mine: Int) {
+    /** Reads the utterance from the bridge, decodes it and writes 16 kHz PCM into [tap]. */
+    private fun pump(tap: PcmTap, mine: Int) {
         val decoder = OpusDecoder()
         var frames = 0
         var samples = 0L
@@ -158,7 +181,7 @@ class VoiceActivity : ComponentActivity() {
                     // a frame or two lost over the air: keep the timing with silence
                     val seq = (frame[0].toInt() and 0xFF) or ((frame[1].toInt() and 0xFF) shl 8)
                     val gap = if (last < 0) 0 else (seq - last - 1) and 0xFFFF
-                    if (gap in 1..4) out.write(ByteArray(gap * FRAME_OUT * 2))
+                    if (gap in 1..4) tap.write(ByteArray(gap * FRAME_OUT * 2))
                     last = seq
                     val pcm = decoder.decode(frame, 2)
                     frames++
@@ -166,7 +189,7 @@ class VoiceActivity : ComponentActivity() {
                     samples += pcm.size
                     for (v in pcm) energy += v.toDouble() * v
                     showLevel(pcm, mine)
-                    out.write(toBytes(pcm))
+                    tap.write(toBytes(pcm))
                 }
             }
         } catch (e: IOException) {
@@ -174,8 +197,10 @@ class VoiceActivity : ComponentActivity() {
         } finally {
             val rms = if (samples > 0) sqrt(energy / samples).toInt() else 0
             Log.i(TAG, "voice: $frames frames, $samples samples at $OUT_RATE Hz, rms $rms, decoder ${decoder.name}")
+            if (frames == 0) remember("no sound came from the remote")
+            else if (decoder.name == "none") remember("this TV cannot decode the remote's sound (no Opus decoder)")
             decoder.release()
-            runCatching { out.close() }
+            tap.end()
             runOnUiThread { if (!done && press == mine) { hint.value = "Tänker …"; level.floatValue = 0f } }
         }
     }
@@ -205,22 +230,57 @@ class VoiceActivity : ComponentActivity() {
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
             if (text.isBlank()) return onError(SpeechRecognizer.ERROR_NO_MATCH)
             Log.i(TAG, "voice heard: $text")
+            remember("heard \"$text\"")
             heard.value = text
             act(text)
         }
 
         override fun onError(error: Int) {
             if (done) return
+            Log.w(TAG, "voice recognizer error $error (attempt $attempt)")
+            val next = when (error) {
+                // nothing said, or no internet: another recognizer would not do better
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> null
+                // Swedish missing: the same recognizer in the TV's language
+                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+                    if (attempt == 0) 1 else if (attempt == 1) 2 else null
+                // it would not take sound from us (or broke): the on-device one
+                else -> if (attempt < 2) 2 else null
+            }
+            if (next != null && listen(next)) return
             done = true
+            remember("recognizer error $error")
             hint.value = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Hörde inget, håll Siri och prata"
                 SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Ingen internetanslutning"
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Mikrofonbehörighet saknas"
-                else -> "Taligenkänningen svarade inte ($error)"
+                else -> "TV:n kunde inte tolka rösten, öppnar sök"
             }
-            Log.w(TAG, "voice recognizer error $error")
-            finishSoon(1800)
+            val searchInstead = error !in listOf(
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT,
+                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT
+            )
+            // a Siri press always leads somewhere: when the voice cannot be understood, to search
+            window.decorView.postDelayed({ if (searchInstead) openSearch(); if (!isFinishing) finish() }, 1800)
         }
+    }
+
+    /** The last voice search's outcome, for the Siri Remote settings page. */
+    private fun remember(what: String) {
+        runCatching {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(LAST, "$what (${java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date())})")
+                .apply()
+        }
+    }
+
+    private fun openSearch() {
+        listOf(
+            Intent(SearchManager.INTENT_ACTION_GLOBAL_SEARCH),
+            Intent(Intent.ACTION_ASSIST),
+            Intent(Intent.ACTION_WEB_SEARCH)
+        ).firstOrNull { start(it) }
     }
 
     private fun act(text: String) {
@@ -281,7 +341,7 @@ class VoiceActivity : ComponentActivity() {
     private fun stopAll() {
         done = true
         runCatching { socket?.close() }
-        runCatching { pipeOut?.close() }
+        tap.end()
         recognizer?.destroy()
         recognizer = null
     }
@@ -300,6 +360,8 @@ class VoiceActivity : ComponentActivity() {
     companion object {
         private const val TAG = "NeonSiri"
         const val OUT_RATE = 16_000
+        const val PREFS = "siri_voice"
+        const val LAST = "last"
         /** 20 ms at [OUT_RATE]. */
         const val FRAME_OUT = 320
 
@@ -315,6 +377,55 @@ class VoiceActivity : ComponentActivity() {
             b.asShortBuffer().put(pcm)
             return b.array()
         }
+    }
+}
+
+/**
+ * The decoded sound of one Siri press: kept whole, and passed on to whichever recognizer is
+ * listening. A recognizer attached late (a second try) gets everything said so far first.
+ */
+internal class PcmTap {
+    private val kept = java.io.ByteArrayOutputStream()
+    private var sink: OutputStream? = null
+    private var ended = false
+    private val lock = Object()
+
+    fun write(b: ByteArray) {
+        val out = synchronized(lock) {
+            if (kept.size() < MAX) kept.write(b)
+            sink
+        } ?: return
+        // outside the lock: a slow recognizer must not stop the next one from attaching
+        runCatching { out.write(b) }.onFailure { synchronized(lock) { if (sink === out) sink = null } }
+    }
+
+    fun end() {
+        val out = synchronized(lock) { ended = true; sink.also { sink = null } }
+        runCatching { out?.close() }
+    }
+
+    /** Hands [out] what was said so far, then everything after; closes it at the end. */
+    fun attach(out: OutputStream) {
+        val old: OutputStream?
+        val backlog: ByteArray
+        synchronized(lock) {
+            old = sink
+            sink = null
+            backlog = kept.toByteArray()
+        }
+        runCatching { old?.close() }
+        val ok = runCatching { out.write(backlog) }.isSuccess
+        synchronized(lock) {
+            // anything written while the backlog went out
+            val more = kept.toByteArray()
+            if (ok && more.size > backlog.size) runCatching { out.write(more, backlog.size, more.size - backlog.size) }
+            if (ended || !ok) runCatching { out.close() } else sink = out
+        }
+    }
+
+    companion object {
+        /** 30 s at 16 kHz. */
+        const val MAX = 30 * 16_000 * 2
     }
 }
 
