@@ -484,7 +484,7 @@ function Undo-All {
     if (Test-Path (Join-Path $Before 'extras.txt')) {
         Restore-Settings 'secure' (Join-Path $Before 'extras.txt')
         Shell "cmd notification disallow_listener $NeonListener" | Out-Null
-        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP') { Shell "pm revoke $NeonApp $p" | Out-Null }
+        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP', 'android.permission.RECORD_AUDIO') { Shell "pm revoke $NeonApp $p" | Out-Null }
     }
     # The Home button goes back to whatever it opened before, normally the Google TV home screen
     $was = Join-Path $Before 'home.txt'
