@@ -89,6 +89,8 @@ case "$1" in
       "pm revoke "*) set -- $c; touch "$ST/granted"; grep -vx "$4" "$ST/granted" > "$ST/g2"; mv "$ST/g2" "$ST/granted" ;;
       "cmd notification allow_listener "*) echo "${c#cmd notification allow_listener }" > "$ST/listener" ;;
       "cmd notification disallow_listener "*) rm -f "$ST/listener" ;;
+      "cmd notification allow_dnd "*) echo "${c#cmd notification allow_dnd }" > "$ST/dnd" ;;
+      "cmd notification disallow_dnd "*) rm -f "$ST/dnd" ;;
       "settings get "*) set -- $c; setting_get "$3" "$4" ;;
       "settings put "*) set -- $c; setting_put "$3" "$4" "$5" ;;
       "settings delete "*) set -- $c; setting_delete "$3" "$4" ;;

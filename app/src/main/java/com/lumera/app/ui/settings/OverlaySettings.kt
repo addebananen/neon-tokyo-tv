@@ -31,6 +31,7 @@ fun OverlaySettings(onGoBack: () -> Unit) {
     var gestures by remember { mutableStateOf(OverlayPrefs.gestures(context)) }
     var hudSeconds by remember { mutableStateOf(OverlayPrefs.hudSeconds(context)) }
     var hudOnConsole by remember { mutableStateOf(OverlayPrefs.hudOnConsole(context)) }
+    var controlCenter by remember { mutableStateOf(OverlayPrefs.controlCenter(context)) }
     // Comes back from the TV's Accessibility page switched on, or not
     LaunchedEffect(Unit) {
         while (true) {
@@ -79,6 +80,32 @@ fun OverlaySettings(onGoBack: () -> Unit) {
         }
     }
     if (on) {
+        Spacer(Modifier.height(15.dp))
+        SettingRow("Control Center") {
+            Column {
+                Text(
+                    "Hold Home on any remote, over any app, for the sound (headphones, speakers, TV), Wi-Fi, profiles, Do Not Disturb, a sleep timer and Power Off. A short press of Home works as always.",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = Color.White.copy(0.6f),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                VoidSegmentedControl(
+                    options = listOf("On" to 1, "Off" to 0, "Open now" to 2, "Set up" to 3),
+                    selectedOption = if (controlCenter) 1 else 0,
+                    onOptionSelected = {
+                        when (it) {
+                            2 -> NeonOverlayService.openControlCenter()
+                            3 -> com.lumera.app.control.ControlSetupActivity.open(context)
+                            else -> {
+                                controlCenter = it == 1
+                                OverlayPrefs.setControlCenter(context, it == 1)
+                            }
+                        }
+                    },
+                    onBack = onGoBack
+                )
+            }
+        }
         Spacer(Modifier.height(15.dp))
         SettingRow("Button chords") {
             VoidSegmentedControl(

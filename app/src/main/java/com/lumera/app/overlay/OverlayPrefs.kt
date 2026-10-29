@@ -13,6 +13,7 @@ object OverlayPrefs {
     private const val GESTURES = "gestures"
     private const val HUD_SECONDS = "hud_seconds"
     private const val HUD_ON_CONSOLE = "hud_on_console"
+    private const val CONTROL_CENTER = "control_center"
 
     /** How long the gaming HUD stays; 0 keeps it until it is put away. */
     val HUD_CHOICES = listOf(4, 6, 10, 0)
@@ -27,6 +28,10 @@ object OverlayPrefs {
 
     fun hudOnConsole(context: Context): Boolean = prefs(context).getBoolean(HUD_ON_CONSOLE, false)
     fun setHudOnConsole(context: Context, on: Boolean) = prefs(context).edit().putBoolean(HUD_ON_CONSOLE, on).apply()
+
+    /** Holding Home opens the Control Center. */
+    fun controlCenter(context: Context): Boolean = prefs(context).getBoolean(CONTROL_CENTER, true)
+    fun setControlCenter(context: Context, on: Boolean) = prefs(context).edit().putBoolean(CONTROL_CENTER, on).apply()
 
     /** True while the overlay service runs: the TV turned it on under Accessibility. */
     fun serviceOn(context: Context): Boolean {

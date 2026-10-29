@@ -82,7 +82,7 @@ class ChordDetector(private val chords: List<Chord>) {
 
         /**
          * Up and Down together for the picture, Left and Right together for the gaming HUD.
-         * Holding Home is the TV's own (Google TV opens its panel), so it isn't used.
+         * Holding Home opens the Control Center, which the service catches before Google TV does.
          */
         val DEFAULT = listOf(
             Chord(setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN), HOLD_MS, ChordAction.Diagnostics),
