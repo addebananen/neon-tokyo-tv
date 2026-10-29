@@ -1770,16 +1770,23 @@ private fun NeonTile(
     var keyHeld by remember { mutableStateOf(false) }
     val pressed = surfacePressed || keyHeld
     val isLifted = lift == Lift.Lifted
-    // A spring that overshoots a touch, so the tile pops when the focus lands on it; glass comes
-    // forward by less, as far as the Motion panel's pop says (4 % at its liveliest), and slower
+    // A spring that overshoots a touch, so the tile pops when the focus lands on it; frosted glass
+    // comes forward by less, as far as the Motion panel's pop says (4 % at its liveliest), and
+    // slower, and liquid glass grows by more (10 %) and settles without a wobble
+    val liquid = look.glassMode == HomeGlass.Liquid
     val scale by animateFloatAsState(
         targetValue = when {
-            isLifted -> if (glass) 1.08f else 1.13f
-            pressed -> if (glass) 0.985f else 1.03f
-            focused -> if (glass) 1f + (HomeMotion.pop.scale - 1f) * 0.57f else HomeMotion.pop.scale
+            isLifted -> if (glass) 1.12f else 1.13f
+            pressed -> if (liquid) 1.06f else if (glass) 0.985f else 1.03f
+            focused -> when {
+                liquid -> 1f + (HomeMotion.pop.scale - 1f) * 1.43f
+                glass -> 1f + (HomeMotion.pop.scale - 1f) * 0.57f
+                else -> HomeMotion.pop.scale
+            }
             else -> 1f
         },
         animationSpec = when {
+            (focused || isLifted) && !pressed && liquid -> spring(dampingRatio = maxOf(HomeMotion.pop.damping, 0.72f), stiffness = 300f)
             (focused || isLifted) && !pressed && glass -> spring(dampingRatio = maxOf(HomeMotion.pop.damping, 0.62f), stiffness = 380f)
             (focused || isLifted) && !pressed -> spring(dampingRatio = HomeMotion.pop.damping, stiffness = 650f)
             else -> spring(stiffness = 900f)
@@ -1903,7 +1910,9 @@ private fun NeonTile(
             Box(
                 modifier = Modifier
                     .size(width, height)
-                    .glassShadow(shape) { tube }
+                    // Liquid glass comes forward by its size and its light alone: a shadow
+                    // round clear glass reads as a dark outline
+                    .then(if (liquid) Modifier else Modifier.glassShadow(shape) { tube })
                     .glassPane(look.glassMode, shape, lit = { tube }, dim = look.shade == null)
                     .glassSheen(shape) { sheen.value }
             )
