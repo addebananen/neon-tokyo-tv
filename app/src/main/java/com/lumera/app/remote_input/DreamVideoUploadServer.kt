@@ -51,6 +51,10 @@ class DreamVideoUploadServer(
     @Volatile
     private var arrived = 0L
 
+    // Which video it is, as the phone names it, so the phone can carry on with the same one later
+    @Volatile
+    private var expectedId = ""
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val base = "/$token"
     private val page: String by lazy {
@@ -74,9 +78,10 @@ class DreamVideoUploadServer(
         if (uri != base && !uri.startsWith("$base/")) return notFound()
         return when (uri.removePrefix(base)) {
             "", "/" -> if (session.method == Method.GET) servePage() else notFound()
-            "/status" -> json("{\"state\":\"$state\",\"received\":$arrived,\"room\":${DreamVideo.roomFor(context)}}")
+            "/status" -> json("{\"state\":\"$state\",\"received\":$arrived,\"id\":\"$expectedId\",\"room\":${DreamVideo.roomFor(context)}}")
             "/video" -> if (session.method == Method.POST) receiveVideo(session) else notFound()
             "/piece" -> if (session.method == Method.POST) receivePiece(session) else notFound()
+            "/awake.mp4" -> asset("dream_video_awake.mp4", "video/mp4")
             "/skyline.webp" -> resource(R.drawable.nt_skyline, "image/webp")
             "/kanit-medium.ttf" -> resource(R.font.kanit_medium, "font/ttf")
             "/kanit-semibold-italic.ttf" -> resource(R.font.kanit_semibold_italic, "font/ttf")
@@ -150,6 +155,7 @@ class DreamVideoUploadServer(
         val offset = session.headers["x-offset"]?.toLongOrNull() ?: return early(badRequest("Your phone didn't say where this piece goes. Try again."))
         val total = session.headers["x-total"]?.toLongOrNull() ?: return early(badRequest("Your phone didn't say how big the video is. Try again."))
         val length = session.headers["content-length"]?.toLongOrNull() ?: return early(badRequest("Your phone didn't say how big the piece is. Try again."))
+        val id = idOf(session)
         val upload = DreamVideo.uploadFile(context)
         if (offset == 0L) {
             if (total <= 0L) return early(badRequest("No video arrived. Try again."))
@@ -157,9 +163,10 @@ class DreamVideoUploadServer(
             upload.delete()
             if (!DreamVideo.makeRoom(context, total)) return early(badRequest(noRoom(total)))
             expected = total
+            expectedId = id
             arrived = 0L
             state = STATE_RECEIVING
-        } else if (state != STATE_RECEIVING || total != expected) {
+        } else if (state != STATE_RECEIVING || total != expected || (id.isNotEmpty() && expectedId.isNotEmpty() && id != expectedId)) {
             return early(conflict("The TV lost the start of the video. Send it again."))
         }
         // Not where the video has got to: say where that is, and the phone sends from there
@@ -203,6 +210,10 @@ class DreamVideoUploadServer(
         return placed()
     }
 
+    /** The phone's name for the video, kept to the characters it encodes it in so it is safe in JSON. */
+    private fun idOf(session: IHTTPSession): String =
+        session.headers["x-id"].orEmpty().filter { it.isLetterOrDigit() || it in "%._~!*'()-" }.take(200)
+
     // A piece whose bytes weren't all read leaves the rest on the connection, so it is closed
     private fun early(response: Response): Response = response.apply { addHeader("Connection", "close") }
 
@@ -213,6 +224,13 @@ class DreamVideoUploadServer(
 
     private fun resource(id: Int, mime: String): Response {
         val bytes = context.resources.openRawResource(id).use { it.readBytes() }
+        return newFixedLengthResponse(Response.Status.OK, mime, bytes.inputStream(), bytes.size.toLong()).apply {
+            addHeader("Cache-Control", "max-age=86400")
+        }
+    }
+
+    private fun asset(name: String, mime: String): Response {
+        val bytes = context.assets.open(name).use { it.readBytes() }
         return newFixedLengthResponse(Response.Status.OK, mime, bytes.inputStream(), bytes.size.toLong()).apply {
             addHeader("Cache-Control", "max-age=86400")
         }

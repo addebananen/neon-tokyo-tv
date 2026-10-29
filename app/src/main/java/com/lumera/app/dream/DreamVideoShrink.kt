@@ -7,6 +7,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -31,13 +32,18 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 /**
- * Makes a video sent from a phone right for the TV before it is kept, keeping as much of its
- * quality as the TV can use. The TV's video chip shows it at the panel's own resolution with
- * its own picture processing, so 1080 lines is plenty, but every frame counts: a phone's 60
- * frames a second stay 60 (a slow motion film's 120 or 240 come down to 60). An iPhone films in
- * HDR, which on most TVs plays washed out, so that is turned into ordinary colour. The sound
- * goes. A video that needs nothing but that is only copied without its sound, untouched; one
- * that must be made again gets a bit rate to suit its size and pace, never more than it had.
+ * Makes a video sent from a phone right for the TV before it is kept: the TV's own shape, 1920 x
+ * 1080 filling the whole screen (a video of another shape is cropped to it, an upright one to its
+ * middle), at up to 60 frames a second. 1080 lines because the TV's video chip, not its graphics
+ * chip, scales it up to the 4K panel with its own picture processing, and decodes 1080p60 with
+ * room to spare, so the home screen above it stays smooth; a 4K file would cost four times the
+ * storage and its encoder can't make 4K at 60 in time. Every frame counts: a phone's 60 frames a
+ * second stay 60, a slow motion film's 120 or 240 come down to 60, and a 30 frame film keeps its
+ * 30, since the panel shows each of those twice at 60 Hz anyway and doubling them in the file
+ * would only take twice the room. An iPhone films in HDR, which on most TVs plays washed out, so
+ * that is turned into ordinary colour. The sound goes, and a film over [MAX_SECONDS] keeps its
+ * start. A video that needs nothing but that is only copied without its sound, untouched; one
+ * that must be made again gets a bit rate to suit its pace, never more than it had.
  * The TV's own video chip does the work, so it takes about as long as the video plays, or less.
  *
  * Not every TV can do every part of that: some have no HEVC encoder, some can't turn HDR into
@@ -46,10 +52,17 @@ import kotlin.math.roundToInt
  */
 @OptIn(UnstableApi::class)
 object DreamVideoShrink {
-    private const val SHORT_SIDE = 1080
+    private const val WIDTH = 1920
+    private const val HEIGHT = 1080
     private const val MAX_FPS = 60f
 
-    // For 1080 lines; a smaller video gets less in proportion
+    /** How long the progress may stand still before a way is given up. */
+    private const val STALL_MS = 60_000L
+
+    /** The longest a loop is kept, so two of them never fill the TV: about 270 MB at most each. */
+    const val MAX_SECONDS = 180
+
+    // For 1080 lines
     private const val RATE_30 = 8_000_000L
     private const val RATE_60 = 12_000_000L
 
@@ -89,13 +102,14 @@ object DreamVideoShrink {
             val failure = attempt(context, input, output, shape, way, onProgress) ?: break
             failures += "${way.name}: $failure"
         }
-        // A light video made again may come out bigger, and is then kept as it was; one in HDR is
-        // kept made again whatever its size, for its colours
+        // A video made again only to be lighter may come out bigger, and is then kept as it was;
+        // one made again for its shape, pace, length or HDR colours is kept made again whatever its size
         val made = failures.size < ways.size && output.length() > 0L
-        if (!made || (output.length() >= input.length() && !shape.hdr)) output.delete()
+        if (!made || (output.length() >= input.length() && !shape.reshaped)) output.delete()
         val ok = output.exists()
         val about = "${shape.width}x${shape.height} at ${shape.fps.roundToInt()} fps${if (shape.hdr) " HDR" else ""}${shape.mime?.let { " $it" } ?: ""}"
-        if (ok) android.util.Log.i("DreamVideoShrink", "shrunk $about from ${input.length() / 1024} kB to ${output.length() / 1024} kB")
+        if (ok) android.util.Log.i("DreamVideoShrink", "shrunk $about from ${input.length() / 1024} kB to ${output.length() / 1024} kB" +
+            (probe(output)?.let { " as ${it.width}x${it.height} at ${it.fps.roundToInt()} fps" } ?: ""))
         else android.util.Log.w("DreamVideoShrink", "kept as it was: $about; ${failures.joinToString("; ").ifEmpty { "no lighter" }}")
         return Outcome(ok, failures.lastOrNull())
     }
@@ -109,9 +123,25 @@ object DreamVideoShrink {
                 val handler = Handler(Looper.getMainLooper())
                 val holder = ProgressHolder()
                 lateinit var transformer: Transformer
+                // A chip that stops making frames is given up after a while, and the next way tried,
+                // rather than leaving the TV stuck at a number for good
+                var last = -1
+                var lastMoved = SystemClock.uptimeMillis()
                 val tick = object : Runnable {
                     override fun run() {
-                        if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) onProgress(holder.progress / 100f)
+                        if (transformer.getProgress(holder) == Transformer.PROGRESS_STATE_AVAILABLE) {
+                            onProgress(holder.progress / 100f)
+                            if (holder.progress != last) {
+                                last = holder.progress
+                                lastMoved = SystemClock.uptimeMillis()
+                            }
+                        }
+                        if (SystemClock.uptimeMillis() - lastMoved > STALL_MS) {
+                            android.util.Log.w("DreamVideoShrink", "stuck at $last % for ${STALL_MS / 1000} s (${way.name})")
+                            transformer.cancel()
+                            if (cont.isActive) cont.resume("stuck at $last %")
+                            return
+                        }
                         handler.postDelayed(this, 500)
                     }
                 }
@@ -143,13 +173,13 @@ object DreamVideoShrink {
                     .build()
                 val effects = buildList {
                     if (shape.fps > MAX_FPS + 1) add(FrameDropEffect.createDefaultFrameDropEffect(MAX_FPS))
-                    // The long side follows from the short one; an upright video keeps standing
-                    if (shape.shortSide > SHORT_SIDE) add(
-                        if (shape.upright) Presentation.createForWidthAndHeight(SHORT_SIDE, SHORT_SIDE * 16 / 9, Presentation.LAYOUT_SCALE_TO_FIT)
-                        else Presentation.createForHeight(SHORT_SIDE)
-                    )
+                    // The TV's shape, filled edge to edge
+                    if (!shape.fits) add(Presentation.createForWidthAndHeight(WIDTH, HEIGHT, Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP))
                 }
-                val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(input)))
+                val media = MediaItem.Builder().setUri(Uri.fromFile(input)).apply {
+                    if (shape.tooLong) setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setEndPositionMs(MAX_SECONDS * 1000L).build())
+                }.build()
+                val item = EditedMediaItem.Builder(media)
                     .setRemoveAudio(true)
                     .setEffects(Effects(emptyList(), effects))
                     .build()
@@ -176,21 +206,24 @@ object DreamVideoShrink {
         return failure
     }
 
-    private class Shape(val width: Int, val height: Int, val fps: Float, val bitrate: Long, val sound: Boolean, val hdr: Boolean, val mime: String?) {
-        val shortSide get() = minOf(width, height)
-        val upright get() = height > width
+    private class Shape(val width: Int, val height: Int, val fps: Float, val bitrate: Long, val sound: Boolean, val hdr: Boolean, val mime: String?, val seconds: Float) {
+        /** Already the TV's shape and size, as it shows. */
+        val fits get() = width == WIDTH && height == HEIGHT
 
-        /** The bit rate to make it again at: enough for its size and pace, never more than it had. */
+        val tooLong get() = seconds > MAX_SECONDS + 1
+
+        /** The bit rate to make it again at: enough for 1080 lines at its pace, never more than it had. */
         val rate: Long
             get() {
-                val lines = minOf(shortSide, SHORT_SIDE).toFloat() / SHORT_SIDE
-                val full = if (minOf(fps, MAX_FPS) > 31f) RATE_60 else RATE_30
-                val fit = (full * lines * lines).toLong().coerceAtLeast(2_000_000L)
-                return if (bitrate > 0) minOf(fit, bitrate) else fit
+                val fit = if (minOf(fps, MAX_FPS) > 31f) RATE_60 else RATE_30
+                return if (bitrate > 0) minOf(fit, bitrate.coerceAtLeast(4_000_000L)) else fit
             }
 
+        /** Made again for more than its weight: its shape, pace, length or colours. */
+        val reshaped get() = !fits || fps > MAX_FPS + 1 || hdr || tooLong
+
         /** Whether the picture itself has to be made again, rather than only copied without sound. */
-        val reencode get() = shortSide > SHORT_SIDE || fps > MAX_FPS + 1 || hdr || bitrate > rate * 3 / 2
+        val reencode get() = reshaped || bitrate > rate * 3 / 2
     }
 
     /** The video's size as it shows (turned the way the phone held it), pace, bit rate, sound and HDR. */
@@ -213,7 +246,8 @@ object DreamVideoShrink {
                 bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() ?: 0L,
                 sound = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes",
                 hdr = track?.hdr ?: false,
-                mime = track?.mime
+                mime = track?.mime,
+                seconds = seconds
             )
         } catch (e: Exception) {
             null
