@@ -187,6 +187,8 @@ class ControlSetupActivity : ComponentActivity() {
         private val Body = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
         private const val PREFS = "neon_control"
         private const val SEEN = "setup_seen_version"
+        private const val SEEN_AT = "setup_seen_at"
+        private const val AGAIN_MS = 20L * 60 * 60 * 1000
         /** Opened from the Wi-Fi list: ask for the names at once. */
         const val EXTRA_NAMES = "names"
 
@@ -194,18 +196,23 @@ class ControlSetupActivity : ComponentActivity() {
             context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
         private fun markSeen(context: Context) =
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(SEEN, BuildConfig.VERSION_CODE).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt(SEEN, BuildConfig.VERSION_CODE).putLong(SEEN_AT, System.currentTimeMillis()).apply()
 
         /**
-         * Neon Home shows the setup once per installed version, after each update, while the
-         * Control Center can't open yet; once all is on it stays away. Never on the
+         * Neon Home shows the setup while the Control Center can't open yet: after each update,
+         * and again once a day while the service is still off. Once all is on it stays away. Never on the
          * emulator, where the TV test drives the home screen with the remote and a card would
          * stand in its way; the test opens it by name instead.
          */
         fun dueOnHome(context: Context): Boolean {
             if (Build.HARDWARE == "ranchu" || Build.HARDWARE == "goldfish") return false
-            if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(SEEN, 0) == BuildConfig.VERSION_CODE) return false
-            return !(OverlayPrefs.serviceOn(context) && names(context))
+            val serviceOn = OverlayPrefs.serviceOn(context)
+            if (serviceOn && names(context)) return false
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            if (prefs.getInt(SEEN, 0) != BuildConfig.VERSION_CODE) return true
+            // The service is what opens it at all: ask again tomorrow while it stays off
+            return !serviceOn && System.currentTimeMillis() - prefs.getLong(SEEN_AT, 0L) > AGAIN_MS
         }
 
         fun open(context: Context, names: Boolean = false) = runCatching {
