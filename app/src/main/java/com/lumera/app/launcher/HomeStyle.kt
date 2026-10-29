@@ -63,7 +63,9 @@ data class HomeLook(
     /** The glass the tiles, tabs, buttons and menus are made of, or none for the style's own tiles. */
     val glassMode: HomeGlass = HomeGlass.Off,
     /** On glass, the white signs on the tiles take the app's own colour in focus. */
-    val brandInFocus: Boolean = true
+    val brandInFocus: Boolean = true,
+    /** On liquid glass, what a tile plays as the focus lands on it. */
+    val focusMotion: GlassFocus = GlassFocus.Glow
 ) {
     val tileFill: Brush = Brush.verticalGradient(listOf(tileTop, tileBottom))
     val fontStyle: FontStyle get() = if (italic) FontStyle.Italic else FontStyle.Normal
