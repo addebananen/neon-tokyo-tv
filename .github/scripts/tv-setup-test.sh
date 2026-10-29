@@ -60,6 +60,15 @@ check "pushed the wallpaper, 17 banners and 17 icons" '[ "$(grep -c " push .*/sd
 run -Ip 192.168.1.77:41234 -Step dream
 check "Neon Tokyo night is the screensaver" '[ "$(setting secure/screensaver_components)" = com.neontokyo.tv/com.lumera.app.dream.NeonDreamService ]'
 
+# Another accessibility service the TV already had stays on next to the overlays
+echo "secure/enabled_accessibility_services=com.example.reader/.Reader" >> "$FAKE_ADB_STATE/settings"
+run -Ip 192.168.1.77:41234 -Step extras
+check "the overlays are on, next to the service that was there" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader:com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService ]'
+check "Neon Tokyo may switch them and ask the TV about video" 'grep -qx android.permission.WRITE_SECURE_SETTINGS "$FAKE_ADB_STATE/granted" && grep -qx android.permission.DUMP "$FAKE_ADB_STATE/granted"'
+check "the music widget may see what plays" 'grep -q NowPlayingListener "$FAKE_ADB_STATE/listener"'
+run -Ip 192.168.1.77:41234 -Step extras
+check "running extras twice lists the overlays once" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader:com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService ]'
+
 run -Ip 192.168.1.77:41234 -Step report
 check "the report ran" 'grep -q "Report" "$WORK/out.txt"'
 
@@ -69,6 +78,8 @@ check "window animations restored" '[ "$(setting global/window_animation_scale)"
 check "Ambient mode is the screensaver again" '[ "$(setting secure/screensaver_components)" = com.google.android.apps.tv.dreamx/.service.Backdrop ]'
 check "the Google TV home screen opens on Home again" 'grep -q launcherx "$FAKE_ADB_STATE/home"'
 check "Neon Home's Home button entry is off after undo" '[ ! -f "$FAKE_ADB_STATE/neonhome" ]'
+check "only the service that was there before is on after undo" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader ]'
+check "the permissions and the listener are taken back" '[ ! -s "$FAKE_ADB_STATE/granted" ] && [ ! -f "$FAKE_ADB_STATE/listener" ]'
 check "no step stopped with an error" '! grep -q "Stopped:" "$WORK/out.txt"'
 
 if [ "$failures" -gt 0 ]; then

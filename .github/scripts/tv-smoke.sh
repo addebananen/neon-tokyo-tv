@@ -7,8 +7,7 @@ APK="$1"
 OUT="$2"
 PKG=com.neontokyo.tv
 ACTIVITY=com.lumera.app.MainActivity
-# SMOKE_MODE=quick, for everyday builds, reviews two of the home styles that rotate from run to
-# run and leaves out the second profile and the scroll stress; the build for a release runs it all
+# SMOKE_MODE=quick, for everyday builds, leaves out the second profile and the scroll stress; the build for a release runs it all
 MODE="${SMOKE_MODE:-full}"
 RUN="${GITHUB_RUN_NUMBER:-0}"
 mkdir -p "$OUT"
@@ -296,7 +295,10 @@ video_from_phone() {
 # hold_ok <seconds>: holds OK down like a thumb on the remote. `input keyevent` can only tap or
 # long press, the shell may not write /dev/input, and the emulator console's keys never arrive
 # without a hardware keyboard, so HoldKey.java injects the down, the repeats and the up itself
-hold_ok() {
+hold_ok() { hold_keys 23 "$1"; }
+
+# hold_keys <codes> <seconds>: the same for any key, or for keys held together ("19,20")
+hold_keys() {
   if ! adb shell ls /data/local/tmp/holdkey.dex >/dev/null 2>&1; then
     local sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}" build tools
     build=$(mktemp -d)
@@ -306,8 +308,8 @@ hold_ok() {
       adb push "$build/classes.dex" /data/local/tmp/holdkey.dex >/dev/null || return 1
   fi
   local ms
-  ms=$(awk -v s="$1" 'BEGIN { printf "%d", s * 1000 }')
-  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey 23 "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
+  ms=$(awk -v s="$2" 'BEGIN { printf "%d", s * 1000 }')
+  adb shell CLASSPATH=/data/local/tmp/holdkey.dex app_process /system/bin HoldKey "$1" "$ms" 2>&1 | tr -d '\r' | tail -1 | grep '^held key'
 }
 
 # menu_go <label>: opens the side menu and moves the D-pad focus onto that entry, then selects it
@@ -377,7 +379,6 @@ if ! adb install -r -g "$APK" > "$OUT/install.txt" 2>&1; then
   exit 1
 fi
 
-adb logcat -c
 adb logcat -v time > "$OUT/logcat-full.txt" 2>&1 &
 LOGCAT_PID=$!
 
@@ -935,14 +936,9 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-others=(nature anime clean city faith car car_night lofi cottage naturecore space aero academia japandi vaporwave retro cyber solarpunk dusk)
-if [ "$MODE" = full ]; then
-  styles=(google_tv "${others[@]}" deepblue)
-  dreams=(lofi dusk nature deepblue)
-else
-  styles=(google_tv "${others[$((RUN * 2 % ${#others[@]}))]}" "${others[$(((RUN * 2 + 1) % ${#others[@]}))]}" deepblue)
-  dreams=("${styles[1]}" deepblue)
-fi
+# Six styles, few enough to review them all on every run
+styles=(clean nature dusk deepblue icelake)
+dreams=(dusk nature deepblue icelake)
 echo "home styles under test ($MODE): ${styles[*]}"
 for style in "${styles[@]}"; do
   adb logcat -c
@@ -955,6 +951,8 @@ for style in "${styles[@]}"; do
   if ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
+  # Nature comes with the consoles on Home as well as on Källor
+  if [ "$style" = nature ] && ! screen_has "HDMI 6"; then fail "Nature does not show the consoles on Home"; fi
   # The style under review is filmed too, for its motion
   if [ "$style" = nature ]; then
     adb shell settings put global animator_duration_scale 1
@@ -962,7 +960,7 @@ for style in "${styles[@]}"; do
     adb shell settings put global animator_duration_scale 0
     adb pull "/sdcard/style-$style.mp4" "$OUT/style-$style.mp4" > /dev/null 2>&1 || true
   fi
-  if [ "$style" = google_tv ]; then
+  if [ "$style" = clean ]; then
     key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
     shot "style-$style-apps"
     key DPAD_RIGHT; sleep 2
@@ -970,8 +968,8 @@ for style in "${styles[@]}"; do
     # Up from the tabs reaches the pills at the top; the profile pill is the first of them
     key DPAD_UP; sleep 1
     label=$(focused_label)
-    case "$label" in N|Neon|Search|Inputs|Bluetooth|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
-    for _ in 1 2 3 4 5 6 7; do
+    case "$label" in N|Neon|Search|AirPlay|Inputs|Bluetooth|Update|nt.*|Motion|Settings) ;; *) fail "Up from the tabs in the $style style is $label, not a pill at the top" ;; esac
+    for _ in 1 2 3 4 5 6 7 8; do
       # The pill reads as its face's letter or the profile's name
       case "$label" in N|Neon) break ;; esac
       key DPAD_LEFT; sleep 1
@@ -981,15 +979,33 @@ for style in "${styles[@]}"; do
     key DPAD_CENTER; sleep 2
     shot "style-$style-profiles"
     screen_has "Who's home?" || fail "the profile pill did not open the profile picker"
+    # Under the profiles, Customize opens the look and layout of the profile that is home
+    key DPAD_DOWN; sleep 1
+    label=$(focused_label)
+    if [ "$label" = "Customize" ]; then
+      key DPAD_CENTER; sleep 2
+      shot "style-$style-customize"
+      screen_has "Liquid glass" || fail "Customize did not open the profile's glass and layout"
+      screen_has "Consoles on Home" || fail "the profile's layout has no choice of consoles on Home"
+      key BACK; sleep 2
+      screen_has "Who's home?" || fail "Back from Customize did not go back to the profiles"
+    else
+      fail "Down from the profiles is $label, not Customize"
+    fi
     key BACK; sleep 2
     screen_has "Who's home?" && fail "one press of Back did not close the profile picker"
     # The panel gives the focus back to the pill that opened it
     label=$(focused_label)
     case "$label" in N|Neon) ;; *) fail "the focus did not go back to the profile pill when the profile picker closed ($label has it)" ;; esac
-    # Bluetooth, three along, lists the paired headphones and speakers of this profile
-    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    # Two along is the AirPlay button, for sharing from an iPhone through a receiver app
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    [ "$label" = "Bluetooth" ] || fail "three along from the profile pill is $label, not Bluetooth"
+    [ "$label" = "AirPlay" ] || fail "two along from the profile pill is $label, not the AirPlay pill"
+    shot "style-$style-airplay"
+    # Bluetooth, two further along, lists the paired headphones and speakers of this profile
+    key DPAD_RIGHT; sleep 1; key DPAD_RIGHT; sleep 1
+    label=$(focused_label)
+    [ "$label" = "Bluetooth" ] || fail "four along from the profile pill is $label, not Bluetooth"
     key DPAD_CENTER; sleep 3
     shot "style-$style-bluetooth"
     screen_has "devices" || screen_has "no Bluetooth" || fail "the Bluetooth pill did not open the Bluetooth panel"
@@ -999,7 +1015,7 @@ for style in "${styles[@]}"; do
     # The pill with the version number, next along, says which version this is and looks for a newer one
     key DPAD_RIGHT; sleep 1
     label=$(focused_label)
-    case "$label" in nt.*|Update) ;; *) fail "four along from the profile pill is $label, not the version pill" ;; esac
+    case "$label" in nt.*|Update) ;; *) fail "five along from the profile pill is $label, not the version pill" ;; esac
     key DPAD_CENTER; sleep 4
     shot "style-$style-updates"
     screen_has "This version" || fail "the version pill did not open the updates panel"
@@ -1022,10 +1038,26 @@ for style in "${styles[@]}"; do
   sleep 2
 done
 
+# The glass and the layout a profile can choose, on styles that come without them: Neon in liquid
+# glass with the consoles on Home, and Ice Lake with square icons at the foot of the screen
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es glass liquid --es layout consoles,names >/dev/null 2>&1
+sleep 6
+shot glass-neon-liquid
+screen_has "HDMI 6" || fail "Neon in liquid glass, asked for the consoles on Home, shows none there"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Neon in liquid glass does not start on YouTube ($label has the focus)"
+key BACK; sleep 2
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style icelake --es layout down,square >/dev/null 2>&1
+sleep 6
+shot glass-icelake-square
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "Ice Lake with square icons does not start on YouTube ($label has the focus)"
+key BACK; sleep 2
+
 # The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
 # on the All apps tab. Apps the emulator lacks keep their neon face
 for pack in original banner glass; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons "$pack" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons "$pack" >/dev/null 2>&1
   sleep 6
   shot "icons-$pack"
   # A banner is all picture, the app's name only in its description
@@ -1044,7 +1076,7 @@ done
 
 # Colour remixes of the apps' own icons, and the neon round Neon Tokyo's tile (fourth on Home)
 for tint in synthwave night; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tint "$tint" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons original --es tint "$tint" >/dev/null 2>&1
   sleep 6
   shot "tint-$tint"
   label=$(focused_label)
@@ -1070,7 +1102,7 @@ done
 # apps, so their tiles are dimmed, but the scene plays all the same
 n=0
 for tiles in "se.tv4.tv4play,se.svt.android.svtplay,allente.b2c.tvclient,com.viaplay.android" "com.netflix.ninja,com.disney.disneyplus,com.amazon.amazonvideo.livingroom,com.wbd.stream"; do
-  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style google_tv --es icons original --es tiles "$tiles" >/dev/null 2>&1
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style clean --es icons original --es tiles "$tiles" >/dev/null 2>&1
   sleep 6
   for i in 1 2 3 4; do
     n=$((n + 1))
@@ -1134,13 +1166,29 @@ adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
 
-# A home style's own screensaver: its picture, its little lights and a quiet clock. The preview
-# opens over the app the way its Preview button does; clearing the task would close the app too
+# Widgets under the clock, a profile's own extra: weather, the week, what plays and the network
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es widgets Weather,Calendar,Music,Network >/dev/null 2>&1
+sleep 5
+shot neon-home-widgets
+screen_has 'text="Week [0-9]*"' || fail "the week widget did not show under the clock"
+screen_has 'text="Nothing playing"' || fail "the music widget did not show under the clock"
+screen_has 'text="Wi‑Fi"\|text="Ethernet"\|text="Online"\|text="Offline"' || fail "the network widget did not show under the clock"
+label=$(focused_label)
+[ "$label" = "YouTube" ] || fail "with widgets on, Neon Home does not start on YouTube ($label has the focus)"
+key BACK
+sleep 2
+
+# A home style's own screensaver: its picture, its little lights and a quiet clock, or for a
+# style that is a film (Deep Blue, Ice Lake) the film alone. The preview opens over the app the
+# way its Preview button does; clearing the task would close the app too
 for style in "${dreams[@]}"; do
   adb shell am start -n "$PKG/com.lumera.app.dream.NeonDreamPreviewActivity" --es style "$style" >/dev/null 2>&1
   sleep 6
   shot "dream-style-$style"
-  screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock"
+  case "$style" in
+    deepblue|icelake) screen_has 'text="[0-9]*:[0-9][0-9]' && fail "the $style screensaver should be its film alone, without a clock" ;;
+    *) screen_has 'text="[0-9]*:[0-9][0-9]' || fail "the $style screensaver shows no clock" ;;
+  esac
   key BACK
   sleep 2
 done
@@ -1215,6 +1263,62 @@ fi
 [ "$(resolve_home)" = "$stock_home" ] || fail "the stock home screen did not get the Home button back ($(resolve_home) instead of $stock_home)"
 adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
 sleep 3
+
+# --- Overlays: picture diagnostics and the gaming HUD over whatever shows ---------
+# The TV turns the overlay service on under Accessibility; the shell may do the same. Holding Up
+# and Down together opens diagnostics and Back puts it away; Left and Right bring the HUD, which
+# goes by itself. The windows draw over the app without taking its focus
+overlay_on() { adb shell dumpsys window windows 2>/dev/null | grep -q "NeonOverlay"; }
+overlay_me="$PKG/com.lumera.app.overlay.NeonOverlayService"
+overlay_before=$(adb shell settings get secure enabled_accessibility_services 2>/dev/null | tr -d '\r')
+adb shell pm grant "$PKG" android.permission.DUMP > "$OUT/overlay.txt" 2>&1
+adb shell settings put secure enabled_accessibility_services "$overlay_me"
+adb shell settings put secure accessibility_enabled 1
+sleep 4
+adb shell dumpsys accessibility >> "$OUT/overlay.txt" 2>&1
+grep -q "NeonOverlayService" "$OUT/overlay.txt" || fail "the overlay service did not start once Accessibility turned it on"
+adb shell settings put global animator_duration_scale 1
+adb shell screenrecord --time-limit 6 --size 1280x720 --bit-rate 6000000 /sdcard/overlay.mp4 >> "$OUT/overlay.txt" 2>&1 &
+recorder=$!
+sleep 0.5
+# Keys injected from the shell never pass the accessibility key filter the chords listen through
+# (a real remote's do; the chords themselves are unit tested), so the overlays are opened the way
+# a PC can: a broadcast only the shell and the system may send. Pictures are plain screencaps,
+# since uiautomator unbinds every accessibility service while it reads the screen
+overlay() { adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show "$1" >/dev/null 2>&1; }
+overlay_shot() { step=$((step + 1)); adb exec-out screencap -p > "$OUT/$(printf "%02d-%s" "$step" "$1").png"; }
+overlay diagnostics
+sleep 2.5
+overlay_on || fail "picture diagnostics did not open"
+sleep 1.5
+overlay_shot overlay-diagnostics
+sleep 1.5
+overlay off
+sleep 1
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/overlay.mp4 "$OUT/overlay-diagnostics.mp4" > /dev/null 2>&1 || true
+if overlay_on; then fail "picture diagnostics did not go away"; fi
+adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
+  fail "picture diagnostics took the app out of front"
+# The app's own folder is closed to adb on Android 11, so the save is read from the log
+adb logcat -d -s Dumps | grep -q "Saved the report" || fail "picture diagnostics saved no report"
+adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show report > "$OUT/overlay-readings.txt" 2>&1
+grep -q "\[Panel\]" "$OUT/overlay-readings.txt" || fail "the overlay service sent no readings back to am broadcast"
+overlay hud
+sleep 1.5
+overlay_on || fail "the gaming HUD did not open"
+overlay_shot overlay-hud
+sleep 6
+if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
+adb shell settings put global animator_duration_scale 0
+if [ -z "$overlay_before" ] || [ "$overlay_before" = null ]; then
+  adb shell settings delete secure enabled_accessibility_services > /dev/null 2>&1
+else
+  adb shell settings put secure enabled_accessibility_services "$overlay_before"
+fi
+sleep 1
+
+adb logcat -d -s NeonOverlay Dumps >> "$OUT/overlay.txt" 2>&1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------

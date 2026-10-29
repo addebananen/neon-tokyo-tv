@@ -24,11 +24,14 @@ object NeonDreamStyle {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, style).apply()
     }
 
-    /** The screensaver's view in the style chosen in Settings; the city drive while no video was sent. */
-    fun view(context: Context): View = when {
-        get(context) == HOME -> HomeDream.view(context)
-        get(context) == SKYLINE -> NeonNightView(context)
-        get(context) == VIDEO && DreamVideo.exists(context) -> VideoDreamView(context, DreamVideo.file(context))
-        else -> CityDriveView(context)
+    /**
+     * The screensaver's view in the style chosen in Settings; the city drive while no video was sent.
+     * Deep Blue and Ice Lake are films already, so while one is on Home it plays on alone instead.
+     */
+    fun view(context: Context): View {
+        val style = get(context)
+        if (style == HOME) return HomeDream.view(context)
+        if (style == VIDEO && DreamVideo.exists(context)) return VideoDreamView(context, DreamVideo.file(context))
+        return HomeDream.film(context) ?: if (style == SKYLINE) NeonNightView(context) else CityDriveView(context)
     }
 }

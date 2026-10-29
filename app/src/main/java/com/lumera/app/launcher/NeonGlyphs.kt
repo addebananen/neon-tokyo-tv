@@ -25,7 +25,8 @@ enum class Glyph(pathData: String) {
     YtMusic(circle(50, 50, 32) + circle(50, 50, 19) + "M45 42 L58 50 L45 58 Z"),
     Spotify(circle(50, 50, 33) + "M31 40 Q50 33 70 42 M34 51 Q50 45 66 53 M37 61 Q50 57 62 63"),
     Stremio("M50 15 L85 50 L50 85 L15 50 Z M44 38 L61 50 L44 62 Z"),
-    NeonTokyo("M24 60 A26 26 0 0 1 76 60 M29 49 H71 M26 55 H74 M12 66 H88 M44 66 L34 88 M56 66 L66 88 M24 80 H76"),
+    // Tokyo Tower: the mast, the legs bowing out to the arch at its foot, and its two decks
+    NeonTokyo("M50 8 V21 M50 21 Q46.7 56.4 30.2 89.6 M50 21 Q53.3 56.4 69.8 89.6 M41.7 41.7 H58.3 M34.6 64.6 H65.4 M38.5 89.6 Q50 75 61.5 89.6"),
     Tv(rect(16, 34, 68, 48, 12) + rect(24, 42, 40, 32, 7) + "M40 34 L30 16 M60 34 L70 16 M71 62 H77" + circle(74, 50, 2.5f)),
     Parcel("M20 50 L50 62 L80 50 V76 L50 88 L20 76 Z M50 62 V88 M20 50 L12 40 M80 50 L88 40" + circle(50, 28, 14) + "M46 21 L57 28 L46 35 Z"),
     Castle(
@@ -87,13 +88,29 @@ enum class Glyph(pathData: String) {
     Hdmi("M14 34 H86 V54 L74 70 H26 L14 54 Z M30 47 H70"),
     Gear(gear(50f, 50f, 38f, 28f, 8) + circle(50, 50, 11)),
     Update("M50 16 V60 M33 44 L50 61 L67 44 M20 68 V82 H80 V68"),
+    /** A screen with a triangle coming up into it, as the iPhone draws AirPlay. */
+    AirPlay("M32 70 H20 A6 6 0 0 1 14 64 V24 A6 6 0 0 1 20 18 H80 A6 6 0 0 1 86 24 V64 A6 6 0 0 1 80 70 H68 M50 56 L72 86 H28 Z"),
+
     Bluetooth("M30 34 L68 66 L50 84 V16 L68 34 L30 66"),
 
     // Earbuds, as AirPods look: two rounded buds, each with its stem hanging down
     Earbuds(
         "M30 20 A13 13 0 1 1 30 46 A13 13 0 0 1 30 20 Z M37 40 V80 A5 5 0 0 1 27 80 V44 " +
             "M70 20 A13 13 0 1 0 70 46 A13 13 0 0 0 70 20 Z M63 40 V80 A5 5 0 0 0 73 80 V44"
-    );
+    ),
+
+    // The widgets by the clock
+    Sun(circle(50, 50, 16) + "M50 14 V24 M50 76 V86 M14 50 H24 M76 50 H86 M24.5 24.5 L31.6 31.6 M68.4 68.4 L75.5 75.5 M24.5 75.5 L31.6 68.4 M68.4 31.6 L75.5 24.5"),
+    Cloud("M30 70 H72 A14 14 0 0 0 70 42 A20 20 0 0 0 32 46 A12 12 0 0 0 30 70 Z"),
+    Rain("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z M38 66 L33 80 M52 66 L47 80 M66 66 L61 80"),
+    Snow("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z " + circle(38, 70, 2.5) + circle(52, 76, 2.5) + circle(66, 70, 2.5) + circle(44, 86, 2.5) + circle(60, 86, 2.5)),
+    Storm("M30 56 H72 A14 14 0 0 0 70 28 A20 20 0 0 0 32 32 A12 12 0 0 0 30 56 Z M54 60 L44 74 H56 L46 90"),
+    Fog("M18 40 H82 M26 52 H74 M18 64 H82 M30 76 H70"),
+    Wifi("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67" + circle(50, 80, 4)),
+    Ethernet(rect(22, 20, 56, 50, 6) + "M36 70 V84 H64 V70 M34 34 V46 M44 34 V46 M56 34 V46 M66 34 V46"),
+    Offline("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67 M18 18 L82 82"),
+    Note("M40 72 V22 L78 14 V64" + circle(30, 72, 10) + circle(68, 64, 10) + "M40 34 L78 26"),
+    Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54");
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
@@ -125,21 +142,30 @@ private fun circle(cx: Number, cy: Number, r: Number): String {
     return "M${x - radius} $y A$radius $radius 0 1 0 ${x + radius} $y A$radius $radius 0 1 0 ${x - radius} $y Z "
 }
 
-/** A neon icon filling its size: a 4 unit tube with a 10 unit glow at a fifth of its strength. */
+/**
+ * A neon icon filling its size: a 4 unit tube with a 10 unit glow at a fifth of its strength, or
+ * [plain], a firmer line with no glow, as signs on glass. [color] is read as the line is drawn.
+ */
 @Composable
-fun NeonGlyph(glyph: Glyph, color: Color, modifier: Modifier = Modifier) {
+fun NeonGlyph(glyph: Glyph, color: Color, modifier: Modifier = Modifier, plain: Boolean = false) {
+    NeonGlyph(glyph, { color }, modifier, plain)
+}
+
+@Composable
+fun NeonGlyph(glyph: Glyph, color: () -> Color, modifier: Modifier = Modifier, plain: Boolean = false) {
     Spacer(
         modifier.drawWithCache {
             val k = size.minDimension / 100f
             val left = (size.width - 100f * k) / 2f
             val top = (size.height - 100f * k) / 2f
             val glow = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            val tube = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val tube = Stroke(width = if (plain) 6.5f else 4f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             onDrawBehind {
+                val c = color()
                 scale(k, k, pivot = Offset.Zero) {
                     translate(left / k, top / k) {
-                        drawPath(glyph.path, color, alpha = 0.22f, style = glow)
-                        drawPath(glyph.path, color, style = tube)
+                        if (!plain) drawPath(glyph.path, c, alpha = 0.22f, style = glow)
+                        drawPath(glyph.path, c, style = tube)
                     }
                 }
             }

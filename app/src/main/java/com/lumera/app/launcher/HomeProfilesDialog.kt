@@ -15,6 +15,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -166,7 +168,13 @@ private fun ProfileList(
             }
             if (list.size < MaxProfiles) AddCard(look, onAdd)
         }
-        PanelNote("OK switches  ·  hold OK to change a profile", look)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The look and layout of the profile that is home: style, glass, rows and icons
+            list.firstOrNull { it.id == activeId }?.let { active ->
+                PanelButton("Customize", look) { onEdit(active) }
+            }
+            PanelNote("OK switches  ·  hold OK to change a profile", look)
+        }
     }
 }
 
@@ -288,6 +296,7 @@ private fun ProfileEditor(
     var takingBackground by remember { mutableStateOf(false) }
     var takingDreamVideo by remember { mutableStateOf(false) }
     var takingVideo by remember { mutableStateOf(false) }
+    var choosingWidgets by remember { mutableStateOf(false) }
     val styleList = remember { FocusRequester() }
     LaunchedEffect(profile.id) {
         withFrameNanos { }
@@ -297,70 +306,102 @@ private fun ProfileEditor(
         val clean = name.trim()
         if (clean.isNotEmpty() && clean != profile.name) profiles.edit(profile.id) { it.copy(name = clean) }
     }
+    fun change(edit: (HomeProfile) -> HomeProfile) {
+        saveName()
+        profiles.edit(profile.id, edit)
+    }
     Column(
         modifier = Modifier
-            .width(920.dp)
-            .homePanel(look, RoundedCornerShape(18.dp))
-            .padding(horizontal = 30.dp, vertical = 22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .width(600.dp)
+            .homePanel(look, RoundedCornerShape(22.dp))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 26.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-            ProfileFace(profile.copy(name = name.ifBlank { profile.name }), Modifier.size(64.dp))
-            Column(Modifier.weight(1f)) {
-                PanelNote("NAME", look)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+            ProfileFace(profile.copy(name = name.ifBlank { profile.name }), Modifier.size(38.dp), letterSize = 17.sp)
+            Column(Modifier.width(220.dp)) {
                 NameField(name, look, onChange = { name = it.take(20) }, onDone = { saveName() })
             }
-            PanelButton("Photo", look) { takingPhoto = true }
-            PanelButton("Own picture", look) { takingBackground = true }
-            PanelButton("Own video", look) { takingVideo = true }
-            // Removing it deletes the file from the TV as well (HomeProfiles.update)
-            if (profile.background != null) PanelButton("Remove background", look) { profiles.edit(profile.id) { it.copy(background = null) } }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PanelNote("STYLE", look)
             Spacer(Modifier.weight(1f))
-            PanelNote(profile.style.blurb, look)
+            PanelNote(profile.style.blurb, look, modifier = Modifier.width(200.dp))
         }
-        StylePicker(profile.style, look, styleList) { style ->
-            saveName()
-            profiles.edit(profile.id) { it.copy(style = style) }
+        // A style brings its own glass and layout; the rows under it then change them
+        OptionRow("Style", look) {
+            HomeStyle.entries.forEach { style ->
+                PanelButton(
+                    style.title,
+                    look,
+                    primary = style == profile.style,
+                    modifier = if (style == profile.style) Modifier.focusRequester(styleList) else Modifier
+                ) {
+                    change { it.copy(style = style, glass = null, rowsDown = null, consolesOnHome = null, squareIcons = null, names = null) }
+                }
+            }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            PanelNote("APP ICONS", look)
-            Spacer(Modifier.width(8.dp))
+        OptionRow("Glass", look) {
+            HomeGlass.entries.forEach { glass ->
+                PanelButton(glass.title, look, primary = glass == profile.glassLook) { change { it.copy(glass = glass) } }
+            }
+        }
+        OptionRow("Watch & listen", look) {
+            PanelButton("At the top", look, primary = !profile.watchDown) { change { it.copy(rowsDown = false) } }
+            PanelButton("At the bottom", look, primary = profile.watchDown) { change { it.copy(rowsDown = true) } }
+        }
+        OptionRow("Consoles on Home", look) {
+            PanelButton("Show", look, primary = profile.showConsoles) { change { it.copy(consolesOnHome = true) } }
+            PanelButton("Hide", look, primary = !profile.showConsoles) { change { it.copy(consolesOnHome = false) } }
+        }
+        OptionRow("Names", look) {
+            PanelButton("Always", look, primary = profile.namesAlways) { change { it.copy(names = true) } }
+            PanelButton("In focus", look, primary = !profile.namesAlways) { change { it.copy(names = false) } }
+        }
+        OptionRow("Tiles", look) {
+            PanelButton("Wide", look, primary = !profile.square) { change { it.copy(squareIcons = false) } }
+            PanelButton("Square icons", look, primary = profile.square) { change { it.copy(squareIcons = true) } }
+        }
+        OptionRow("App icons", look) {
             IconPack.values().forEach { pack ->
-                PanelButton(pack.title, look, primary = pack == profile.icons) {
-                    saveName()
-                    profiles.edit(profile.id) { it.copy(icons = pack) }
-                }
+                PanelButton(pack.title, look, primary = pack == profile.icons) { change { it.copy(icons = pack) } }
             }
         }
-        // The remixes are of the apps' own icons, so the neon line icons have none
-        if (profile.icons != IconPack.Neon) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                PanelNote("COLOURS", look)
-                Spacer(Modifier.width(8.dp))
+        // The remixes are of the apps' own icons, which the neon line icons are not, unless the
+        // liquid glass shows the apps' own icons anyway
+        if (profile.icons != IconPack.Neon || profile.glassLook == HomeGlass.Liquid) {
+            OptionRow("Colours", look) {
                 IconTint.values().forEach { tint ->
-                    PanelButton(tint.title, look, primary = tint == profile.tint) {
-                        saveName()
-                        profiles.edit(profile.id) { it.copy(tint = tint) }
-                    }
+                    PanelButton(tint.title, look, primary = tint == profile.tint) { change { it.copy(tint = tint) } }
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        OptionRow("Widgets", look) {
+            PanelButton("Under the clock", look) { choosingWidgets = true }
+        }
+        OptionRow("From your phone", look) {
+            PanelButton("Photo", look) { takingPhoto = true }
+            PanelButton("Background", look) { takingBackground = true }
+            PanelButton("Background video", look) { takingVideo = true }
+            PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
+        }
+        // Removing a background deletes the file from the TV as well (HomeProfiles.update)
+        if (profile.background != null || profile.dreamVideo != null) {
+            OptionRow("", look) {
+                if (profile.background != null) PanelButton("Remove background", look) { change { it.copy(background = null) } }
+                if (profile.dreamVideo != null) PanelButton("Remove screensaver video", look) { change { it.copy(dreamVideo = null) } }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
             PanelButton("Done", look, primary = true) {
                 saveName()
                 onDone()
             }
-            PanelButton(if (profile.dreamVideo == null) "Screensaver video" else "New screensaver video", look) { takingDreamVideo = true }
-            if (profile.dreamVideo != null) PanelButton("Remove screensaver video", look) { profiles.edit(profile.id) { it.copy(dreamVideo = null) } }
             if (canDelete) PanelButton("Remove profile", look, onClick = onDelete)
+            Spacer(Modifier.weight(1f))
+            PanelNote("Back closes", look)
         }
+    }
+    if (choosingWidgets) {
+        HomeWidgetsDialog(profile, onDismiss = { choosingWidgets = false })
     }
     if (takingPhoto) {
         ProfilePhotoDialog(
@@ -437,83 +478,21 @@ private fun NameField(value: String, look: HomeLook, onChange: (String) -> Unit,
     )
 }
 
-/** The styles side by side, each a little picture of its painting; OK on one chooses it. */
-@OptIn(ExperimentalTvMaterial3Api::class)
+/** A row of the profile editor: what it sets on the left, and its choices beside it. */
 @Composable
-private fun StylePicker(current: HomeStyle, look: HomeLook, focusRequester: FocusRequester, onChoose: (HomeStyle) -> Unit) {
-    val start = HomeStyle.entries.indexOf(current)
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = (start - 1).coerceAtLeast(0))
-    LazyRow(
-        state = state,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)
-    ) {
-        itemsIndexed(HomeStyle.entries) { index, style ->
-            val chosen = style == current
-            val shape = RoundedCornerShape(10.dp)
-            var focused by remember { mutableStateOf(false) }
-            val lift by animateFloatAsState(if (focused) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "StyleLift")
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Surface(
-                    onClick = { onChoose(style) },
-                    modifier = Modifier
-                        .size(StyleThumb.first, StyleThumb.second)
-                        .then(if (index == start) Modifier.focusRequester(focusRequester) else Modifier)
-                        .onFocusChanged { focused = it.isFocused },
-                    shape = ClickableSurfaceDefaults.shape(shape = shape),
-                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1.08f),
-                    colors = ClickableSurfaceDefaults.colors(containerColor = Color.Black, focusedContainerColor = Color.Black),
-                    border = ClickableSurfaceDefaults.border(
-                        border = Border(BorderStroke(if (chosen) 2.dp else 0.5.dp, if (chosen) look.accent else look.text.copy(alpha = 0.2f)), shape = shape),
-                        focusedBorder = Border(BorderStroke(2.5.dp, style.look.accent), shape = shape)
-                    ),
-                    glow = ClickableSurfaceDefaults.glow(focusedGlow = Glow(elevationColor = style.look.accent.copy(alpha = 0.55f), elevation = 14.dp))
-                ) {
-                    StyleThumbnail(style)
-                }
-                Spacer(Modifier.height(8.dp))
-                BasicText(
-                    style.title,
-                    style = TextStyle(
-                        fontFamily = style.look.font,
-                        fontWeight = style.look.weight,
-                        fontStyle = style.look.fontStyle,
-                        fontSize = 12.sp,
-                        color = if (focused || chosen) look.text else look.dim
-                    ),
-                    modifier = Modifier.graphicsLayer { translationY = lift * 4.dp.toPx() }
-                )
-            }
-        }
-    }
-}
-
-private val StyleThumb: Pair<Dp, Dp> = 144.dp to 81.dp
-
-@Composable
-private fun StyleThumbnail(style: HomeStyle) {
-    val context = LocalContext.current
-    val image by produceState(ThumbCache.cached(style), style) {
-        if (value == null) value = withContext(Dispatchers.IO) { ThumbCache.load(context, style) }
-    }
-    image?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-}
-
-/** Small copies of the paintings, an eighth of their size, for the style picker. */
-private object ThumbCache {
-    private val thumbs = HashMap<HomeStyle, ImageBitmap>()
-
-    @Synchronized
-    fun cached(style: HomeStyle): ImageBitmap? = thumbs[style]
-
-    fun load(context: Context, style: HomeStyle): ImageBitmap? {
-        cached(style)?.let { return it }
-        val drawable = style.backdrop ?: R.drawable.nt_wall_tokyo
-        val image = runCatching {
-            BitmapFactory.decodeResource(context.resources, drawable, BitmapFactory.Options().apply { inSampleSize = 8 })
-        }.getOrNull()?.asImageBitmap() ?: return null
-        synchronized(this) { thumbs[style] = image }
-        return image
+private fun OptionRow(label: String, look: HomeLook, choices: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        BasicText(
+            label,
+            style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.text.copy(alpha = 0.7f)),
+            maxLines = 1,
+            modifier = Modifier.width(122.dp)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) { choices() }
     }
 }
 
@@ -534,12 +513,13 @@ internal fun PanelTitle(text: String, look: HomeLook) {
 }
 
 @Composable
-internal fun PanelNote(text: String, look: HomeLook) {
+internal fun PanelNote(text: String, look: HomeLook, modifier: Modifier = Modifier) {
     BasicText(
         text,
-        style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 11.sp, letterSpacing = 0.8.sp, color = look.dim),
+        style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 11.sp, letterSpacing = if (look.glassy) 0.2.sp else 0.8.sp, color = look.dim),
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
     )
 }
 
@@ -547,6 +527,10 @@ internal fun PanelNote(text: String, look: HomeLook) {
 @Composable
 internal fun PanelButton(text: String, look: HomeLook, primary: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
+    if (look.glassy) {
+        GlassButton(text, look, primary, modifier, onClick)
+        return
+    }
     Surface(
         onClick = onClick,
         modifier = modifier,
@@ -569,5 +553,50 @@ internal fun PanelButton(text: String, look: HomeLook, primary: Boolean = false,
             style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 12.sp, color = look.text),
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+    }
+}
+
+/**
+ * A menu's button in the look's glass: a quiet pane at rest, white with dark writing in focus (or
+ * brighter glass for liquid glass), and a dot in the accent before the choice that is made.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun GlassButton(text: String, look: HomeLook, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    var focused by remember { mutableStateOf(false) }
+    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(if (focused) 180 else 260), label = "ButtonLit")
+    val turnsWhite = look.glassMode != HomeGlass.Liquid
+    Surface(
+        onClick = onClick,
+        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(shape = shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f, pressedScale = 0.97f),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = look.text,
+            focusedContainerColor = Color.Transparent,
+            focusedContentColor = look.text,
+            pressedContainerColor = Color.Transparent,
+            pressedContentColor = look.text
+        )
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .glassPane(look.glassMode, shape, lit = { lit }, white = turnsWhite)
+                .padding(horizontal = 11.dp, vertical = 6.dp)
+        ) {
+            if (primary) {
+                Box(Modifier.size(5.dp).background(if (turnsWhite && focused) GlassInk else look.accent, CircleShape))
+                Spacer(Modifier.width(6.dp))
+            }
+            BasicText(
+                text,
+                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 11.sp),
+                color = { if (turnsWhite) lerp(look.text, GlassInk, lit) else look.text },
+                maxLines = 1
+            )
+        }
     }
 }

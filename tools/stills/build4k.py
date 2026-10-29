@@ -10,12 +10,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 BOXES = {
-    'nature': [0.0, 70.4, 4226.0, 2377.1], 'faith': [0.0, 0.0, 5000.0, 2812.5],
-    'car_night': [0.0, 520.8, 5000.0, 2812.5], 'city': [0.0, 260.4, 5000.0, 2812.5],
-    'cottage': [0.0, 1122.9, 3546.0, 1994.6], 'naturecore': [0.0, 260.4, 5000.0, 2812.5],
-    'space': [0.0, 886.2, 3798.0, 2136.4], 'aero': [146.3, 0.0, 4531.5, 2549.0],
-    'academia': [0.0, 291.7, 5000.0, 2812.5], 'japandi': [0.0, 508.2, 4928.0, 2772.0],
-    'cyber': [0.0, 0.0, 5000.0, 2812.5], 'solarpunk': [0.0, 250.0, 5000.0, 2812.5],
+    'nature': [0.0, 70.4, 4226.0, 2377.1],
 }
 name = sys.argv[1]
 RES = __import__('os').path.join(__import__('os').path.dirname(__file__), '../../app/src/main/res/drawable-nodpi')

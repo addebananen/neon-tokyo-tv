@@ -61,6 +61,8 @@ case "$1" in
         enabled com.google.android.apps.tv.launcherx && printf 'priority=2\ncom.google.android.apps.tv.launcherx/.home.HomeActivity\n'
         enabled com.google.android.tungsten.setupwraith && printf 'priority=1\ncom.google.android.tungsten.setupwraith/.MainActivity\n'
         ;;
+      *"query-services"*"AccessibilityService"*)
+        enabled com.neontokyo.tv && printf 'com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService\n' ;;
       *"query-services"*)
         enabled com.neontokyo.tv && printf 'com.neontokyo.tv/com.lumera.app.dream.NeonDreamService\n'
         printf 'com.google.android.apps.tv.dreamx/.service.Backdrop\n' ;;
@@ -83,6 +85,10 @@ case "$1" in
         fi ;;
       "am start -a android.intent.action.VIEW"*) echo com.spocky.projengmenu >> "$ST/installed"; echo "Starting: Intent { market }" ;;
       "am start -n "*) echo "Starting: Intent { cmp=${c#am start -n } }" ;;
+      "pm grant "*) set -- $c; echo "$4" >> "$ST/granted" ;;
+      "pm revoke "*) set -- $c; touch "$ST/granted"; grep -vx "$4" "$ST/granted" > "$ST/g2"; mv "$ST/g2" "$ST/granted" ;;
+      "cmd notification allow_listener "*) echo "${c#cmd notification allow_listener }" > "$ST/listener" ;;
+      "cmd notification disallow_listener "*) rm -f "$ST/listener" ;;
       "settings get "*) set -- $c; setting_get "$3" "$4" ;;
       "settings put "*) set -- $c; setting_put "$3" "$4" "$5" ;;
       "settings delete "*) set -- $c; setting_delete "$3" "$4" ;;

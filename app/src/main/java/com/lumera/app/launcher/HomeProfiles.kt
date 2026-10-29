@@ -27,8 +27,25 @@ data class HomeProfile(
     /** How the apps on its tiles look: neon, or their own icons. */
     val icons: IconPack = IconPack.Neon,
     /** The colours those icons are shown in: their own, or a remix. */
-    val tint: IconTint = IconTint.Own
-)
+    val tint: IconTint = IconTint.Own,
+    // How its home screen is laid out, each null for what its style does
+    /** The glass the tiles and menus are made of. */
+    val glass: HomeGlass? = null,
+    /** Watch & listen down at the foot of the screen. */
+    val rowsDown: Boolean? = null,
+    /** The consoles in a row on Home too. */
+    val consolesOnHome: Boolean? = null,
+    /** Square glass icons rather than wide tiles. */
+    val squareIcons: Boolean? = null,
+    /** The apps' names and the buttons' words all the time, not only in focus. */
+    val names: Boolean? = null
+) {
+    val glassLook: HomeGlass get() = glass ?: style.glass
+    val watchDown: Boolean get() = rowsDown ?: style.rowsDown
+    val showConsoles: Boolean get() = consolesOnHome ?: style.consolesOnHome
+    val square: Boolean get() = squareIcons ?: style.squareIcons
+    val namesAlways: Boolean get() = names ?: style.namesAlways
+}
 
 /**
  * The home profiles and which one shows, kept in the app's preferences. There is always at
@@ -121,6 +138,11 @@ class HomeProfiles private constructor(private val context: Context) {
                 p.photo?.let { put("photo", it) }
                 p.background?.let { put("background", it) }
                 p.dreamVideo?.let { put("dreamVideo", it) }
+                p.glass?.let { put("glass", it.key) }
+                p.rowsDown?.let { put("rowsDown", it) }
+                p.consolesOnHome?.let { put("consolesOnHome", it) }
+                p.squareIcons?.let { put("squareIcons", it) }
+                p.names?.let { put("names", it) }
             })
         }
         prefs.edit().putString(KEY_PROFILES, array.toString()).apply()
@@ -139,7 +161,12 @@ class HomeProfiles private constructor(private val context: Context) {
                     background = o.optString("background").ifEmpty { null }?.takeIf { File(it).exists() },
                     dreamVideo = o.optString("dreamVideo").ifEmpty { null }?.takeIf { File(it).exists() },
                     icons = IconPack.of(o.optString("icons")),
-                    tint = IconTint.of(o.optString("tint"))
+                    tint = IconTint.of(o.optString("tint")),
+                    glass = HomeGlass.of(o.optString("glass")),
+                    rowsDown = o.flag("rowsDown"),
+                    consolesOnHome = o.flag("consolesOnHome"),
+                    squareIcons = o.flag("squareIcons"),
+                    names = o.flag("names")
                 )
             }
         }.getOrDefault(emptyList())
@@ -159,3 +186,6 @@ class HomeProfiles private constructor(private val context: Context) {
             instance ?: synchronized(this) { instance ?: HomeProfiles(context.applicationContext).also { instance = it } }
     }
 }
+
+/** A choice kept only once it was made: null when [key] was never set. */
+private fun JSONObject.flag(key: String): Boolean? = if (has(key)) optBoolean(key) else null

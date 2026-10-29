@@ -31,6 +31,17 @@ object HomeCatalog {
     val Stremio = KnownApp("Stremio", Glyph.Stremio, Color(0xFFB58CFF), listOf("com.stremio.one"))
     val NeonTokyo = KnownApp("Neon Tokyo", Glyph.NeonTokyo, Color(0xFFFF3D9A), listOf("com.neontokyo.tv", "com.neontokyo.tv.test"))
 
+    /**
+     * What the AirPlay button at the top opens. Google TV cannot take AirPlay itself, so a
+     * receiver app does it: AirScreen first (free, the one the Play Store offers when none is
+     * installed), then AirPin and AirReceiver if one of those is on the TV instead.
+     */
+    val AirPlay = KnownApp(
+        "AirScreen", Glyph.AirPlay, Color(0xFF3EF0FF),
+        listOf("com.ionitech.airscreen", "com.waxrain.airplaydmr", "com.softmedia.receiver.lite", "com.softmedia.receiver"),
+        useLabel = true
+    )
+
     /** The big tiles on the Home tab. Neon Tokyo has Stremio's place; Stremio stays under All apps. */
     val favourites = listOf(YouTube, YtMusic, Spotify, NeonTokyo)
 
@@ -76,6 +87,7 @@ object HomeCatalog {
         KnownApp("VLC", Glyph.Cone, Color(0xFFFF8A3D), listOf("org.videolan.vlc")),
         KnownApp("Play Games", Glyph.Gamepad, Color(0xFF86FF6A), listOf("com.google.android.play.games")),
         KnownApp("Red Ball 4", Glyph.Ball, Color(0xFFFF4D4D), listOf("com.FDGEntertainment.redball4.gp")),
+        AirPlay,
         KnownApp("Play Store", Glyph.Bag, Color(0xFF86FF6A), listOf("com.android.vending")),
         KnownApp("Downloader", Glyph.Download, Color(0xFFFFA64D), listOf("com.esaba.downloader")),
         KnownApp("NordVPN", Glyph.Lock, Color(0xFF4D9DFF), listOf("com.nordvpn.android")),
