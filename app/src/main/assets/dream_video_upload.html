@@ -359,6 +359,9 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
       if (id !== sendId) return;
       if (typeof s.room === "number" && file.size > s.room * 1.5 + 200 * 1048576) {
         failed("The TV has " + megabytes(s.room) + " free and this video is " + megabytes(file.size) + ". Trim it on your phone, or free up space on the TV.");
+      } else if ((s.state === "checking" || s.state === "done") && s.id === fileId) {
+        // This very video is already there: follow the TV while it finishes
+        arrived();
       } else if (s.state === "receiving" && s.id === fileId && s.received > 0 && s.received < file.size) {
         // This video already got partway: on from there
         progress(s.received, file.size);

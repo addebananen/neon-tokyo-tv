@@ -30,6 +30,10 @@ const status = async () => {
   console.log(`page at ${pageUrl}: secure context ${secure}, wake lock ${await page.evaluate(() => 'wakeLock' in navigator)}`);
   if (secure) fail('the test page counted as secure, so it cannot show what a phone gets');
 
+  // A phone's Wi-Fi, not the test machine's cable: about 6 MB/s up, so it can be cut off halfway
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 5, downloadThroughput: 12e6, uploadThroughput: 6e6 });
   await page.setInputFiles('#library', videoFile);
   await page.click('#send');
   await sleep(2000);
