@@ -46,4 +46,21 @@ class HomeProfileLooksTest {
         assertEquals(IconPack.entries.last(), p.icons)
         assertEquals(IconTint.entries.last(), p.tint)
     }
+
+    @Test
+    fun theFocusMotionIsKeptPerStyleToo() {
+        val p = adrian.copy(focus = GlassFocus.Tilt).wearing(HomeStyle.IceLake)
+        assertEquals(GlassFocus.Glow, p.focusMotion)
+        assertEquals(GlassFocus.Tilt, p.wearing(HomeStyle.DeepBlue).focusMotion)
+    }
+
+    @Test
+    fun aLandingSettlesWhereItEnds() {
+        assertEquals(0f to 0f, squash(1f))
+        assertEquals(0f, bob(1f), 0f)
+        assertEquals(1f, easeOut(1f), 1e-6f)
+        assertEquals(0f, easeOut(0f), 1e-6f)
+        // Squashed wide before it stretches tall
+        assertTrue(squash(0.1f).first > 0f)
+    }
 }

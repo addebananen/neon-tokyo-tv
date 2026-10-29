@@ -77,7 +77,7 @@ internal fun Modifier.glassShadow(shape: Shape, lift: () -> Float): Modifier = d
 /**
  * A pane of [glass] shaped [shape] behind what the modifier holds. [lit] runs from 0 at rest to 1
  * in focus: smoked glass brightens, or turns white with [white] as a button does, and liquid glass
- * lights up from inside. [panel] is the darker glass of a menu, which text sits on.
+ * lights up from inside, as brightly as [glow] says when given. [panel] is the darker glass of a menu, which text sits on.
  */
 internal fun Modifier.glassPane(
     glass: HomeGlass,
@@ -85,7 +85,8 @@ internal fun Modifier.glassPane(
     lit: () -> Float,
     white: Boolean = false,
     panel: Boolean = false,
-    dim: Boolean = false
+    dim: Boolean = false,
+    glow: (() -> Float)? = null
 ): Modifier = drawWithCache {
     val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
     val hair = Stroke(2.dp.toPx())
@@ -158,7 +159,8 @@ internal fun Modifier.glassPane(
                     drawPath(path, Color.White, style = mid, alpha = 0.07f / 3f)
                     drawPath(path, Color.White, style = near, alpha = 0.07f / 3f)
                     drawRect(foot)
-                    if (l > 0f) drawRect(shine, alpha = l)
+                    val g = glow?.invoke()?.coerceIn(0f, 1f) ?: l
+                    if (g > 0f) drawRect(shine, alpha = g)
                     drawPath(path, Color.White, style = hair, alpha = 0.10f)
                     drawPath(path, rimBrush, style = rim, alpha = 0.55f)
                 }

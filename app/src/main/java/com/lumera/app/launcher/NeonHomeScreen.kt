@@ -255,7 +255,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewGlass: HomeGlass? = null, previewLayout: Set<String>? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
+fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewGlass: HomeGlass? = null, previewLayout: Set<String>? = null, previewFocus: GlassFocus? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -270,7 +270,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val consolesOnHome = previewLayout?.let { "consoles" in it } ?: if (own) profile.showConsoles else style.consolesOnHome
     val squareIcons = previewLayout?.let { "square" in it } ?: if (own) profile.square else style.squareIcons
     val namesAlways = previewLayout?.let { "names" in it } ?: if (own) profile.namesAlways else style.namesAlways
-    val look = remember(style, glass) { style.look.inGlass(glass) }
+    val focusMotion = previewFocus ?: if (own) profile.focusMotion else GlassFocus.Glow
+    val look = remember(style, glass, focusMotion) { style.look.inGlass(glass).copy(focusMotion = focusMotion) }
     val inputs = remember { TvInputs(appContext) }
     val links = remember { ConsoleLinks(appContext) }
     val sounds = remember { HomeSounds(appContext) }
@@ -1774,11 +1775,14 @@ private fun NeonTile(
     // comes forward by less, as far as the Motion panel's pop says (4 % at its liveliest), and
     // slower, and liquid glass grows by more (10 %) and settles without a wobble
     val liquid = look.glassMode == HomeGlass.Liquid
+    // What liquid glass plays as the focus lands on it, as the profile chose
+    val motion = if (liquid) look.focusMotion else null
     val scale by animateFloatAsState(
         targetValue = when {
             isLifted -> if (glass) 1.12f else 1.13f
             pressed -> if (liquid) 1.06f else if (glass) 0.985f else 1.03f
             focused -> when {
+                motion == GlassFocus.Layers -> HomeMotion.pop.scale
                 liquid -> 1f + (HomeMotion.pop.scale - 1f) * 1.43f
                 glass -> 1f + (HomeMotion.pop.scale - 1f) * 0.57f
                 else -> HomeMotion.pop.scale
@@ -1793,18 +1797,31 @@ private fun NeonTile(
         },
         label = "TileScale"
     )
-    // The light sweeping across glass, once each time the focus lands
+    // The light sweeping across glass, once each time the focus lands, and on liquid glass the
+    // landing its focus motion plays, with which way the focus came from
     val sheen = remember { Animatable(0f) }
+    val land = remember { Animatable(1f) }
+    val from = remember { floatArrayOf(0f) }
     if (glass) {
         LaunchedEffect(focused) {
             if (focused) {
                 sheen.snapTo(0f)
+                if (motion != null) {
+                    land.snapTo(0f)
+                    launch { land.animateTo(1f, tween(900, easing = LinearEasing)) }
+                }
                 sheen.animateTo(1f, tween(900, delayMillis = 50, easing = SheenEasing))
             } else {
                 sheen.snapTo(0f)
             }
         }
     }
+    // Breathe: the light inside rises and falls slowly while the tile is in focus
+    val breath = if (motion == GlassFocus.Breathe && focused) {
+        rememberInfiniteTransition(label = "GlassBreath").animateFloat(
+            1f, 0.45f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Breath"
+        )
+    } else null
     val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
     val faded by animateFloatAsState(if (lift == Lift.Other) 0.45f else 1f, tween(220), label = "TileFade")
 
@@ -1900,6 +1917,20 @@ private fun NeonTile(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                when (motion) {
+                    GlassFocus.Liquid -> squash(land.value).let { (wide, tall) ->
+                        scaleX = scale * (1f + wide)
+                        scaleY = scale * (1f + tall)
+                    }
+                    GlassFocus.Tilt -> if (focused) {
+                        // Leans towards where the focus came from, then straightens
+                        val lean = 1f - easeOut(land.value)
+                        cameraDistance = 14f * density
+                        rotationY = from[0] * 7f * lean
+                        rotationX = -2f * lean
+                    }
+                    else -> Unit
+                }
                 alpha = faded
                 // Glass grows round its own middle rather than that of it and its name
                 if (captionRoom > 0.dp) transformOrigin = TransformOrigin(0.5f, height / (height + captionRoom) / 2f)
@@ -1913,8 +1944,12 @@ private fun NeonTile(
                     // Liquid glass comes forward by its size and its light alone: a shadow
                     // round clear glass reads as a dark outline
                     .then(if (liquid) Modifier else Modifier.glassShadow(shape) { tube })
-                    .glassPane(look.glassMode, shape, lit = { tube }, dim = look.shade == null)
-                    .glassSheen(shape) { sheen.value }
+                    .glassPane(
+                        look.glassMode, shape, lit = { tube }, dim = look.shade == null,
+                        glow = breath?.let { b -> { tube * b.value } }
+                    )
+                    .then(if (motion != null) Modifier.glassFocusFx(motion, shape, { land.value }, { tube }, { from[0] }) else Modifier)
+                    .glassSheen(shape) { if (motion == null || motion.sweeps) sheen.value else 0f }
             )
         } else {
             behind(focused)
@@ -1930,6 +1965,12 @@ private fun NeonTile(
                 .onFocusChanged {
                     focused = it.isFocused
                     if (it.isFocused) {
+                        // Which way the focus came, from where the last tile in focus sat
+                        placed[0]?.takeIf { c -> c.isAttached }?.boundsInRoot()?.center?.x?.let { x ->
+                            val last = GlassFocus.lastX
+                            from[0] = if (last.isNaN() || last == x) 0f else if (x > last) 1f else -1f
+                            GlassFocus.lastX = x
+                        }
                         onFocus()
                         tellWhere(always = true)
                     }
@@ -1961,7 +2002,23 @@ private fun NeonTile(
                     if (caption != null) {
                         Box(Modifier.padding(top = height)) { TileCaption(caption, width, always = captionAlways, lit = { tube }) }
                     }
-                    Box(Modifier.size(width, height).graphicsLayer { alpha = if (dimmed) 0.5f else 1f }) { content(focused) }
+                    Box(
+                        Modifier.size(width, height).graphicsLayer {
+                            alpha = if (dimmed) 0.5f else 1f
+                            when (motion) {
+                                // The icon lifts off the glass
+                                GlassFocus.Layers -> {
+                                    val l = tube
+                                    scaleX = 1f + 0.1f * l
+                                    scaleY = 1f + 0.1f * l
+                                    translationY = -4.dp.toPx() * l
+                                }
+                                GlassFocus.Liquid -> translationY = bob(land.value) * size.height
+                                GlassFocus.Tilt -> if (focused) translationX = from[0] * 3.dp.toPx() * (1f - easeOut(land.value))
+                                else -> Unit
+                            }
+                        }
+                    ) { content(focused) }
                 }
             } else {
                 Box(

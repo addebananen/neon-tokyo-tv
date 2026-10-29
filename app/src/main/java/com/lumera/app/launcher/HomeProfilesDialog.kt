@@ -360,6 +360,14 @@ private fun ProfileEditor(
             PanelButton("Wide", look, primary = !profile.square) { change { it.copy(squareIcons = false) } }
             PanelButton("Square icons", look, primary = profile.square) { change { it.copy(squareIcons = true) } }
         }
+        // How liquid glass tiles come forward in focus; the other glass keeps its own
+        if (profile.glassLook == HomeGlass.Liquid) {
+            OptionRow("Focus", look) {
+                GlassFocus.entries.forEach { motion ->
+                    PanelButton(motion.title, look, primary = motion == profile.focusMotion) { change { it.copy(focus = motion) } }
+                }
+            }
+        }
         OptionRow("App icons", look) {
             IconPack.values().forEach { pack ->
                 PanelButton(pack.title, look, primary = pack == profile.icons) { change { it.copy(icons = pack) } }

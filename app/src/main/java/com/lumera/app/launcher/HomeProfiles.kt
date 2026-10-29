@@ -39,11 +39,13 @@ data class HomeProfile(
     val squareIcons: Boolean? = null,
     /** The apps' names and the buttons' words all the time, not only in focus. */
     val names: Boolean? = null,
+    /** What its liquid glass tiles play as the focus lands on them. */
+    val focus: GlassFocus? = null,
     /** The layout it chose for each of the other styles it has worn, back again when it wears one. */
     val looks: Map<HomeStyle, HomeLayout> = emptyMap()
 ) {
     /** How it lays out its current style. */
-    val layout: HomeLayout get() = HomeLayout(glass, rowsDown, consolesOnHome, squareIcons, names)
+    val layout: HomeLayout get() = HomeLayout(glass, rowsDown, consolesOnHome, squareIcons, names, focus)
 
     /**
      * Wearing [next]: the layout chosen for this style is kept for when it comes back, and the one
@@ -55,7 +57,7 @@ data class HomeProfile(
         val back = kept[next] ?: HomeLayout()
         return copy(
             style = next, glass = back.glass, rowsDown = back.rowsDown, consolesOnHome = back.consolesOnHome,
-            squareIcons = back.squareIcons, names = back.names, looks = kept - next
+            squareIcons = back.squareIcons, names = back.names, focus = back.focus, looks = kept - next
         )
     }
 
@@ -64,6 +66,7 @@ data class HomeProfile(
     val showConsoles: Boolean get() = consolesOnHome ?: style.consolesOnHome
     val square: Boolean get() = squareIcons ?: style.squareIcons
     val namesAlways: Boolean get() = names ?: style.namesAlways
+    val focusMotion: GlassFocus get() = focus ?: GlassFocus.Glow
 }
 
 /** A profile's own choices for how a style lays out its home screen, each null for what the style does. */
@@ -72,7 +75,8 @@ data class HomeLayout(
     val rowsDown: Boolean? = null,
     val consolesOnHome: Boolean? = null,
     val squareIcons: Boolean? = null,
-    val names: Boolean? = null
+    val names: Boolean? = null,
+    val focus: GlassFocus? = null
 ) {
     val isEmpty: Boolean get() = this == HomeLayout()
 
@@ -82,6 +86,7 @@ data class HomeLayout(
         consolesOnHome?.let { put("consolesOnHome", it) }
         squareIcons?.let { put("squareIcons", it) }
         names?.let { put("names", it) }
+        focus?.let { put("focus", it.key) }
     }
 
     companion object {
@@ -90,7 +95,8 @@ data class HomeLayout(
             rowsDown = o.flag("rowsDown"),
             consolesOnHome = o.flag("consolesOnHome"),
             squareIcons = o.flag("squareIcons"),
-            names = o.flag("names")
+            names = o.flag("names"),
+            focus = GlassFocus.of(o.optString("focus"))
         )
     }
 }
@@ -212,6 +218,7 @@ class HomeProfiles private constructor(private val context: Context) {
                     consolesOnHome = o.flag("consolesOnHome"),
                     squareIcons = o.flag("squareIcons"),
                     names = o.flag("names"),
+                    focus = GlassFocus.of(o.optString("focus")),
                     looks = o.optJSONObject("looks")?.let { looks ->
                         looks.keys().asSequence().mapNotNull { key ->
                             // A style since removed has nothing to come back to
