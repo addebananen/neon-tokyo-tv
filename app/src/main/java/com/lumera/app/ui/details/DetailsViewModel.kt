@@ -645,13 +645,16 @@ class DetailsViewModel @Inject constructor(
      */
     private suspend fun serviceStreams(type: String, id: String): List<Stream> {
         val meta = _state.value.meta ?: return emptyList()
-        if (!id.startsWith(meta.id.substringBefore(':'))) return emptyList()
+        // Only for the title on screen: a prefetch can outlive a jump to another title
+        if (meta.type != type) return emptyList()
         return try {
             withTimeoutOrNull(SERVICE_TIMEOUT_MS) {
                 val tmdb = withTimeoutOrNull(5_000) {
                     runCatching { tmdbService.ensureTmdbId(meta.id, meta.type) }.getOrNull()
                 }
-                VodLibrary.streams(appContext, type, id, meta.name, meta.releaseInfo?.let(VodCatalog::yearIn), tmdb)
+                // The episode as the title's own list numbers it, whatever shape its id has
+                val episode = meta.videos?.firstOrNull { it.id == id && it.season > 0 && it.episode > 0 }?.let { it.season to it.episode }
+                VodLibrary.streams(appContext, type, id, meta.name, meta.releaseInfo?.let(VodCatalog::yearIn), tmdb, episode)
             }.orEmpty()
         } catch (e: CancellationException) {
             throw e

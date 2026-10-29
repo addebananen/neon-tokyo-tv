@@ -56,7 +56,8 @@ object VodLibrary {
         videoId: String,
         title: String,
         year: Int?,
-        tmdb: String?
+        tmdb: String?,
+        seasonEpisode: Pair<Int, Int>? = null
     ): List<Stream> = withContext(Dispatchers.IO) {
         val source = LiveTv.source(context) as? IptvSource.Xtream ?: return@withContext emptyList()
         if (title.isBlank()) return@withContext emptyList()
@@ -64,17 +65,27 @@ object VodLibrary {
             when (type) {
                 "movie" -> {
                     val index = library(context, source, movie = true) ?: return@withContext emptyList()
-                    index.find(title, year, tmdb).map { item ->
+                    val found = index.find(title, year, tmdb)
+                    Log.i(TAG, "${found.size} films on the service for \"$title\" ($year)")
+                    found.map { item ->
                         val ext = item.ext.ifBlank { "mp4" }
                         stream(item.name, ext, XtreamApi.vodUrl(source, "movie", item.id, ext))
                     }
                 }
                 "series" -> {
-                    val (season, episode) = episodeOf(videoId) ?: return@withContext emptyList()
+                    val (season, episode) = seasonEpisode ?: episodeOf(videoId) ?: run {
+                        Log.i(TAG, "No season and episode in the episode id")
+                        return@withContext emptyList()
+                    }
                     val index = library(context, source, movie = false) ?: return@withContext emptyList()
-                    index.find(title, year, tmdb).flatMap { show ->
-                        episodesOf(source, show.id)
-                            .filter { it.season == season && it.episode == episode }
+                    val shows = index.find(title, year, tmdb)
+                    Log.i(TAG, "${shows.size} series on the service for \"$title\" ($year), looking for S${season}E$episode")
+                    shows.flatMap { show ->
+                        val all = episodesOf(source, show.id)
+                        if (all.none { it.season == season && it.episode == episode }) {
+                            Log.i(TAG, "\"${show.name}\" has ${all.size} episodes on the service, not S${season}E$episode")
+                        }
+                        all.filter { it.season == season && it.episode == episode }
                             .map { ep ->
                                 val ext = ep.ext.ifBlank { "mp4" }
                                 val name = "${show.name} " + String.format(Locale.US, "S%02dE%02d", season, episode) +
