@@ -222,7 +222,8 @@ class TraktAuthManager @Inject constructor(
                     "refresh_token" to refreshToken,
                     "client_id" to BuildConfig.TRAKT_CLIENT_ID,
                     "client_secret" to BuildConfig.TRAKT_CLIENT_SECRET,
-                    "redirect_uri" to "urn:ietf:wg:oauth:2.0:oob",
+                    // Must match the Trakt app's registered redirect; development apps only accept localhost
+                    "redirect_uri" to "http://localhost",
                     "grant_type" to "refresh_token"
                 )
             )
