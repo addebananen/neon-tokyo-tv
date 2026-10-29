@@ -677,6 +677,16 @@ impl Engine {
         self.fling = if f.rate < FLING_MIN_RATE { None } else { Some(f) };
     }
 
+    /// A finger on the pad, already decoded (for the browser simulator).
+    pub fn touch_finger(&mut self, f: Finger, t: f64) {
+        self.touch_report(&[f], t);
+    }
+
+    /// The finger left the pad (for the browser simulator).
+    pub fn touch_lift(&mut self, t: f64) {
+        self.touch_report(&[], t);
+    }
+
     pub fn flinging(&self) -> bool {
         self.fling.is_some()
     }

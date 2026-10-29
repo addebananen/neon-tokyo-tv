@@ -64,3 +64,4 @@ recovery/
 android-file-chooser/
 app/src/main/jniLibs/*/libneon_siri.so
 native/siri-remote/target/
+native/siri-remote/sim/out/

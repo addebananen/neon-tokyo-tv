@@ -169,3 +169,63 @@ mod tests {
         assert_eq!(encode(None, &[])[0], -1);
     }
 }
+
+/// The same engine for the browser, so the scrolling can be felt on a phone before the TV.
+#[cfg(target_arch = "wasm32")]
+pub mod wasm {
+    use super::*;
+    use protocol::Finger;
+
+    static mut ENGINE: Option<Engine> = None;
+    static mut OUT: [i32; 256] = [0; 256];
+
+    #[allow(static_mut_refs)]
+    fn e() -> &'static mut Engine {
+        unsafe { ENGINE.get_or_insert_with(|| Engine::new(Generation::Gen23)) }
+    }
+
+    #[allow(static_mut_refs)]
+    fn flush(t: f64) -> *const i32 {
+        let due = e().tick(t);
+        let v = encode(due, &e().drain());
+        unsafe {
+            OUT[0] = v.len().min(255) as i32;
+            for (i, x) in v.iter().take(255).enumerate() {
+                OUT[i + 1] = *x;
+            }
+            OUT.as_ptr()
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn sim_reset(t: f64, speed: f32, momentum: i32) -> *const i32 {
+        unsafe { ENGINE = Some(Engine::new(Generation::Gen23)) };
+        e().cfg.scroll_speed = speed;
+        e().cfg.momentum = momentum != 0;
+        e().connected(t - 1.0);
+        flush(t)
+    }
+
+    /// One finger at (x, y) in pad radii, or lifted.
+    #[no_mangle]
+    pub extern "C" fn sim_touch(x: f32, y: f32, down: i32, t: f64) -> *const i32 {
+        if down != 0 {
+            e().touch_finger(Finger { x, y }, t);
+        } else {
+            e().touch_lift(t);
+        }
+        flush(t)
+    }
+
+    /// The gen 2/3 button mask, as the remote sends it.
+    #[no_mangle]
+    pub extern "C" fn sim_buttons(mask: i32, t: f64) -> *const i32 {
+        e().report(protocol::REPORT_BUTTONS, &(mask as u16).to_le_bytes(), t);
+        flush(t)
+    }
+
+    #[no_mangle]
+    pub extern "C" fn sim_tick(t: f64) -> *const i32 {
+        flush(t)
+    }
+}
