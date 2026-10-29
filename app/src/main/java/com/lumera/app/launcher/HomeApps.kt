@@ -6,12 +6,19 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 
 /** Finding and opening the TV's apps. */
 object HomeApps {
     private const val TAG = "HomeApps"
+
+    /**
+     * How the next app started comes onto the screen. A home tile sets it for as long as its
+     * press runs, so the app grows out of that tile; anything started otherwise comes on as usual.
+     */
+    var growFrom: (() -> Bundle?)? = null
 
     /**
      * The apps with a TV launcher entry, plus apps added by hand that only have a phone one.
@@ -96,7 +103,8 @@ object HomeApps {
     /** Starts [intent], and says so on screen when nothing on the TV can open it. */
     fun start(context: Context, intent: Intent): Boolean {
         return try {
-            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            val options = runCatching { growFrom?.invoke() }.getOrNull()
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options)
             true
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, "Nothing on this TV can open that", Toast.LENGTH_SHORT).show()

@@ -107,7 +107,7 @@ internal fun HomeMotionDialog(context: Context, onDismiss: () -> Unit) {
             Column(
                 modifier = Modifier
                     .width(640.dp)
-                    .homePanel(look, RoundedCornerShape(16.dp))
+                    .panelIn().homePanel(look, RoundedCornerShape(16.dp))
                     .padding(horizontal = 26.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

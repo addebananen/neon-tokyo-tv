@@ -121,7 +121,7 @@ fun HomeBackgroundDialog(profileName: String, profiles: HomeProfiles, onDismiss:
         Row(
             modifier = Modifier
                 .width(760.dp)
-                .homePanel(look, RoundedCornerShape(18.dp))
+                .panelIn().homePanel(look, RoundedCornerShape(18.dp))
                 .padding(28.dp),
             horizontalArrangement = Arrangement.spacedBy(28.dp),
             verticalAlignment = Alignment.CenterVertically

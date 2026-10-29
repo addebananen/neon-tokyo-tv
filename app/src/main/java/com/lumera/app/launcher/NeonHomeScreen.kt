@@ -1,13 +1,16 @@
 package com.lumera.app.launcher
 
+import android.app.ActivityOptions
 import android.app.SearchManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.View
 import android.view.ViewConfiguration
 import android.provider.Settings
 import android.text.format.DateFormat
@@ -146,16 +149,19 @@ import com.lumera.app.livetv.Programme
 import com.lumera.app.domain.ContinueEntry
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
@@ -216,10 +222,10 @@ private val LiveGreen = Color(0xFF34D27B)
 /** The light across glass: quick off the mark, gliding out. */
 private val SheenEasing = CubicBezierEasing(0.3f, 0.6f, 0.3f, 1f)
 
-/** The keys a TV Surface clicks on. */
 /** The made-up device a preview's Bluetooth card shows. */
 private const val PREVIEW_DEVICE = "preview"
 
+/** The keys a TV Surface clicks on. */
 private val SelectKeys = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 private val ArrowKeys = setOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)
 
@@ -358,6 +364,9 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     }
 
     var tab by rememberSaveable { mutableStateOf(HomeTab.Home) }
+    // Where each tab lies in its row, and whether the focus is up on them, for the mark that glides
+    val tabSpots = remember { HomeTab.entries.associateWith { mutableStateOf<TabSpot?>(null) } }
+    var onTabs by remember { mutableStateOf(false) }
     // How tall the rows of Home are, and how far down they and the tabs sit
     var homeRowsHeight by remember { mutableIntStateOf(0) }
     val drop = remember { Animatable(0f) }
@@ -673,20 +682,17 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 else drop.snapTo(dropTo)
                 if (homeRowsHeight > 0 || !watchDown) dropSettled[0] = true
             }
-            // The picture lies a little further back than the tiles: it leans gently away from
-            // the tile in focus, and settles in the middle when the focus is up top or on All apps
-            val leanTo = spot?.takeIf { spotOn }?.bounds?.center?.let { c ->
-                Offset(
-                    -(c.x / constraints.maxWidth - 0.5f) * 2f * leanX,
-                    -(c.y / constraints.maxHeight - 0.5f) * 2f * leanY
-                )
-            } ?: Offset.Zero
-            val lean by animateOffsetAsState(leanTo, tween(1100, easing = FastOutSlowInEasing), label = "BackdropLean")
-            HomeBackdrop(style, profile.background, wallpaper, lean = { lean })
-            if (style == HomeStyle.Neon && profile.background == null) {
-                SkySparkles()
-                FloorLight(spot, spotOn, ignite = { ignite.value })
-            }
+            FocusBackdrop(
+                style = style,
+                picture = profile.background,
+                leanX = leanX,
+                leanY = leanY,
+                screen = Size(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat()),
+                wallpaper = { wallpaper },
+                spot = { spot },
+                spotOn = { spotOn },
+                ignite = { ignite.value }
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = Side, end = Side, top = 30.dp),
@@ -770,7 +776,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 }
             }
 
-            Row(
+            Box(
                 modifier = Modifier
                     .padding(start = Side, top = tabsTop)
                     .offset { IntOffset(0, drop.value.roundToInt()) }
@@ -778,6 +784,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         alpha = ignite.value
                         translationY = (1f - ignite.value) * 14.dp.toPx()
                     }
+                    .onFocusChanged { onTabs = it.hasFocus }
                     // Up from the tiles lands on the open tab, never on the other one, which would open it
                     .focusProperties {
                         enter = {
@@ -788,31 +795,40 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                             }
                         }
                     }
-                    .focusGroup(),
-                horizontalArrangement = Arrangement.spacedBy(if (look.glassy) 4.dp else 6.dp)
+                    .focusGroup()
             ) {
-                TabPill("Home", tab == HomeTab.Home, homeTab, onFocus = {
-                    focusMoved()
-                    tab = HomeTab.Home
-                    spotOn = false
-                }, onClick = { focusFirst++ })
-                TabPill("All apps", tab == HomeTab.Apps, appsTab, onFocus = {
-                    focusMoved()
-                    tab = HomeTab.Apps
-                    spotOn = false
-                }, onClick = { focusFirst++ })
-                TabPill("Källor", tab == HomeTab.Sources, sourcesTab, onFocus = {
-                    focusMoved()
-                    tab = HomeTab.Sources
-                    spotOn = false
-                }, onClick = { focusFirst++ })
+                // The glass lies behind the words, the neon line over the pills
+                if (look.glassy) TabGlide(tabSpots.getValue(tab).value, focused = { onTabs })
+                Row(horizontalArrangement = Arrangement.spacedBy(if (look.glassy) 4.dp else 6.dp)) {
+                    fun placed(of: HomeTab) = Modifier.onPlaced {
+                        tabSpots.getValue(of).value = TabSpot(it.positionInParent().x, it.positionInParent().y, it.size.width.toFloat(), it.size.height.toFloat())
+                    }
+                    TabPill("Home", tab == HomeTab.Home, homeTab, placed(HomeTab.Home), onFocus = {
+                        focusMoved()
+                        tab = HomeTab.Home
+                        spotOn = false
+                    }, onClick = { focusFirst++ })
+                    TabPill("All apps", tab == HomeTab.Apps, appsTab, placed(HomeTab.Apps), onFocus = {
+                        focusMoved()
+                        tab = HomeTab.Apps
+                        spotOn = false
+                    }, onClick = { focusFirst++ })
+                    TabPill("Källor", tab == HomeTab.Sources, sourcesTab, placed(HomeTab.Sources), onFocus = {
+                        focusMoved()
+                        tab = HomeTab.Sources
+                        spotOn = false
+                    }, onClick = { focusFirst++ })
+                }
+                if (!look.glassy) TabGlide(tabSpots.getValue(tab).value, focused = { onTabs })
             }
 
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = {
-                    (fadeIn(tween(180, delayMillis = 40)) + slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 14 })
-                        .togetherWith(fadeOut(tween(110)))
+                    // The next tab comes in from the side it lies on, and the last one gives way
+                    val way = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (fadeIn(tween(200, delayMillis = 40)) + slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { way * it / 18 })
+                        .togetherWith(fadeOut(tween(120)) + slideOutHorizontally(tween(160, easing = FastOutSlowInEasing)) { -way * it / 30 })
                 },
                 label = "HomeTab",
                 modifier = Modifier
@@ -1784,6 +1800,22 @@ private fun NeonTile(
     val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
     val faded by animateFloatAsState(if (lift == Lift.Other) 0.45f else 1f, tween(220), label = "TileFade")
 
+    // Where the tile was laid out and last said it was, kept out of state so that moving it
+    // never recomposes anything. A focused tile that moves, as its row slides in, says so again.
+    val placed = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val told = remember { arrayOfNulls<Rect>(1) }
+    // An app the press opens grows out of the tile onto the screen, as from a flagship's icons
+    val view = LocalView.current
+    val press = {
+        val bounds = placed[0]?.takeIf { it.isAttached }?.boundsInRoot()
+        HomeApps.growFrom = bounds?.let { b -> { growOut(view, b) } }
+        try {
+            onClick()
+        } finally {
+            HomeApps.growFrom = null
+        }
+    }
+
     val holdLight = remember { Animatable(0f) }
     val holdScope = rememberCoroutineScope()
     val hold = remember { Hold() }
@@ -1833,7 +1865,7 @@ private fun NeonTile(
                     val longPress = hold.longPress || heldFor >= ViewConfiguration.getLongPressTimeout()
                     when {
                         longPress && onLongClick != null -> onLongClick()
-                        heldFor < HoldShowsMs && !longPress -> onClick()
+                        heldFor < HoldShowsMs && !longPress -> press()
                     }
                 }
                 true
@@ -1841,10 +1873,6 @@ private fun NeonTile(
             else -> false
         }
     }
-    // Where the tile was laid out and last said it was, kept out of state so that moving it
-    // never recomposes anything. A focused tile that moves, as its row slides in, says so again.
-    val placed = remember { arrayOfNulls<LayoutCoordinates>(1) }
-    val told = remember { arrayOfNulls<Rect>(1) }
     fun tellWhere(always: Boolean) {
         val coordinates = placed[0] ?: return
         if (onFocusRect == null || !coordinates.isAttached) return
@@ -1859,16 +1887,8 @@ private fun NeonTile(
         modifier = modifier
             .size(width, height + captionRoom)
             .zIndex(if (focused) 1f else 0f)
-            .then(
-                if (onFocusRect != null) {
-                    Modifier.onGloballyPositioned {
-                        placed[0] = it
-                        if (focused) tellWhere(always = false)
-                    }
-                } else {
-                    Modifier
-                }
-            )
+            .onPlaced { placed[0] = it }
+            .then(if (onFocusRect != null) Modifier.onGloballyPositioned { if (focused) tellWhere(always = false) } else Modifier)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -1890,7 +1910,7 @@ private fun NeonTile(
             behind(focused)
         }
         Surface(
-            onClick = onClick,
+            onClick = press,
             // With a hold the keys are read above, so the Surface never sees a long press
             onLongClick = if (onHold == null) onLongClick else null,
             modifier = Modifier
@@ -1955,6 +1975,16 @@ private fun NeonTile(
         }
     }
 }
+
+/** How an app opened from a tile at [bounds] (on the screen, in pixels) comes on: growing out of it. */
+private fun growOut(view: View, bounds: Rect): Bundle =
+    ActivityOptions.makeScaleUpAnimation(
+        view,
+        bounds.left.roundToInt(),
+        bounds.top.roundToInt(),
+        bounds.width.roundToInt().coerceAtLeast(1),
+        bounds.height.roundToInt().coerceAtLeast(1)
+    ).toBundle()
 
 /** An app's name under its glass tile, faint at rest when shown all the time, rising into place as the focus lands. */
 @Composable
@@ -2214,17 +2244,16 @@ private fun ButtonGlyph(glyph: Glyph, ink: () -> Color) {
 /** Home or All apps. Pointing at a tab opens it, as on other TV home screens. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun TabPill(text: String, selected: Boolean, focusRequester: FocusRequester, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun TabPill(text: String, selected: Boolean, focusRequester: FocusRequester, modifier: Modifier, onFocus: () -> Unit, onClick: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     if (look.glassy) {
-        GlassTab(text, selected, focusRequester, onFocus, onClick)
+        GlassTab(text, selected, focusRequester, modifier, onFocus, onClick)
         return
     }
-    val line by animateFloatAsState(if (selected) 1f else 0f, tween(170, easing = FastOutSlowInEasing), label = "TabLine")
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .focusRequester(focusRequester)
             .onFocusChanged { if (it.isFocused) onFocus() },
         shape = ClickableSurfaceDefaults.shape(shape = shape),
@@ -2251,19 +2280,77 @@ private fun TabPill(text: String, selected: Boolean, focusRequester: FocusReques
                 color = if (selected) look.text else look.dim,
                 shadow = if (selected && look.glowingText) Shadow(look.accent.copy(alpha = 0.55f), blurRadius = 12f) else null
             ),
-            modifier = Modifier
-                .padding(start = 11.dp, end = 11.dp, top = 4.dp, bottom = 7.dp)
-                .drawWithCache {
-                    // The neon line under the open tab, drawn from its middle outwards
-                    val y = size.height + 2.dp.toPx()
+            // The neon line under the open tab is [TabGlide]'s, which glides from tab to tab
+            modifier = Modifier.padding(start = TabInset, end = TabInset, top = 4.dp, bottom = 7.dp)
+        )
+    }
+}
+
+/** Where a tab lies in its row, in pixels. */
+private data class TabSpot(val left: Float, val top: Float, val width: Float, val height: Float)
+
+/** How far a neon tab's word sits in from the ends of its pill, and so its line too. */
+private val TabInset = 11.dp
+
+// The end of the open tab's mark that leads the way to the next tab, and the end that follows
+private val TabLead = spring<Float>(dampingRatio = 0.8f, stiffness = 700f)
+private val TabTrail = spring<Float>(dampingRatio = 0.9f, stiffness = 260f)
+
+/**
+ * The mark of the open tab: on glass the pane behind its word, otherwise the neon line under it.
+ * It glides from tab to tab rather than going out on one and coming on at the next, the end it
+ * travels towards leading and the other following, so it stretches on the way and settles.
+ */
+@Composable
+private fun BoxScope.TabGlide(to: TabSpot?, focused: () -> Boolean) {
+    val spot = to ?: return
+    val look = LocalHomeLook.current
+    val inset = if (look.glassy) 0f else with(LocalDensity.current) { TabInset.toPx() }
+    val start = spot.left + inset
+    val end = spot.left + spot.width - inset
+    // The neon line comes on the first time from the middle of its word outwards
+    val left = remember { Animatable(if (look.glassy) start else (start + end) / 2f) }
+    val right = remember { Animatable(if (look.glassy) end else (start + end) / 2f) }
+    LaunchedEffect(start, end) {
+        val opening = left.value == right.value
+        val rightwards = start > left.value
+        launch { left.animateTo(start, if (rightwards || opening) TabTrail else TabLead) }
+        launch { right.animateTo(end, if (rightwards && !opening) TabLead else TabTrail) }
+    }
+    val on = focused()
+    if (look.glassy) {
+        // Comes forward with the tab in focus, as far and as springy as the tab itself
+        val lit = rememberLit(on)
+        val scale by animateFloatAsState(if (on) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "TabGlideScale")
+        Spacer(
+            Modifier
+                .matchParentSize()
+                .layout { measurable, constraints ->
+                    val width = (right.value - left.value).roundToInt().coerceAtLeast(0)
+                    val pane = measurable.measure(Constraints.fixed(width, spot.height.roundToInt()))
+                    layout(constraints.maxWidth, constraints.maxHeight) { pane.place(left.value.roundToInt(), spot.top.roundToInt()) }
+                }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .glassPane(look.glassMode, RoundedCornerShape(50), lit = { lit.value }, white = look.glassMode != HomeGlass.Liquid)
+        )
+    } else {
+        // Grows with the pill in focus, round the pill's middle
+        val scale by animateFloatAsState(if (on) 1.07f else 1f, tween(150), label = "TabGlideScale")
+        Spacer(
+            Modifier
+                .matchParentSize()
+                .drawBehind {
+                    val l = left.value
+                    val r = right.value
+                    if (r - l < 0.5f) return@drawBehind
                     val thick = 1.5.dp.toPx()
-                    onDrawBehind {
-                        if (line <= 0f) return@onDrawBehind
-                        val half = size.width / 2f * line
-                        val from = Offset(size.width / 2f - half, y)
-                        val to = Offset(size.width / 2f + half, y)
-                        if (look.glowingText) drawLine(look.accent.copy(alpha = 0.25f), from, to, strokeWidth = thick * 5f, cap = StrokeCap.Round)
-                        drawLine(look.accent, from, to, strokeWidth = thick, cap = StrokeCap.Round)
+                    val y = spot.top + spot.height - 5.dp.toPx()
+                    scale(scale, pivot = Offset(spot.left + spot.width / 2f, spot.top + spot.height / 2f)) {
+                        if (look.glowingText) drawLine(look.accent.copy(alpha = 0.25f), Offset(l, y), Offset(r, y), strokeWidth = thick * 5f, cap = StrokeCap.Round)
+                        drawLine(look.accent, Offset(l, y), Offset(r, y), strokeWidth = thick, cap = StrokeCap.Round)
                     }
                 }
         )
@@ -2276,7 +2363,7 @@ private fun TabPill(text: String, selected: Boolean, focusRequester: FocusReques
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusRequester, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusRequester, modifier: Modifier, onFocus: () -> Unit, onClick: () -> Unit) {
     val look = LocalHomeLook.current
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
@@ -2292,7 +2379,7 @@ private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusReque
     }
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .focusRequester(focusRequester)
             .graphicsLayer {
                 scaleX = scale
@@ -2323,9 +2410,8 @@ private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusReque
                 shadow = if (selected || focused) null else Shadow(Color(0x59000000), blurRadius = 8f)
             ),
             color = { ink() },
-            modifier = Modifier
-                .then(if (selected || focused) Modifier.glassPane(look.glassMode, shape, lit = { lit.value }, white = turnsWhite) else Modifier)
-                .padding(horizontal = 13.dp, vertical = 5.dp)
+            // The pane behind the open tab is [TabGlide]'s, which glides from tab to tab
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 5.dp)
         )
     }
 }
@@ -2803,6 +2889,44 @@ private fun CacheDrawScope.filmScene(color: Color, time: () -> Float, lit: () ->
 
 /** The tile in focus on the Home tab: where it is on the screen, and its colour. */
 private data class Spot(val bounds: Rect, val color: Color)
+
+/**
+ * The picture behind everything, leaning gently away from the tile in focus, and for Neon the
+ * sky and the light on the floor under that tile. It reads where the focus is itself, so a move
+ * of the focus, or a focused tile sliding as its rows scroll, redraws this alone rather than
+ * the whole home screen.
+ */
+@Composable
+private fun FocusBackdrop(
+    style: HomeStyle,
+    picture: String?,
+    leanX: Float,
+    leanY: Float,
+    screen: Size,
+    wallpaper: () -> NeonWallpaper,
+    spot: () -> Spot?,
+    spotOn: () -> Boolean,
+    ignite: () -> Float
+) {
+    val at = spot()
+    val on = spotOn()
+    // The picture lies a little further back than the tiles, and settles in the middle when the
+    // focus is up top or on All apps
+    val leanTo = at?.takeIf { on }?.bounds?.center?.let { c ->
+        Offset(
+            -(c.x / screen.width - 0.5f) * 2f * leanX,
+            -(c.y / screen.height - 0.5f) * 2f * leanY
+        )
+    } ?: Offset.Zero
+    val lean by animateOffsetAsState(leanTo, tween(1100, easing = FastOutSlowInEasing), label = "BackdropLean")
+    // Only the skyline takes its colours from the tile in focus
+    val skyline = picture == null && style.video == null && style.backdrop == null
+    HomeBackdrop(style, picture, if (skyline) wallpaper() else NeonWallpaper.TOKYO, lean = { lean })
+    if (style == HomeStyle.Neon && picture == null) {
+        SkySparkles()
+        FloorLight(at, on, ignite)
+    }
+}
 
 /**
  * The light the tile in focus throws on the floor of the skyline, and its reflection, the way
@@ -3302,7 +3426,7 @@ private fun InputPicker(
             Column(
                 modifier = Modifier
                     .width(400.dp)
-                    .homePanel(look, RoundedCornerShape(14.dp))
+                    .panelIn().homePanel(look, RoundedCornerShape(14.dp))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -3422,6 +3546,22 @@ private fun PickerRow(
                 BasicText("✓", style = TextStyle(fontSize = 14.sp, color = look.accent))
             }
         }
+    }
+}
+
+/**
+ * A menu coming on: rising out of a little depth into place as it fades in, rather than being
+ * there all at once, quick enough that it is ready to use as soon as it shows.
+ */
+internal fun Modifier.panelIn(): Modifier = composed {
+    val come = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { come.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 480f)) }
+    graphicsLayer {
+        val t = come.value
+        alpha = t.coerceIn(0f, 1f)
+        scaleX = 0.95f + 0.05f * t
+        scaleY = 0.95f + 0.05f * t
+        translationY = (1f - t) * 10.dp.toPx()
     }
 }
 
