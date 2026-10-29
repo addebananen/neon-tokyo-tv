@@ -158,6 +158,14 @@ object SiriBridge : SiriLink.Listener {
             val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NeonTokyo:SiriCheck")
             wl.acquire(1_000); wl.release(); println("wake lock: yes")
         }.onFailure { println("wake lock: $it") }
+        // If Android made an input device of the remote itself, its keys would arrive twice
+        for (id in InputDevice.getDeviceIds()) {
+            val d = InputDevice.getDevice(id) ?: continue
+            if (d.vendorId == SiriLink.APPLE || "siri" in d.name.lowercase()) {
+                val dup = intArrayOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BACK)
+                println("input device of the remote: ${d.name}, its own keys ${d.hasKeys(*dup).toList()}")
+            }
+        }
         val t = SystemClock.uptimeMillis()
         val probe = KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_UNKNOWN, 0)
         println("key injection: ${ShellEnv.inject(probe)}")

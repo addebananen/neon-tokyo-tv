@@ -60,6 +60,10 @@ class SiriLink(
     private val notSiri = HashSet<String>()
     private var candidates = ArrayDeque<BluetoothDevice>()
     private var probing = false
+    /** The current [gatt] reconnects by itself (autoConnect), keeping its subscriptions. */
+    private var autoConnecting = false
+    /** The remote's generation once subscribed; a reconnect with it is ready at once. */
+    private var knownGeneration = 0
 
     var state = "starting"
         private set
@@ -91,6 +95,14 @@ class SiriLink(
             a.bondedDevices.orEmpty().filter {
                 it.address !in notSiri &&
                     (it.type == BluetoothDevice.DEVICE_TYPE_LE || it.type == BluetoothDevice.DEVICE_TYPE_DUAL)
+            }.sortedBy {
+                // the likeliest first: probing a gamepad or the TV's own remote takes up to 10 s each
+                val name = runCatching { it.name }.getOrNull().orEmpty().lowercase()
+                when {
+                    "siri" in name || "apple" in name -> 0
+                    "remote" in name -> 1
+                    else -> 2
+                }
             }
         )
         probeNext()
@@ -123,6 +135,8 @@ class SiriLink(
         closed = false
         device = d
         state = "connecting"
+        knownGeneration = 0
+        autoConnecting = !probing
         Log.i(TAG, "connecting to ${d.address}")
         gatt = if (Build.VERSION.SDK_INT >= 26) {
             d.connectGatt(ShellEnv.context, !probing, callback, BluetoothDevice.TRANSPORT_LE, BluetoothDevice.PHY_LE_1M_MASK, handler)
@@ -134,6 +148,7 @@ class SiriLink(
     fun close() {
         closed = true
         ready = false
+        knownGeneration = 0
         ops.clear()
         busy = false
         reportIds.clear()
@@ -223,9 +238,17 @@ class SiriLink(
             if (g != gatt) return
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 state = "discovering"
+                if (knownGeneration != 0 && reportIds.isNotEmpty()) {
+                    // Back after a doze. The press that woke the remote (Power, say) arrives right
+                    // now, before any discovery could finish: this client's subscriptions
+                    // survived the drop, so take reports at once
+                    ready = true
+                    state = "connected"
+                    device?.let { listener.onReady(knownGeneration, runCatching { it.name }.getOrNull() ?: "Siri Remote", it.address) }
+                }
                 // the remote asks for 7.5-15 ms, latency 80, timeout 6 s; with host defaults it
-                // drops the link whenever it dozes between presses
-                g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                // drops the link whenever it dozes between presses. (Not CONNECTION_PRIORITY_HIGH:
+                // its latency 0 would keep the remote awake every 15 ms and drain it.)
                 runCatching {
                     BluetoothGatt::class.java.getMethod(
                         "requestLeConnectionUpdate",
@@ -251,7 +274,10 @@ class SiriLink(
                     return
                 }
                 state = "waiting"
-                // reconnects by itself the moment a press wakes the remote
+                // An autoConnect client reconnects by itself the moment a press wakes the remote,
+                // and keeps its subscriptions, so the waking press is not lost. A direct one (the
+                // probe that found the remote) is replaced by one that does.
+                if (autoConnecting) return
                 val d = device ?: return
                 g.close()
                 gatt = null
@@ -341,8 +367,8 @@ class SiriLink(
 
     /** Reads every report's id, then subscribes. */
     private fun plan(g: BluetoothGatt, hid: android.bluetooth.BluetoothGattService) {
+        // reportIds stays as it is until subscribe() replaces it: reports keep flowing meanwhile
         refs.clear()
-        reportIds.clear()
         val reports = hid.characteristics.filter { it.uuid == REPORT }
         reports.forEach { c -> c.getDescriptor(REPORT_REF)?.let { enqueue(Op.ReadDesc(it)) } }
         enqueue(Op.Run { subscribe(g, reports) })
@@ -356,6 +382,7 @@ class SiriLink(
         }
         val inputs = reports.filter { refs[it]?.get(1) == 1 }
         val gen = if (inputs.any { refs[it]?.get(0) == 0xFB || refs[it]?.get(0) == 0xFC }) 3 else 1
+        reportIds.clear()
         inputs.forEach { c ->
             reportIds[c.instanceId] = refs[c]!![0]
             g.setCharacteristicNotification(c, true)
@@ -373,11 +400,14 @@ class SiriLink(
             b.getDescriptor(CCCD)?.let { enqueue(Op.WriteDesc(it, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)) }
         }
         enqueue(Op.Run {
+            val already = ready && knownGeneration == gen
             ready = true
             probing = false
+            knownGeneration = gen
             state = "connected"
             val d = device!!
-            listener.onReady(gen, runCatching { d.name }.getOrNull() ?: "Siri Remote", d.address)
+            // after a quick reconnect the engine is already taking this connection's presses
+            if (!already) listener.onReady(gen, runCatching { d.name }.getOrNull() ?: "Siri Remote", d.address)
         })
     }
 
