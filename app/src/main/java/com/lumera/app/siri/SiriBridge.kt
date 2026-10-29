@@ -59,6 +59,11 @@ object SiriBridge : SiriLink.Listener {
             exitProcess(1)
         }
         loadEngine(pkg)
+        if (args.getOrNull(1) == "check") {
+            check()
+            exitProcess(0)
+        }
+        debug = args.getOrNull(1) == "debug"
         if (!SiriStatusServer.start(this)) {
             System.err.println("another bridge is already running")
             exitProcess(0)
@@ -68,6 +73,38 @@ object SiriBridge : SiriLink.Listener {
         link = SiriLink(handler, this)
         link.start(config.address)
         Looper.loop()
+    }
+
+    private var debug = false
+
+    /** `... SiriBridge <package> check`: what this TV lets the bridge do, without starting it. */
+    private fun check() {
+        val ctx = ShellEnv.context
+        println("uid ${android.os.Process.myUid()} package ${ctx.opPackageName}")
+        for (p in listOf("android.permission.BLUETOOTH_PRIVILEGED", "android.permission.BLUETOOTH_CONNECT",
+            "android.permission.BLUETOOTH_SCAN", "android.permission.INJECT_EVENTS", "android.permission.WAKE_LOCK")) {
+            println("$p: ${if (ctx.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED) "yes" else "NO"}")
+        }
+        val adapter = runCatching {
+            android.bluetooth.BluetoothManager::class.java.getDeclaredConstructor(Context::class.java)
+                .apply { isAccessible = true }.newInstance(ctx).adapter
+        }.onFailure { println("bluetooth manager: $it") }.getOrNull()
+        println("bluetooth: ${runCatching { adapter?.isEnabled }.getOrElse { it.toString() }}")
+        runCatching {
+            adapter?.bondedDevices?.forEach { println("  paired: ${it.address} ${it.name} type ${it.type}") }
+        }.onFailure { println("paired devices: $it") }
+        val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+        println("screen on: ${pm.isInteractive}")
+        runCatching {
+            val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NeonTokyo:SiriCheck")
+            wl.acquire(1_000); wl.release(); println("wake lock: yes")
+        }.onFailure { println("wake lock: $it") }
+        val t = SystemClock.uptimeMillis()
+        val probe = KeyEvent(t, t, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_UNKNOWN, 0)
+        println("key injection: ${ShellEnv.inject(probe)}")
+        val e = SiriNative.nativeCreate(3)
+        println("rust engine: ${if (e != 0L) "loaded" else "NO"}")
+        SiriNative.nativeDestroy(e)
     }
 
     /** The Rust library ships in the APK; shell may not map it from there, so it is copied first. */
@@ -151,10 +188,12 @@ object SiriBridge : SiriLink.Listener {
             config.save()
         }
         Log.i(TAG, "ready: gen $generation $name $address")
+        if (debug) println("ready: gen $generation $name $address")
         apply(SiriNative.nativeConnected(engine, now()))
     }
 
     override fun onReport(reportId: Int, data: ByteArray) {
+        if (debug) println("report %02x %s".format(reportId, data.joinToString(" ") { "%02x".format(it) }))
         if (engine == 0L) return
         apply(SiriNative.nativeReport(engine, reportId, data, now()))
     }
@@ -170,6 +209,7 @@ object SiriBridge : SiriLink.Listener {
 
     override fun onProblem(text: String) {
         problem = text
+        if (debug) println("problem: $text")
         Log.w(TAG, text)
     }
 

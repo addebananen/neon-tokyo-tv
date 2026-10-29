@@ -41,7 +41,12 @@ class SiriLink(
     }
 
     private val adapter: BluetoothAdapter? by lazy {
-        runCatching { ShellEnv.context.getSystemService(BluetoothManager::class.java)?.adapter }.getOrNull()
+        // built on the shell context, so every Bluetooth call is attributed to com.android.shell
+        runCatching {
+            BluetoothManager::class.java.getDeclaredConstructor(android.content.Context::class.java)
+                .apply { isAccessible = true }.newInstance(ShellEnv.context).adapter
+        }.getOrNull()
+            ?: runCatching { ShellEnv.context.getSystemService(BluetoothManager::class.java)?.adapter }.getOrNull()
             ?: BluetoothAdapter.getDefaultAdapter()
     }
 

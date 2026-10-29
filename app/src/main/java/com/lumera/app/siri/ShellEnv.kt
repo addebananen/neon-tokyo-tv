@@ -29,8 +29,16 @@ object ShellEnv {
         at.getDeclaredMethod("getSystemContext").invoke(thread) as Context
     }
 
-    /** A Context that says it is com.android.shell, so Bluetooth and power checks pass. */
-    val context: Context by lazy { ShellContext(systemContext) }
+    /**
+     * A Context that says it is com.android.shell, so Bluetooth and power checks pass. It wraps a
+     * package context of the shell app rather than the system context: system services take
+     * their caller's package from the context they are created with, and the system context
+     * would claim to be "android" from the shell's uid.
+     */
+    val context: Context by lazy {
+        val shell = runCatching { systemContext.createPackageContext(SHELL_PACKAGE, 0) }.getOrDefault(systemContext)
+        ShellContext(shell)
+    }
 
     private class ShellContext(base: Context) : ContextWrapper(base) {
         override fun getPackageName() = SHELL_PACKAGE
