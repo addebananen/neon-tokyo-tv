@@ -68,6 +68,20 @@ class NeonHomeActivity : ComponentActivity() {
 
     private var stoppedAt = 0L
 
+    override fun onResume() {
+        super.onResume()
+        // New on this TV: the Control Center asks once, with the remote, for what it still needs
+        if (!preview && com.lumera.app.control.ControlSetupActivity.dueOnHome(this)) {
+            window.decorView.postDelayed({
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) &&
+                    com.lumera.app.control.ControlSetupActivity.dueOnHome(this)
+                ) {
+                    com.lumera.app.control.ControlSetupActivity.open(this)
+                }
+            }, SETUP_DELAY_MS)
+        }
+    }
+
     override fun onStop() {
         super.onStop()
         stoppedAt = android.os.SystemClock.uptimeMillis()
@@ -189,6 +203,9 @@ class NeonHomeActivity : ComponentActivity() {
         intent.getStringExtra(EXTRA_LAYOUT)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
 
     companion object {
+        /** The intro has played and the home screen settled before the setup card comes. */
+        private const val SETUP_DELAY_MS = 4_000L
+
         /** The key of a [HomeStyle] to show a preview in. */
         const val EXTRA_STYLE = "style"
 

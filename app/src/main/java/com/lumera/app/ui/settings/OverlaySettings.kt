@@ -90,11 +90,12 @@ fun OverlaySettings(onGoBack: () -> Unit) {
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 VoidSegmentedControl(
-                    options = listOf("On" to 1, "Off" to 0, "Open now" to 2),
+                    options = listOf("On" to 1, "Off" to 0, "Open now" to 2, "Set up" to 3),
                     selectedOption = if (controlCenter) 1 else 0,
                     onOptionSelected = {
                         when (it) {
                             2 -> NeonOverlayService.openControlCenter()
+                            3 -> com.lumera.app.control.ControlSetupActivity.open(context)
                             else -> {
                                 controlCenter = it == 1
                                 OverlayPrefs.setControlCenter(context, it == 1)

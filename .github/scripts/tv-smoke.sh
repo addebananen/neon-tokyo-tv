@@ -1311,6 +1311,14 @@ overlay_shot overlay-hud
 sleep 6
 if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
 
+# Its setup card, which Neon Home shows once on a real TV: with the overlays on, only the Wi-Fi
+# names are left to allow
+adb shell am start -n "$PKG/com.lumera.app.control.ControlSetupActivity" >> "$OUT/overlay.txt" 2>&1
+sleep 2.5
+overlay_shot control-setup
+adb shell input keyevent BACK
+sleep 1
+
 # The Control Center: a held Home opens it on a real remote; here the broadcast the Siri Remote
 # bridge sends does. Each list page is opened straight away, with made-up headphones for the sound
 adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION >> "$OUT/overlay.txt" 2>&1

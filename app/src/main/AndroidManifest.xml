@@ -205,6 +205,14 @@
             </intent-filter>
         </service>
 
+        <!-- Setting the Control Center up with the remote: Accessibility and Wi-Fi names -->
+        <activity
+            android:name="com.lumera.app.control.ControlSetupActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NeonSheet" />
+
         <activity
             android:name=".dream.NeonDreamPreviewActivity"
             android:exported="true"

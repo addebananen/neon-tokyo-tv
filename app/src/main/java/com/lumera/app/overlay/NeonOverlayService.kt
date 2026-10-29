@@ -1,6 +1,7 @@
 package com.lumera.app.overlay
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import com.lumera.app.control.CcPage
 import com.lumera.app.control.ControlCenter
+import com.lumera.app.launcher.BluetoothHelper
+import com.lumera.app.launcher.SettingsHand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,6 +47,8 @@ class NeonOverlayService : AccessibilityService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var probe: SignalProbe
     private var control: ControlCenter? = null
+    /** The hand that presses on the TV's settings pages for the Control Center, lent while this runs. */
+    private val hand = SettingsHand(this) { handOff() }
 
     private var foreground: String? = null
     private var keyLagMs: Int? = null
@@ -103,6 +108,7 @@ class NeonOverlayService : AccessibilityService() {
             override fun diagnostics() = showDiagnostics()
             override fun hud() = showHud()
         }).also { it.attach() }
+        BluetoothHelper.lent = hand
         // Only the shell and the system hold DUMP, so no app can open the overlays this way
         runCatching { unregisterReceiver(fromAdb) }
         ContextCompat.registerReceiver(this, fromAdb, IntentFilter(ACTION_ADB), "android.permission.DUMP", handler, ContextCompat.RECEIVER_EXPORTED)
@@ -136,6 +142,10 @@ class NeonOverlayService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (SettingsHand.pending != null) {
+            handOn()
+            hand.step()
+        }
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         // The TV's volume bar and other system panels sit over the app, which stays in front
@@ -155,6 +165,29 @@ class NeonOverlayService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    private var handWatching = false
+
+    /** While the hand works it follows the page as it changes; the rest of the time it doesn't look. */
+    private fun handOn() {
+        if (handWatching) return
+        handWatching = true
+        serviceInfo?.let { info ->
+            info.eventTypes = info.eventTypes or AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            info.flags = info.flags or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            serviceInfo = info
+        }
+    }
+
+    private fun handOff() {
+        if (!handWatching) return
+        handWatching = false
+        serviceInfo?.let { info ->
+            info.eventTypes = info.eventTypes and AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED.inv()
+            info.flags = info.flags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()
+            serviceInfo = info
+        }
+    }
+
     override fun onDestroy() {
         if (instance === this) instance = null
         runCatching { unregisterReceiver(fromAdb) }
@@ -163,6 +196,8 @@ class NeonOverlayService : AccessibilityService() {
         hud?.close()
         control?.detach()
         control = null
+        if (BluetoothHelper.lent === hand) BluetoothHelper.lent = null
+        hand.stop()
         scope.cancel()
         super.onDestroy()
     }

@@ -146,7 +146,7 @@ class CcModel {
                 list += CcRow("wifi:${s.ssid}", s.ssid, NetRules.band(s.frequency), CcRow.Kind.Wifi, bars = NetRules.bars(s.rssi), secure = s.secure)
             }
         } else if (!canName) {
-            list += CcRow("note", "Run neon-tv.ps1 -Step extras once to see network names here", kind = CcRow.Kind.Note, header = true)
+            list += CcRow("allow-names", "Show network names", "Android asks once. Nothing is located", CcRow.Kind.Settings)
         }
         list += CcRow("wifi-settings", "Network settings…", kind = CcRow.Kind.Settings)
         return list
@@ -457,6 +457,7 @@ class ControlCenter(private val service: AccessibilityService, private val actio
                 else if (!helped) Toast.makeText(service, "Pick $name in the list", Toast.LENGTH_LONG).show()
             }
             row.key == "wifi-settings" || row.key == "eth" -> { closeNow(); start(Intent(Settings.ACTION_WIFI_SETTINGS)) }
+            row.key == "allow-names" -> { closeNow(); ControlSetupActivity.open(service, names = true) }
             row.key.startsWith("profile:") -> {
                 HomeProfiles.get(service).select(row.key.removePrefix("profile:"))
                 refresh()
