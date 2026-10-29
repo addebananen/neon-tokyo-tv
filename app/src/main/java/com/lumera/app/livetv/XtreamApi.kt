@@ -87,6 +87,7 @@ object XtreamApi {
     fun readStreams(
         reader: Reader,
         categories: Map<String, String>,
+        onProgress: ((Int) -> Unit)? = null,
         url: (streamId: String) -> String
     ): List<IptvChannel> {
         val out = ArrayList<IptvChannel>()
@@ -123,6 +124,7 @@ object XtreamApi {
                     epgId = epg,
                     number = number ?: (out.size + 1)
                 )
+                if (onProgress != null && out.size % 2000 == 0) onProgress(out.size)
             }
             json.endArray()
         }
