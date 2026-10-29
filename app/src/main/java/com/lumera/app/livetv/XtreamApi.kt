@@ -24,6 +24,10 @@ object XtreamApi {
     fun streamUrl(source: IptvSource.Xtream, streamId: String, format: String) =
         "${source.base}/live/${enc(source.username)}/${enc(source.password)}/$streamId.$format"
 
+    /** Where a film ("movie") or an episode ("series") of the service's library plays from. */
+    fun vodUrl(source: IptvSource.Xtream, kind: String, id: String, ext: String) =
+        "${source.base}/$kind/${enc(source.username)}/${enc(source.password)}/$id.$ext"
+
     fun pickFormat(account: Account): String =
         if (account.formats.isEmpty() || "ts" in account.formats) "ts" else if ("m3u8" in account.formats) "m3u8" else account.formats.first()
 
