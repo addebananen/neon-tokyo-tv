@@ -4,12 +4,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 
 /**
@@ -54,6 +56,25 @@ private val RimStops = arrayOf(
 internal val GlassInk = Color(0xFF0B0D12)
 
 /**
+ * A soft shadow round a pane as it comes forward, [lift] from 0 to 1. It lies outside the pane
+ * only: an elevation shadow would show through the glass as a dark box inside it.
+ */
+internal fun Modifier.glassShadow(shape: Shape, lift: () -> Float): Modifier = drawWithCache {
+    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+    val rings = listOf(3.dp, 7.dp, 12.dp, 18.dp).map { Stroke(it.toPx() * 2f) }
+    val drop = 4.dp.toPx()
+    onDrawBehind {
+        val l = lift().coerceIn(0f, 1f)
+        if (l <= 0f) return@onDrawBehind
+        clipPath(path, ClipOp.Difference) {
+            translate(top = drop * l) {
+                rings.forEach { drawPath(path, Color.Black, style = it, alpha = 0.07f * l) }
+            }
+        }
+    }
+}
+
+/**
  * A pane of [glass] shaped [shape] behind what the modifier holds. [lit] runs from 0 at rest to 1
  * in focus: smoked glass brightens, or turns white with [white] as a button does, and liquid glass
  * catches more light at its rim. [panel] is the darker glass of a menu, which text sits on.
@@ -78,8 +99,8 @@ internal fun Modifier.glassPane(
     )
     // Smoked glass: lit along its top edge, faint round the rest
     val smoke = when {
-        panel && glass == HomeGlass.Liquid -> Color(0x7A080A10)
-        panel -> Color(0x9E0A0C12)
+        panel && glass == HomeGlass.Liquid -> Color(0xB3080A10)
+        panel -> Color(0xCC0A0C12)
         glass == HomeGlass.Liquid -> Color.Transparent
         else -> Color(0x4D0C0E14)
     }

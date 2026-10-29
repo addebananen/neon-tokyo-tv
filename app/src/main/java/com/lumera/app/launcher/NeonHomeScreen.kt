@@ -1882,11 +1882,7 @@ private fun NeonTile(
             Box(
                 modifier = Modifier
                     .size(width, height)
-                    // A soft shadow under the glass as it comes forward
-                    .graphicsLayer {
-                        this.shape = shape
-                        shadowElevation = tube * 10.dp.toPx()
-                    }
+                    .glassShadow(shape) { tube }
                     .glassPane(look.glassMode, shape, lit = { tube }, dim = look.shade == null)
                     .glassSheen(shape) { sheen.value }
             )
