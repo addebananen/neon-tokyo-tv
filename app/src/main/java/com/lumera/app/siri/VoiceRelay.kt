@@ -1,7 +1,7 @@
 package com.lumera.app.siri
 
 import android.util.Log
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.TimeUnit
 
 /**
@@ -12,12 +12,15 @@ import java.util.concurrent.TimeUnit
 object VoiceRelay {
     private const val TAG = "NeonSiri"
     /** Frames: 2-byte sequence number + Opus. An empty array ends the utterance. */
-    private val queue = LinkedBlockingQueue<ByteArray>()
+    private val queue = LinkedBlockingDeque<ByteArray>()
     @Volatile private var active = false
+    /** Each Siri press is a new session; a stream from an earlier press stops taking frames. */
+    @Volatile private var session = 0
     @Volatile var packageName = "com.neontokyo.tv"
     private val END = ByteArray(0)
 
     fun start() {
+        session++
         queue.clear()
         active = true
         // `am` runs as the shell user, which may start any app's activity
@@ -44,9 +47,15 @@ object VoiceRelay {
 
     /** Streams one utterance to [write], as `f <hex>` lines and a final `end`. */
     fun stream(write: (String) -> Unit) {
+        val mine = session
         val deadline = System.currentTimeMillis() + 30_000
-        while (System.currentTimeMillis() < deadline) {
+        while (System.currentTimeMillis() < deadline && session == mine) {
             val f = queue.poll(2, TimeUnit.SECONDS) ?: if (active) continue else break
+            if (session != mine) {
+                // a new press began while this waited: the frame is the new stream's
+                queue.offerFirst(f)
+                break
+            }
             if (f.isEmpty()) break
             write("f " + f.joinToString("") { "%02x".format(it) })
         }

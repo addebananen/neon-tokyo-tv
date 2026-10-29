@@ -26,6 +26,21 @@ import kotlin.system.exitProcess
 object SiriBridge : SiriLink.Listener {
     private const val TAG = "NeonSiri"
     const val VERSION = 1
+    /**
+     * The bridge is started in a loop that brings it back after a crash ([LAUNCH]); these two
+     * exits end the loop instead.
+     */
+    const val EXIT_ALREADY_RUNNING = 3
+    const val EXIT_STOPPED = 4
+
+    /**
+     * How the bridge is started on the TV, as the shell user (`adb shell`, or Neon Tokyo itself
+     * over the TV's own wireless debugging): in a loop that restarts it 2 s after a crash.
+     * `%1$s` is the APK, `%2$s` the package.
+     */
+    const val LAUNCH = "cd /data/local/tmp && setsid sh -c 'while :; do CLASSPATH=%1\$s app_process /system/bin " +
+        "com.lumera.app.siri.SiriBridge %2\$s; c=\$?; [ \$c -eq $EXIT_ALREADY_RUNNING ] || [ \$c -eq $EXIT_STOPPED ] && break; " +
+        "echo bridge exited \$c, restarting; sleep 2; done' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &"
 
     private lateinit var handler: Handler
     private lateinit var link: SiriLink
@@ -64,19 +79,62 @@ object SiriBridge : SiriLink.Listener {
             check()
             exitProcess(0)
         }
-        debug = args.getOrNull(1) == "debug"
+        sim = args.getOrNull(1) == "sim"
+        debug = sim || args.getOrNull(1) == "debug"
         if (!SiriStatusServer.start(this)) {
             System.err.println("another bridge is already running")
-            exitProcess(0)
+            exitProcess(EXIT_ALREADY_RUNNING)
         }
-        println("Neon Tokyo Siri Remote bridge $VERSION running (pid ${android.os.Process.myPid()})")
+        println("Neon Tokyo Siri Remote bridge $VERSION running (pid ${android.os.Process.myPid()})${if (sim) " in simulation" else ""}")
         updateWakeLock()
-        link = SiriLink(handler, this)
-        link.start(config.address)
+        if (!sim) {
+            link = SiriLink(handler, this)
+            link.start(config.address)
+        }
         Looper.loop()
     }
 
+    /** Prints what it does: every report, key and action. */
     private var debug = false
+
+    /**
+     * `... SiriBridge <package> sim`: no Bluetooth; a pretend remote's reports come from a script
+     * ([play]), and everything after that runs exactly as with a real one. For the emulator test.
+     */
+    @Volatile var sim = false
+        private set
+
+    /**
+     * Plays a script of remote reports, one per line, timed from now:
+     *
+     *   <ms> ready <generation>      the remote connects
+     *   <ms> r <report id> <hex>     one notification
+     *   <ms> lost                    the link drops
+     *   <ms> mark <text>             printed, so a test can tell the parts apart
+     */
+    fun play(path: String): Boolean {
+        if (!sim) return false
+        val lines = runCatching { File(path).readLines() }.getOrElse { return false }
+        val start = SystemClock.uptimeMillis() + 50
+        for (line in lines) {
+            val p = line.trim().split(' ')
+            val at = p.firstOrNull()?.toLongOrNull() ?: continue
+            val action: () -> Unit = when (p.getOrNull(1)) {
+                "ready" -> { { onReady(p.getOrNull(2)?.toIntOrNull() ?: 3, "Simulated Siri Remote", "00:00:00:00:00:00") } }
+                "lost" -> { { onLost() } }
+                "mark" -> { { println("mark ${p.drop(2).joinToString(" ")}") } }
+                "r" -> {
+                    val id = p.getOrNull(2)?.toIntOrNull(16) ?: continue
+                    val hex = p.getOrNull(3).orEmpty()
+                    val data = ByteArray(hex.length / 2) { hex.substring(2 * it, 2 * it + 2).toInt(16).toByte() }
+                    ({ onReport(id, data) })
+                }
+                else -> continue
+            }
+            handler.postAtTime({ action() }, start + at)
+        }
+        return true
+    }
 
     /** `... SiriBridge <package> check`: what this TV lets the bridge do, without starting it. */
     private fun check() {
@@ -126,12 +184,13 @@ object SiriBridge : SiriLink.Listener {
 
     fun pair() = handler.post {
         problem = ""
-        link.pair()
+        if (!sim) link.pair()
     }
 
     fun forget() = handler.post {
         config = config.copy(address = "")
         config.save()
+        if (sim) return@post
         link.close()
         link.start("")
     }
@@ -145,9 +204,9 @@ object SiriBridge : SiriLink.Listener {
 
     fun stop() = handler.post {
         release()
-        link.close()
+        if (!sim) link.close()
         wakeLock?.let { if (it.isHeld) it.release() }
-        exitProcess(0)
+        exitProcess(EXIT_STOPPED)
     }
 
     private fun applyConfig() {
@@ -195,7 +254,7 @@ object SiriBridge : SiriLink.Listener {
     }
 
     override fun onReport(reportId: Int, data: ByteArray) {
-        if (debug) println("report %02x %s".format(reportId, data.joinToString(" ") { "%02x".format(it) }))
+        if (debug && reportId != 0xFA) println("report %02x %s".format(reportId, data.joinToString(" ") { "%02x".format(it) }))
         if (engine == 0L) return
         if (reportId == 0xFA) {
             SiriNative.nativeAudioFrame(data)?.let { VoiceRelay.frame(it) }
@@ -241,8 +300,8 @@ object SiriBridge : SiriLink.Listener {
                 SiriOut.KEY_DOWN -> key(code, true, repeat, false)
                 SiriOut.KEY_UP -> key(code, false, 0, flags and SiriOut.FLAG_CANCELED != 0)
                 SiriOut.POWER -> power()
-                SiriOut.VOICE_START -> VoiceRelay.start()
-                SiriOut.VOICE_STOP -> VoiceRelay.stop()
+                SiriOut.VOICE_START -> { if (debug) println("voice start"); VoiceRelay.start() }
+                SiriOut.VOICE_STOP -> { if (debug) println("voice stop"); VoiceRelay.stop() }
             }
             i += 4
         }
@@ -271,7 +330,9 @@ object SiriBridge : SiriLink.Listener {
             downTime, t, if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code, repeat, 0,
             KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags, source
         )
-        if (ShellEnv.inject(event)) keysSent++
+        val ok = ShellEnv.inject(event)
+        if (ok) keysSent++
+        if (debug) println("key $code ${if (down) "down" else "up"} r$repeat${if (canceled) " canceled" else ""}${if (ok) "" else " NOT INJECTED"}")
     }
 
     /**
@@ -291,6 +352,7 @@ object SiriBridge : SiriLink.Listener {
                 arrayOf("am", "broadcast", "-a", "com.neontokyo.tv.OVERLAY", "--es", "show", "control", "-p", VoiceRelay.packageName)
             ).waitFor() == 0
         }.getOrDefault(false)
+        if (debug) println("control center: ${if (sent) "opened" else "overlays off, quick settings instead"}")
         if (!sent) handler.post {
             key(KeyEvent.KEYCODE_SETTINGS, true, 0, false)
             key(KeyEvent.KEYCODE_SETTINGS, false, 0, false)
@@ -301,6 +363,7 @@ object SiriBridge : SiriLink.Listener {
     private fun power() {
         val pm = ShellEnv.context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val code = if (pm.isInteractive) KeyEvent.KEYCODE_POWER else KeyEvent.KEYCODE_WAKEUP
+        if (debug) println("power: screen was ${if (pm.isInteractive) "on" else "off"}")
         key(code, true, 0, false)
         key(code, false, 0, false)
     }

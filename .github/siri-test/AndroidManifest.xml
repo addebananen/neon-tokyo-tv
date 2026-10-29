@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Test helper for the Siri Remote voice test, never shipped: a speech recognizer that checks
+     the sound Neon Tokyo hands it, and an app called Hikari for the voice command to open -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.neontokyo.siritest">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+    <application android:label="Siri test">
+        <service
+            android:name=".FakeRecognizer"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name=".Hikari"
+            android:label="Hikari"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

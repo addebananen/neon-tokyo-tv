@@ -451,7 +451,18 @@ impl Engine {
         }
     }
 
+    /// The clickpad or a ring edge is pressed down.
+    fn clicking(&self) -> bool {
+        self.held.iter().any(|(b, _)| {
+            matches!(b, Button::Select | Button::RingUp | Button::RingDown | Button::RingLeft | Button::RingRight)
+        })
+    }
+
     fn click(&mut self, code: i32) {
+        // the same key already held down (a held ring edge) is moving focus by itself
+        if self.held.iter().any(|(_, h)| h.code == code) {
+            return;
+        }
         self.out.push(Out::Key { code, down: true, repeat: 0, canceled: false });
         self.out.push(Out::Key { code, down: false, repeat: 0, canceled: false });
     }
@@ -459,6 +470,11 @@ impl Engine {
     fn release_all(&mut self, t: f64) {
         for (b, _) in self.held.clone() {
             self.release_button(b, true);
+        }
+        // Siri held as the link dropped: the voice search must not wait for a release that
+        // never comes
+        if self.buttons.has(Button::Siri) {
+            self.out.push(Out::VoiceStop);
         }
         self.buttons = Buttons::default();
         self.touch = None;
@@ -485,6 +501,9 @@ impl Engine {
             return;
         };
         let Some(mut touch) = self.touch else {
+            // A finger resting on a held click can go quiet long enough to count as lifted;
+            // when it moves again it must not scroll on top of the held arrow
+            let clicking = self.clicking();
             let caught = self.fling.take().is_some();
             self.touch = Some(Touch {
                 start: f,
@@ -498,7 +517,7 @@ impl Engine {
                 acc_y: 0.0,
                 axis: None,
                 travel: 0.0,
-                spent: caught,
+                spent: caught || clicking,
                 caught,
                 angle: f.y.atan2(f.x),
                 turned: 0.0,

@@ -13,8 +13,9 @@ import kotlin.concurrent.thread
  *   pair | forget | stop   -> ok
  *   voice                  -> the microphone of the current Siri press, `f <hex>` lines, then `end`
  *   config k=v k=v ...     -> ok
+ *   play <script>          -> ok (simulation only: a pretend remote, see [SiriBridge.play])
  *
- * Only the TV itself can reach it, and nothing it accepts presses keys.
+ * Only the TV itself can reach it, and outside simulation nothing it accepts presses keys.
  */
 object SiriStatusServer {
     const val PORT = 47391
@@ -47,6 +48,7 @@ object SiriStatusServer {
                     }
                     "forget" -> { bridge.forget(); "ok" }
                     "stop" -> { bridge.stop(); "ok" }
+                    "play" -> if (bridge.play(line.removePrefix(cmd).trim())) "ok" else "error not in simulation"
                     "config" -> {
                         val pairs = line.removePrefix(cmd).trim().split(' ')
                             .mapNotNull { p -> p.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }

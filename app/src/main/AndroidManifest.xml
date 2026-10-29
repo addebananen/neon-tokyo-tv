@@ -52,6 +52,11 @@
         <intent>
             <action android:name="android.media.tv.TvInputService" />
         </intent>
+        <!-- Voice search with the Siri Remote: without this the TV's speech recognizer is
+             invisible to the app, and SpeechRecognizer says there is none -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

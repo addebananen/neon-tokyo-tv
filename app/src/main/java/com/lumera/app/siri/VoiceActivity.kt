@@ -53,6 +53,9 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.concurrent.thread
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -66,7 +69,10 @@ class VoiceActivity : ComponentActivity() {
     private val level = mutableFloatStateOf(0f)
     private var recognizer: SpeechRecognizer? = null
     private var pipeOut: OutputStream? = null
+    @Volatile private var socket: Socket? = null
     @Volatile private var done = false
+    /** Which Siri press this is: a stream from an earlier one leaves the screen alone. */
+    @Volatile private var press = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +112,7 @@ class VoiceActivity : ComponentActivity() {
             else -> null
         }
         if (rec == null) {
+            Log.w(TAG, "voice: no speech recognizer on this TV")
             hint.value = "TV:n har ingen taligenkänning"
             finishSoon(3000)
             return
@@ -126,19 +133,23 @@ class VoiceActivity : ComponentActivity() {
         rec.startListening(intent)
         read.close()
         val out = pipeOut!!
-        thread(name = "siri-voice") { pump(out) }
+        val mine = ++press
+        thread(name = "siri-voice") { pump(out, mine) }
     }
 
     /** Reads the utterance from the bridge, decodes it and writes 16 kHz PCM into the recognizer. */
-    private fun pump(out: OutputStream) {
+    private fun pump(out: OutputStream, mine: Int) {
         val decoder = OpusDecoder()
+        var frames = 0
+        var samples = 0L
+        var energy = 0.0
         try {
-            Socket("127.0.0.1", SiriStatusServer.PORT).use { s ->
+            Socket("127.0.0.1", SiriStatusServer.PORT).also { socket = it }.use { s ->
                 s.soTimeout = 35_000
                 s.getOutputStream().apply { write("voice\n".toByteArray()); flush() }
                 val lines = s.getInputStream().bufferedReader()
                 var last = -1
-                while (!done) {
+                while (!done && press == mine) {
                     val line = lines.readLine() ?: break
                     if (line == "end") break
                     if (!line.startsWith("f ")) continue
@@ -150,26 +161,31 @@ class VoiceActivity : ComponentActivity() {
                     if (gap in 1..4) out.write(ByteArray(gap * FRAME_OUT * 2))
                     last = seq
                     val pcm = decoder.decode(frame, 2)
+                    frames++
                     if (pcm.isEmpty()) continue
-                    showLevel(pcm)
+                    samples += pcm.size
+                    for (v in pcm) energy += v.toDouble() * v
+                    showLevel(pcm, mine)
                     out.write(toBytes(pcm))
                 }
             }
         } catch (e: IOException) {
             Log.w(TAG, "voice stream ended", e)
         } finally {
+            val rms = if (samples > 0) sqrt(energy / samples).toInt() else 0
+            Log.i(TAG, "voice: $frames frames, $samples samples at $OUT_RATE Hz, rms $rms, decoder ${decoder.name}")
             decoder.release()
             runCatching { out.close() }
-            runOnUiThread { if (!done) { hint.value = "Tänker …"; level.floatValue = 0f } }
+            runOnUiThread { if (!done && press == mine) { hint.value = "Tänker …"; level.floatValue = 0f } }
         }
     }
 
-    private fun showLevel(pcm: ShortArray) {
+    private fun showLevel(pcm: ShortArray, mine: Int) {
         var sum = 0.0
         for (v in pcm) sum += v.toDouble() * v
         val rms = sqrt(sum / pcm.size) / 32768.0
         val l = (rms * 9).coerceIn(0.0, 1.0).toFloat()
-        runOnUiThread { level.floatValue = l }
+        runOnUiThread { if (press == mine) level.floatValue = l }
     }
 
     private val listener = object : RecognitionListener {
@@ -188,6 +204,7 @@ class VoiceActivity : ComponentActivity() {
         override fun onResults(results: Bundle?) {
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
             if (text.isBlank()) return onError(SpeechRecognizer.ERROR_NO_MATCH)
+            Log.i(TAG, "voice heard: $text")
             heard.value = text
             act(text)
         }
@@ -201,7 +218,7 @@ class VoiceActivity : ComponentActivity() {
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Mikrofonbehörighet saknas"
                 else -> "Taligenkänningen svarade inte ($error)"
             }
-            Log.w(TAG, "recognizer error $error")
+            Log.w(TAG, "voice recognizer error $error")
             finishSoon(1800)
         }
     }
@@ -210,6 +227,7 @@ class VoiceActivity : ComponentActivity() {
         done = true
         val apps = HomeApps.load(this).map { it.packageName to it.label }
         val command = VoiceCommands.parse(text, apps)
+        Log.i(TAG, "voice action: $command")
         hint.value = when (command) {
             is VoiceCommand.OpenApp -> "Öppnar ${command.label}"
             is VoiceCommand.PlayIn -> "Söker i ${command.app.replaceFirstChar { it.uppercase() }}"
@@ -262,6 +280,7 @@ class VoiceActivity : ComponentActivity() {
 
     private fun stopAll() {
         done = true
+        runCatching { socket?.close() }
         runCatching { pipeOut?.close() }
         recognizer?.destroy()
         recognizer = null
@@ -311,6 +330,7 @@ private class OpusDecoder {
         format.setByteBuffer("csd-2", nanos(80_000_000))
         MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS).apply { configure(format, null, null, 0); start() }
     }.onFailure { Log.w("NeonSiri", "no opus decoder", it) }.getOrNull()
+    val name: String get() = runCatching { codec?.name }.getOrNull() ?: "none"
     private val down = Downsampler()
     private val info = MediaCodec.BufferInfo()
     private var pts = 0L
@@ -358,29 +378,46 @@ private class OpusDecoder {
     private fun nanos(n: Long): ByteBuffer = ByteBuffer.allocate(8).order(ByteOrder.nativeOrder()).putLong(n).apply { flip() }
 }
 
-/** 48 kHz to 16 kHz: a short low-pass, then every third sample. */
+/**
+ * 48 kHz to 16 kHz: a windowed-sinc low-pass (flat to 5 kHz, gone above 9 kHz, so nothing folds
+ * back into the speech band), then every third sample.
+ */
 internal class Downsampler {
-    private val taps = floatArrayOf(
-        -0.0027f, -0.0060f, 0f, 0.0230f, 0.0500f, 0.0350f, -0.0400f, -0.1100f,
-        0.2400f, 0.5414f, 0.2400f, -0.1100f, -0.0400f, 0.0350f, 0.0500f, 0.0230f, 0f, -0.0060f, -0.0027f
-    ).let { t -> val s = t.sum(); FloatArray(t.size) { t[it] / s } }
-    private val history = FloatArray(taps.size)
+    private val taps = FloatArray(TAPS) { i ->
+        val m = i - (TAPS - 1) / 2.0
+        val sinc = if (m == 0.0) 2 * CUTOFF else sin(2 * PI * CUTOFF * m) / (PI * m)
+        val blackman = 0.42 - 0.5 * cos(2 * PI * i / (TAPS - 1)) + 0.08 * cos(4 * PI * i / (TAPS - 1))
+        (sinc * blackman).toFloat()
+    }.let { t -> val sum = t.sum(); FloatArray(t.size) { t[it] / sum } }
+    /** The last [TAPS] samples, as a ring; [pos] is where the next one goes. */
+    private val history = FloatArray(TAPS)
+    private var pos = 0
     private var phase = 0
 
     fun push(input: ShortArray): ShortArray {
         val out = ShortArray((input.size + phase + 2) / 3)
         var n = 0
         for (x in input) {
-            System.arraycopy(history, 1, history, 0, history.size - 1)
-            history[history.size - 1] = x.toFloat()
+            history[pos] = x.toFloat()
+            pos = (pos + 1) % TAPS
             if (phase == 0) {
                 var acc = 0f
-                for (i in taps.indices) acc += taps[i] * history[i]
+                var j = pos // oldest sample
+                for (i in 0 until TAPS) {
+                    acc += taps[i] * history[j]
+                    j = if (j + 1 == TAPS) 0 else j + 1
+                }
                 if (n < out.size) out[n++] = acc.coerceIn(-32768f, 32767f).toInt().toShort()
             }
             phase = (phase + 1) % 3
         }
         return if (n == out.size) out else out.copyOf(n)
+    }
+
+    companion object {
+        const val TAPS = 63
+        /** 7.2 kHz, as a fraction of 48 kHz. */
+        const val CUTOFF = 7_200.0 / 48_000.0
     }
 }
 

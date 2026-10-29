@@ -64,7 +64,14 @@ jobs:
           rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android
           cargo install cargo-ndk --locked --version 3.5.4
           cd native/siri-remote
-          cargo test
+          # unit tests, millions of random reports, then the pretend remote's scenarios through
+          # the engine (the emulator test plays the same ones through the real bridge)
+          cargo test --release
+          python3 -c "import ctypes.util, sys; sys.exit(0 if ctypes.util.find_library('opus') else 1)" \
+            || (sudo apt-get update -q && sudo apt-get install -y -q libopus0)
+          python3 ../../.github/scripts/siri-sim.py make /tmp/siri-sim
+          cargo run -q --release --example sim -- /tmp/siri-sim/remote.sim > /tmp/siri-sim/remote.log
+          python3 ../../.github/scripts/siri-sim.py check /tmp/siri-sim/remote.log remote
           ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973" cargo ndk -t arm64-v8a -t armeabi-v7a --platform 26 \
             -o ../../app/src/main/jniLibs build --release
           ls -l ../../app/src/main/jniLibs/*/libneon_siri.so
@@ -186,8 +193,75 @@ jobs:
           git commit -q -m "TV smoke test screenshots, run ${{ github.run_number }}"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-screens
 
+  # The Siri Remote end to end on Android TV 14 (as on TV 1), with a pretend remote: buttons,
+  # touch scrolling, Power off and on, and voice through the TV's own Opus decoder
+  siri-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: neon-tokyo-apk
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: siri-x86
+          path: siri-x86
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Prepare test APKs
+        run: |
+          python3 -c "import ctypes.util, sys; sys.exit(0 if ctypes.util.find_library('opus') else 1)" \
+            || (sudo apt-get update -q && sudo apt-get install -y -q libopus0)
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          JAR=$(ls -d "$ANDROID_HOME"/platforms/android-* | sort -V | tail -1)/android.jar
+          keytool -genkeypair -keystore test.jks -storepass android -keypass android -alias test \
+            -keyalg RSA -keysize 2048 -validity 365 -dname "CN=Neon Tokyo Test"
+          # Neon Tokyo without its ARM libraries (the emulator is x86), as in tv-test
+          APK=$(ls neon-tokyo-*.apk | head -1)
+          cp "$APK" stripped.apk
+          zip -q -d stripped.apk 'lib/*' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.MF' || true
+          "$BT/zipalign" -f 4 stripped.apk aligned.apk
+          "$BT/apksigner" sign --ks test.jks --ks-pass pass:android --key-pass pass:android --out neon-tokyo-test.apk aligned.apk
+          # the stand-in speech recognizer and the Hikari app
+          mkdir -p st/classes
+          javac -source 11 -target 11 -classpath "$JAR" -d st/classes $(find .github/siri-test/src -name '*.java')
+          "$BT/d8" --min-api 26 --lib "$JAR" --output st $(find st/classes -name '*.class')
+          "$BT/aapt2" link -o st/base.apk --manifest .github/siri-test/AndroidManifest.xml -I "$JAR"
+          (cd st && zip -q base.apk classes.dex)
+          "$BT/zipalign" -f 4 st/base.apk st/aligned.apk
+          "$BT/apksigner" sign --ks test.jks --ks-pass pass:android --key-pass pass:android --out siritest.apk st/aligned.apk
+
+      - name: Run Siri Remote test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          ram-size: 3072M
+          disk-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash .github/scripts/siri-test.sh neon-tokyo-test.apk siri-x86/libneon_siri.so siri-out
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: siri-test
+          path: siri-out
+          retention-days: 7
+
   release:
-    needs: [build, tv-test, tv-setup-test]
+    needs: [build, tv-test, tv-setup-test, siri-test]
     if: github.ref == 'refs/heads/main' || inputs.prerelease
     runs-on: ubuntu-latest
     steps:
