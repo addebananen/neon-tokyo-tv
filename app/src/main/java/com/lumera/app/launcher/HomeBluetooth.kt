@@ -322,13 +322,17 @@ class HomeBluetooth(private val context: Context) {
 
     fun clock(): Long = SystemClock.elapsedRealtime()
 
-    /** Connects [address] the best way this TV allows. */
-    fun connect(address: String): BtConnect {
+    /**
+     * Connects [address] the best way this TV allows, or with [disconnect] lets it go so the
+     * sound comes back to the TV. [back] returns to the app beneath once the helper is done.
+     */
+    fun connect(address: String, disconnect: Boolean = false, back: Boolean = false): BtConnect {
         val adapter = adapter ?: return BtConnect.Failed
         if (!permittedNow()) return BtConnect.Failed
         val device = runCatching { adapter.getRemoteDevice(address) }.getOrNull() ?: return BtConnect.Failed
-        if (connectDirect(device)) return BtConnect.Direct
-        val helper = BluetoothHelper.request(context, nameOf(device))
+        if (!disconnect && connectDirect(device)) return BtConnect.Direct
+        val task = if (disconnect) BluetoothHelper.Task.Disconnect else BluetoothHelper.Task.Connect
+        val helper = BluetoothHelper.request(context, nameOf(device), task, back)
         if (!HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))) {
             BluetoothHelper.cancel()
             return BtConnect.Failed

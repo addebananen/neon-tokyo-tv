@@ -6,8 +6,9 @@ Neon Tokyo setup for a TCL Google TV, run from a Windows PC on the same network.
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step launcher -HomeScreen projectivy   # Projectivy on the Home button instead of Neon Home
 
 Steps: connect, inventory, debloat, launcher, tune, art, app, dream, extras, restart, report, undo.
-extras turns on picture diagnostics and the gaming HUD (Up+Down / Left+Right held 2 s), lets
-Neon Tokyo's own settings switch them, and lets the music widget see what plays.
+extras turns on the Control Center (hold Home), picture diagnostics and the gaming HUD
+(Up+Down / Left+Right held 2 s), lets Neon Tokyo's own settings switch them, lets the Control
+Center name Wi-Fi networks and switch Do Not Disturb, and lets the music widget see what plays.
 Nothing is uninstalled: apps are only disabled, and every change is written to
 %USERPROFILE%\NeonTV\undo.txt so -Step undo can reverse it. A factory reset also
 restores everything.
@@ -417,6 +418,10 @@ function Set-Extras {
     Shell "settings put secure enabled_accessibility_services $((@($list) + $NeonOverlay) -join ':')" | Out-Null
     Shell 'settings put secure accessibility_enabled 1' | Out-Null
     Shell "cmd notification allow_listener $NeonListener" | Out-Null
+    # The Control Center: Wi-Fi names (Android hides them from apps without location) and Do Not Disturb
+    foreach ($p in 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION') { Shell "pm grant $NeonApp $p" | Out-Null }
+    Shell "cmd notification allow_dnd $NeonApp" | Out-Null
+    Say 'Control Center: hold Home for a moment on any remote, over any app. A short press is Home as always.'
     Say 'Picture diagnostics: hold Up and Down together for 2 seconds. Gaming HUD: hold Left and Right. Back or the same buttons put them away.'
 }
 
@@ -454,7 +459,8 @@ function Undo-All {
     if (Test-Path (Join-Path $Before 'extras.txt')) {
         Restore-Settings 'secure' (Join-Path $Before 'extras.txt')
         Shell "cmd notification disallow_listener $NeonListener" | Out-Null
-        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP') { Shell "pm revoke $NeonApp $p" | Out-Null }
+        Shell "cmd notification disallow_dnd $NeonApp" | Out-Null
+        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP', 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION') { Shell "pm revoke $NeonApp $p" | Out-Null }
     }
     # The Home button goes back to whatever it opened before, normally the Google TV home screen
     $was = Join-Path $Before 'home.txt'

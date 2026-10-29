@@ -459,7 +459,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         btBefore[0] = btNearby
         val shown = btCard
         when {
-            fresh != null -> btCard = btDevices.first { it.address == fresh }
+            // Do Not Disturb in the Control Center keeps the card away
+            fresh != null && !com.lumera.app.control.Quiet.on(context) -> btCard = btDevices.first { it.address == fresh }
             shown != null && shown.address != PREVIEW_DEVICE &&
                 (shown.address !in btMine || shown.address in connected || shown.address !in btNearby) -> btCard = null
         }
