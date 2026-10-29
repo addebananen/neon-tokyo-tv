@@ -704,16 +704,17 @@ class DetailsViewModel @Inject constructor(
                 val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
                 val profile = activeProfileId?.let { dao.getProfileById(it) }
 
+                // The household's own service is never filtered away: it is what they pay for
+                val (ownStreams, addonStreams) = rawStreams.partition { it.addonTransportUrl == VodLibrary.TRANSPORT }
                 val sortedStreams = if (profile?.sourceSortingEnabled != false) {
                     val enabledQualities = StreamSortingService.parseEnabledQualities(profile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
                     val excludePhrases = StreamSortingService.parseExcludePhrases(profile?.sourceExcludePhrases ?: "")
                     val addonSortOrders = dao.getAllAddons().firstOrNull()
                         ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
                     val excludedFormats = StreamSortingService.parseExcludedFormats(profile?.sourceExcludedFormats ?: "")
-                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceMaxSizeGb ?: 0, excludedFormats)
-                } else rawStreams
-                // The household's own service first: it is what they pay for
-                val streams = sortedStreams.sortedBy { it.addonTransportUrl != VodLibrary.TRANSPORT }
+                    streamSortingService.sortAndFilter(addonStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceMaxSizeGb ?: 0, excludedFormats)
+                } else addonStreams
+                val streams = ownStreams + sortedStreams
 
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {
                     null

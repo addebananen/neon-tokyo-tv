@@ -113,7 +113,8 @@ object VodLibrary {
 
     private fun stream(name: String, ext: String, url: String) = Stream(
         name = listOfNotNull(LABEL, VodCatalog.quality(name)).joinToString(" "),
-        title = "$name\n${ext.uppercase()} · from your TV service",
+        // No file type in the text: the sources filter reads "TS" as a camera copy
+        title = "$name\nfrom your TV service",
         url = url,
         addonTransportUrl = TRANSPORT
     )

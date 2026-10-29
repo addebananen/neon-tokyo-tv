@@ -763,7 +763,7 @@ else
   key DPAD_CENTER
   if wait_for '\[IPTV\]' 45; then
     shot vod-movie-sources
-    adb logcat -d -s VodLibrary:I VodLibrary:W | tee "$OUT/vod.txt"
+    adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
     # The service's copy comes first, so OK on the panel's first row plays it
     key DPAD_CENTER
     sleep 8
@@ -775,7 +775,7 @@ else
     screen_has "Dune" || key BACK
   else
     shot vod-movie-none
-    adb logcat -d -s VodLibrary:I VodLibrary:W | tee "$OUT/vod.txt"
+    adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
     fail "the sources for Dune (2021) have no [IPTV] entry from the service (see vod.txt)"
   fi
   # Back to the search results, then the series row below
@@ -800,7 +800,7 @@ else
       screen_has "S01E01" || fail "the IPTV source for Dune: Prophecy is not episode 1 of season 1"
     else
       shot vod-series-none
-      adb logcat -d -s VodLibrary:I VodLibrary:W | tee -a "$OUT/vod.txt"
+      adb logcat -d -s VodLibrary:I | tee -a "$OUT/vod.txt"
       fail "the sources for Dune: Prophecy S1E1 have no [IPTV] entry from the service (see vod.txt)"
     fi
     key BACK
