@@ -1889,9 +1889,7 @@ private fun NeonTile(
                     }
                     .glassPane(look.glassMode, shape, lit = { tube }, dim = look.shade == null)
                     .glassSheen(shape) { sheen.value }
-            ) {
-                Box(Modifier.matchParentSize().graphicsLayer { alpha = if (dimmed) 0.5f else 1f }) { content(focused) }
-            }
+            )
         } else {
             behind(focused)
         }
@@ -1931,10 +1929,13 @@ private fun NeonTile(
             interactionSource = interaction
         ) {
             if (glass) {
-                // The name is the Surface's own, so it reads as the tile's
-                Column {
-                    Spacer(Modifier.height(height))
-                    if (caption != null) TileCaption(caption, width, always = captionAlways, lit = { tube })
+                // What is on the glass lies in the Surface, which would otherwise hide it from
+                // TalkBack; the name comes first, so it reads as the tile's own
+                Box {
+                    if (caption != null) {
+                        Box(Modifier.padding(top = height)) { TileCaption(caption, width, always = captionAlways, lit = { tube }) }
+                    }
+                    Box(Modifier.size(width, height).graphicsLayer { alpha = if (dimmed) 0.5f else 1f }) { content(focused) }
                 }
             } else {
                 Box(
