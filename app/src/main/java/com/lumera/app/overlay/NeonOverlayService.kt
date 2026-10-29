@@ -38,7 +38,7 @@ import kotlinx.coroutines.withContext
  * it only watches the buttons for its two chords and which app is in front.
  *
  * Hold Up and Down together for 2 s: picture diagnostics. Hold Left and Right: the gaming HUD.
- * The same chord again, or Back for diagnostics, puts them away. Hold Home: the Control Center
+ * The same chord again, or Back for diagnostics, puts them away. Settings (or a held Home): the Control Center
  * ([ControlCenter]), which also holds the sleep timer.
  */
 class NeonOverlayService : AccessibilityService() {
