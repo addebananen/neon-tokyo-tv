@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lumera.app.BuildConfig
 import com.lumera.app.R
 import com.lumera.app.launcher.GlassInk
 import com.lumera.app.launcher.Glyph
@@ -185,7 +186,7 @@ class ControlSetupActivity : ComponentActivity() {
     companion object {
         private val Body = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
         private const val PREFS = "neon_control"
-        private const val SEEN = "setup_seen"
+        private const val SEEN = "setup_seen_version"
         /** Opened from the Wi-Fi list: ask for the names at once. */
         const val EXTRA_NAMES = "names"
 
@@ -193,16 +194,17 @@ class ControlSetupActivity : ComponentActivity() {
             context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
         private fun markSeen(context: Context) =
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(SEEN, true).apply()
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(SEEN, BuildConfig.VERSION_CODE).apply()
 
         /**
-         * Neon Home shows the setup once, when the Control Center can't open yet. Never on the
+         * Neon Home shows the setup once per installed version, after each update, while the
+         * Control Center can't open yet; once all is on it stays away. Never on the
          * emulator, where the TV test drives the home screen with the remote and a card would
          * stand in its way; the test opens it by name instead.
          */
         fun dueOnHome(context: Context): Boolean {
             if (Build.HARDWARE == "ranchu" || Build.HARDWARE == "goldfish") return false
-            if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(SEEN, false)) return false
+            if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(SEEN, 0) == BuildConfig.VERSION_CODE) return false
             return !(OverlayPrefs.serviceOn(context) && names(context))
         }
 
