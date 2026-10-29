@@ -87,7 +87,7 @@ internal fun HomeUpdatesDialog(updates: AppUpdateManager, onDismiss: () -> Unit)
             Column(
                 modifier = Modifier
                     .width(380.dp)
-                    .homePanel(look, RoundedCornerShape(14.dp))
+                    .panelIn().homePanel(look, RoundedCornerShape(14.dp))
                     .padding(horizontal = 20.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

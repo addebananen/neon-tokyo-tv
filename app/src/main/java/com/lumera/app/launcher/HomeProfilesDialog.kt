@@ -149,7 +149,7 @@ private fun ProfileList(
     }
     Column(
         modifier = Modifier
-            .homePanel(look, RoundedCornerShape(18.dp))
+            .panelIn().homePanel(look, RoundedCornerShape(18.dp))
             .padding(horizontal = 30.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -313,7 +313,7 @@ private fun ProfileEditor(
     Column(
         modifier = Modifier
             .width(600.dp)
-            .homePanel(look, RoundedCornerShape(22.dp))
+            .panelIn().homePanel(look, RoundedCornerShape(22.dp))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 26.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp)

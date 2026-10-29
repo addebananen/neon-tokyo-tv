@@ -259,7 +259,7 @@ internal fun HomeBluetoothDialog(
             Column(
                 modifier = Modifier
                     .width(460.dp)
-                    .homePanel(look, RoundedCornerShape(14.dp))
+                    .panelIn().homePanel(look, RoundedCornerShape(14.dp))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
