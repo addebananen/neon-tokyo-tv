@@ -3,7 +3,7 @@
     <string name="nt_dream_label">Neon Tokyo night</string>
     <string name="nt_now_playing_label">Neon Tokyo now playing</string>
     <string name="nt_overlay_label">Neon Tokyo overlays</string>
-    <string name="nt_overlay_description">Picture diagnostics and the gaming HUD over any app or console. Hold Up and Down together for 2 seconds for the picture, Left and Right for the HUD. It watches only the remote\'s buttons and which app is in front, and reads nothing on the screen.</string>
+    <string name="nt_overlay_description">The Control Center, picture diagnostics and the gaming HUD over any app or console. Hold Home for the Control Center (sound, Wi-Fi, profiles, sleep timer, power). Hold Up and Down together for 2 seconds for the picture, Left and Right for the HUD. It watches only the remote\'s buttons and which app is in front, and reads nothing on the screen.</string>
     <string name="nt_bluetooth_helper_label">Neon Tokyo Bluetooth connect</string>
     <string name="nt_bluetooth_helper_description">Presses Connect on the TV\'s Bluetooth page when you connect a device from Neon Home, then turns itself off.</string>
 

@@ -1310,6 +1310,37 @@ overlay_on || fail "the gaming HUD did not open"
 overlay_shot overlay-hud
 sleep 6
 if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
+
+# The Control Center: a held Home opens it on a real remote; here the broadcast the Siri Remote
+# bridge sends does. Each list page is opened straight away, with made-up headphones for the sound
+adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION >> "$OUT/overlay.txt" 2>&1
+adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION >> "$OUT/overlay.txt" 2>&1
+adb shell screenrecord --time-limit 5 --size 1280x720 --bit-rate 6000000 /sdcard/control.mp4 >> "$OUT/overlay.txt" 2>&1 &
+recorder=$!
+sleep 0.5
+overlay control
+sleep 2
+overlay_on || fail "the Control Center did not open"
+overlay_shot control-center
+sleep 1
+overlay off
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/control.mp4 "$OUT/control-center.mp4" > /dev/null 2>&1 || true
+sleep 1
+if overlay_on; then fail "the Control Center did not go away"; fi
+adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
+  fail "the Control Center took the app out of front"
+adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show control:audio --es devices "Adrian's AirPods Pro,Erika – AirPods,JBL Flip 6" >/dev/null 2>&1
+sleep 2
+overlay_shot control-sound
+for page in wifi profiles sleep; do
+  overlay "control:$page"
+  sleep 1.5
+  overlay_shot "control-$page"
+done
+overlay off
+sleep 1
+if overlay_on; then fail "the Control Center did not go away from a list page"; fi
 adb shell settings put global animator_duration_scale 0
 if [ -z "$overlay_before" ] || [ "$overlay_before" = null ]; then
   adb shell settings delete secure enabled_accessibility_services > /dev/null 2>&1
@@ -1318,7 +1349,7 @@ else
 fi
 sleep 1
 
-adb logcat -d -s NeonOverlay Dumps >> "$OUT/overlay.txt" 2>&1
+adb logcat -d -s NeonOverlay Dumps ControlCenter >> "$OUT/overlay.txt" 2>&1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------

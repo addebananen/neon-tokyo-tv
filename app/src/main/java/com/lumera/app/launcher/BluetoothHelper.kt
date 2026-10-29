@@ -15,7 +15,9 @@ import android.view.accessibility.AccessibilityNodeInfo
 /**
  * The hand that presses Connect. Android 13 and later only let the system connect a Bluetooth
  * device, and the TV's own Bluetooth page is the system: Neon Tokyo opens it, and this service
- * finds the device there and presses Connect on its page, then goes home again.
+ * finds the device there and presses Connect on its page, then goes home again. The Control
+ * Center sends it the same way to press Disconnect (back to the TV's speakers) or to join a
+ * Wi-Fi network, and then it goes Back to the app beneath instead.
  *
  * It is an accessibility service, which can read and press what is on the screen, so it is only
  * on while it works: Neon Tokyo turns it on for a press (the TV allows that once
@@ -47,27 +49,66 @@ class BluetoothHelper : AccessibilityService() {
         val job = pending ?: return finishIdle()
         if (SystemClock.uptimeMillis() > job.until) return finish(job, done = false)
         val root = rootInActiveWindow ?: return
-        // The device's own page: Connect, or already connected
-        if (job.opened) {
-            find(root) { it in CONNECT }?.let { button ->
-                if (click(button)) finish(job, done = true)
-                return
+        // The settings app this job opened, to know when Back has left it
+        if (job.settingsApp == null && root.packageName != packageName) job.settingsApp = root.packageName?.toString()
+        when (job.task) {
+            Task.Connect -> {
+                // The device's own page: Connect, or already connected
+                if (job.opened) {
+                    find(root) { it in CONNECT }?.let { button ->
+                        if (click(button)) finish(job, done = true)
+                        return
+                    }
+                    if (find(root) { it in DISCONNECT } != null) finish(job, done = true)
+                    return
+                }
             }
-            if (find(root) { it in DISCONNECT } != null) finish(job, done = true)
-            return
+            Task.Disconnect -> {
+                if (job.opened) {
+                    find(root) { it in DISCONNECT }?.let { button ->
+                        if (click(button)) finish(job, done = true)
+                        return
+                    }
+                    // Not connected after all
+                    if (find(root) { it in CONNECT } != null) finish(job, done = true)
+                    return
+                }
+            }
+            Task.Wifi -> {
+                if (job.opened) {
+                    // A network it has never joined asks for its password: that is for the remote
+                    if (findNode(root) { it.isEditable } != null) return leave(job)
+                    find(root) { it in WIFI_CONNECT }?.let { button ->
+                        if (click(button)) finish(job, done = true)
+                        return
+                    }
+                    // A known network is joined by the press on its row alone
+                    if (SystemClock.uptimeMillis() - job.openedAt > WIFI_SETTLE_MS) finish(job, done = true)
+                    else handler.postDelayed({ if (pending === job) step() }, 400L)
+                    return
+                }
+            }
         }
-        // The list of devices: open this one
+        // The list: open this one
         find(root) { it == job.name.lowercase() }?.let { row ->
-            if (click(row)) job.opened = true
+            if (click(row)) {
+                job.opened = true
+                job.openedAt = SystemClock.uptimeMillis()
+                if (job.task == Task.Wifi) handler.postDelayed({ if (pending === job) step() }, 400L)
+            }
         }
     }
 
-    private fun find(node: AccessibilityNodeInfo?, depth: Int = 0, match: (String) -> Boolean): AccessibilityNodeInfo? {
+    private fun find(node: AccessibilityNodeInfo?, match: (String) -> Boolean): AccessibilityNodeInfo? = findNode(node) {
+        val text = (it.text ?: it.contentDescription)?.toString()?.trim()?.lowercase()
+        text != null && match(text)
+    }
+
+    private fun findNode(node: AccessibilityNodeInfo?, depth: Int = 0, match: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         node ?: return null
         if (depth > 40) return null
-        val text = (node.text ?: node.contentDescription)?.toString()?.trim()?.lowercase()
-        if (text != null && node.isVisibleToUser && match(text)) return node
-        for (i in 0 until node.childCount) find(node.getChild(i), depth + 1, match)?.let { return it }
+        if (node.isVisibleToUser && match(node)) return node
+        for (i in 0 until node.childCount) findNode(node.getChild(i), depth + 1, match)?.let { return it }
         return null
     }
 
@@ -88,11 +129,29 @@ class BluetoothHelper : AccessibilityService() {
             finishIdle()
             return
         }
-        // A moment on the page so the press takes, then home: the TV keeps connecting in the background
+        // A moment on the page so the press takes, then away: the TV keeps connecting in the background
         handler.postDelayed({
-            performGlobalAction(GLOBAL_ACTION_HOME)
-            finishIdle()
+            // Some TVs ask once more before they let a device go
+            if (job.task == Task.Disconnect) rootInActiveWindow?.let { root -> find(root) { it in CONFIRM }?.let { click(it) } }
+            if (job.back) backOut(job, BACK_TRIES) else {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                finishIdle()
+            }
         }, HOME_AFTER_MS)
+    }
+
+    /** Back out of the settings app, to the film or app the Control Center was opened over. */
+    private fun backOut(job: Request, tries: Int) {
+        val app = rootInActiveWindow?.packageName?.toString()
+        if (tries <= 0 || app == null || app != job.settingsApp) return finishIdle()
+        performGlobalAction(GLOBAL_ACTION_BACK)
+        handler.postDelayed({ backOut(job, tries - 1) }, BACK_GAP_MS)
+    }
+
+    /** Left on the page for the remote, as when a password is asked. */
+    private fun leave(job: Request) {
+        if (pending === job) pending = null
+        finishIdle()
     }
 
     /** Nothing left to do: off again. */
@@ -100,17 +159,27 @@ class BluetoothHelper : AccessibilityService() {
         if (pending == null) disableSelf()
     }
 
-    private class Request(val name: String, val until: Long) {
+    /** What the hand is asked to do on the TV's settings page. */
+    enum class Task { Connect, Disconnect, Wifi }
+
+    private class Request(val name: String, val until: Long, val task: Task, val back: Boolean) {
         var opened = false
+        var openedAt = 0L
+        var settingsApp: String? = null
     }
 
     companion object {
         private const val WORK_MS = 15_000L
         private const val HOME_AFTER_MS = 1_200L
+        private const val BACK_GAP_MS = 450L
+        private const val BACK_TRIES = 5
+        private const val WIFI_SETTLE_MS = 3_000L
 
         /** The TV's words for Connect and Disconnect, in English and Swedish. */
         private val CONNECT = setOf("connect", "anslut", "koppla", "koppla till")
         private val DISCONNECT = setOf("disconnect", "koppla från", "koppla bort")
+        private val CONFIRM = setOf("ok", "yes", "ja", "disconnect", "koppla från")
+        private val WIFI_CONNECT = setOf("connect", "anslut", "connect to network", "anslut till nätverket", "anslut till nätverk")
 
         @Volatile
         private var instance: BluetoothHelper? = null
@@ -123,12 +192,13 @@ class BluetoothHelper : AccessibilityService() {
             context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
 
         /**
-         * Asks for Connect to be pressed on [name]'s page, just before the TV's Bluetooth page
-         * opens. False when the helper can't be on, and the press is left to the remote.
+         * Asks for [task] to be done on [name]'s row, just before the TV's Bluetooth or Wi-Fi page
+         * opens. False when the helper can't be on, and the press is left to the remote. [back]
+         * leaves the page with Back when done, to the app beneath, rather than going Home.
          */
-        fun request(context: Context, name: String): Boolean {
+        fun request(context: Context, name: String, task: Task = Task.Connect, back: Boolean = false): Boolean {
             if (!canTurnOn(context)) return false
-            pending = Request(name, SystemClock.uptimeMillis() + WORK_MS)
+            pending = Request(name, SystemClock.uptimeMillis() + WORK_MS, task, back)
             if (instance == null && !turnOn(context)) {
                 pending = null
                 return false

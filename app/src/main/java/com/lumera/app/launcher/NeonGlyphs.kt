@@ -110,7 +110,14 @@ enum class Glyph(pathData: String) {
     Ethernet(rect(22, 20, 56, 50, 6) + "M36 70 V84 H64 V70 M34 34 V46 M44 34 V46 M56 34 V46 M66 34 V46"),
     Offline("M12 40 A54 54 0 0 1 88 40 M24 54 A36 36 0 0 1 76 54 M36 67 A18 18 0 0 1 64 67 M18 18 L82 82"),
     Note("M40 72 V22 L78 14 V64" + circle(30, 72, 10) + circle(68, 64, 10) + "M40 34 L78 26"),
-    Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54");
+    Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54"),
+
+    // The Control Center
+    Power("M31.6 27.4 A32 32 0 1 0 68.4 27.4 M50 12 V50"),
+    Timer(circle(50, 56, 32) + "M50 56 L66 38 M40 12 H60 M50 12 V24"),
+    Check("M26 52 L43 69 L76 32"),
+    Pulse("M8 54 H28 L38 30 L52 76 L62 42 L68 54 H92"),
+    Dream("M40 22 A30 30 0 1 0 78 62 A24 24 0 0 1 40 22 Z M70 18 L72 24 L78 26 L72 28 L70 34 L68 28 L62 26 L68 24 Z M84 40 L85 43 L88 44 L85 45 L84 48 L83 45 L80 44 L83 43 Z");
 
     /** The icon's outline on the 100 by 100 grid, made once. */
     val path: Path by lazy { PathParser().parsePathString(pathData).toPath() }
