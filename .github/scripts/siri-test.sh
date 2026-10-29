@@ -46,15 +46,15 @@ for want in "BLUETOOTH_PRIVILEGED: yes" "BLUETOOTH_CONNECT: yes" "BLUETOOTH_SCAN
 done
 
 # --- the bridge, started as the TV setup script starts it -------------------
-LAUNCH="cd /data/local/tmp && setsid sh -c 'while :; do CLASSPATH=$APK_PATH app_process /system/bin com.lumera.app.siri.SiriBridge $PKG sim; c=\$?; [ \$c -eq 3 ] || [ \$c -eq 4 ] && break; echo bridge exited \$c, restarting; sleep 2; done' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &"
-adb shell "$LAUNCH"
+LAUNCH="cd /data/local/tmp; setsid sh -c 'while :; do CLASSPATH=$APK_PATH app_process /system/bin com.lumera.app.siri.SiriBridge $PKG sim; c=\$?; [ \$c -eq 3 ] || [ \$c -eq 4 ] && break; echo bridge exited \$c, restarting; sleep 2; done' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &"
+timeout 30 adb shell "$LAUNCH" || fail "starting the bridge did not return (the start command holds adb open)"
 sleep 4
 grep -q running <(adb shell cat /data/local/tmp/neon-siri.log) && ok "bridge runs" || fail "bridge did not start: $(adb shell cat /data/local/tmp/neon-siri.log)"
 send status > "$OUT/status.txt"
 grep -q '"version"' "$OUT/status.txt" && ok "status answers" || fail "no status: $(cat "$OUT/status.txt")"
 
 # a second start must leave the one bridge running, not a pile of them
-adb shell "$LAUNCH"
+timeout 30 adb shell "$LAUNCH" || fail "starting the bridge did not return (the start command holds adb open)"
 sleep 4
 n=$(adb shell "pgrep -f '^app_process /system/bin com.lumera.app.siri.SiriBridge'" | wc -l)
 [ "$n" -eq 1 ] && ok "starting twice leaves one bridge" || fail "$n bridges after starting twice"

@@ -38,7 +38,7 @@ object SiriBridge : SiriLink.Listener {
      * over the TV's own wireless debugging): in a loop that restarts it 2 s after a crash.
      * `%1$s` is the APK, `%2$s` the package.
      */
-    const val LAUNCH = "cd /data/local/tmp && setsid sh -c 'while :; do CLASSPATH=%1\$s app_process /system/bin " +
+    const val LAUNCH = "cd /data/local/tmp; setsid sh -c 'while :; do CLASSPATH=%1\$s app_process /system/bin " +
         "com.lumera.app.siri.SiriBridge %2\$s; c=\$?; [ \$c -eq $EXIT_ALREADY_RUNNING ] || [ \$c -eq $EXIT_STOPPED ] && break; " +
         "echo bridge exited \$c, restarting; sleep 2; done' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &"
 

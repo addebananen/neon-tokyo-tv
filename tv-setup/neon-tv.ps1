@@ -440,7 +440,7 @@ function Start-Siri {
     Start-Sleep -Milliseconds 500
     # In a loop that brings it back 2 s after a crash; it ends on its own when stopped (exit 4)
     # or when one already runs (exit 3). Same command as SiriBridge.LAUNCH in the app.
-    $launch = 'cd /data/local/tmp && setsid sh -c ''while :; do CLASSPATH={0} app_process /system/bin com.lumera.app.siri.SiriBridge {1}; c=$?; [ $c -eq 3 ] || [ $c -eq 4 ] && break; echo bridge exited $c, restarting; sleep 2; done'' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &' -f $apk, $NeonApp
+    $launch = 'cd /data/local/tmp; setsid sh -c ''while :; do CLASSPATH={0} app_process /system/bin com.lumera.app.siri.SiriBridge {1}; c=$?; [ $c -eq 3 ] || [ $c -eq 4 ] && break; echo bridge exited $c, restarting; sleep 2; done'' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &' -f $apk, $NeonApp
     Shell $launch | Out-Null
     Start-Sleep -Seconds 3
     $log = Shell 'cat /data/local/tmp/neon-siri.log'
