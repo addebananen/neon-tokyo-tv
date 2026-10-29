@@ -252,6 +252,10 @@ object SiriBridge : SiriLink.Listener {
     }
 
     private fun key(code: Int, down: Boolean, repeat: Int, canceled: Boolean) {
+        if (code == SiriConfig.CONTROL_CENTER) {
+            if (down && repeat == 0) controlCenter()
+            return
+        }
         val t = now()
         val downTime = if (down && repeat == 0) t.also { downTimes[code] = it } else downTimes[code] ?: t
         if (!down) downTimes.remove(code)
@@ -269,6 +273,29 @@ object SiriBridge : SiriLink.Listener {
         )
         if (ShellEnv.inject(event)) keysSent++
     }
+
+    /**
+     * Neon Tokyo's Control Center. A held Home on the TV's remote reaches it through the overlay
+     * service's key filter, but injected keys skip that filter, so the bridge asks for it directly
+     * (shell holds DUMP, which guards the broadcast). With the overlays off: quick settings.
+     */
+    private fun controlCenter() = Thread {
+        // `am` takes a moment; keys keep flowing meanwhile
+        val services = runCatching {
+            android.provider.Settings.Secure.getString(
+                ShellEnv.context.contentResolver, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+        }.getOrNull().orEmpty()
+        val sent = services.contains("${VoiceRelay.packageName}/") && runCatching {
+            Runtime.getRuntime().exec(
+                arrayOf("am", "broadcast", "-a", "com.neontokyo.tv.OVERLAY", "--es", "show", "control", "-p", VoiceRelay.packageName)
+            ).waitFor() == 0
+        }.getOrDefault(false)
+        if (!sent) handler.post {
+            key(KeyEvent.KEYCODE_SETTINGS, true, 0, false)
+            key(KeyEvent.KEYCODE_SETTINGS, false, 0, false)
+        }
+    }.start()
 
     /** Off when on, on when off, like the TCL remote's power button. */
     private fun power() {

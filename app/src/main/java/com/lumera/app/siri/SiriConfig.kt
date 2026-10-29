@@ -19,7 +19,8 @@ data class SiriConfig(
     /** A key for the Siri button besides voice search; 0 = voice search only. */
     val siriKey: Int = 0,
     val tvDoubleKey: Int = KeyEvent.KEYCODE_APP_SWITCH,
-    val tvHoldKey: Int = KeyEvent.KEYCODE_SETTINGS,
+    /** [CONTROL_CENTER]: Neon Tokyo's Control Center, like a held Home on the TV's own remote. */
+    val tvHoldKey: Int = CONTROL_CENTER,
     /** Keep the TV from sleeping deeply, so the Power button can wake it again. */
     val wakeFromRemote: Boolean = true,
     /** The paired remote, once found. */
@@ -67,6 +68,8 @@ data class SiriConfig(
             """"wakeFromRemote":$wakeFromRemote}"""
 
     companion object {
+        /** Not a key: the bridge opens the Control Center for it (quick settings when that is off). */
+        const val CONTROL_CENTER = -2
         val DIR = File("/data/local/tmp/neon-siri")
         private val FILE = File(DIR, "config.properties")
 
