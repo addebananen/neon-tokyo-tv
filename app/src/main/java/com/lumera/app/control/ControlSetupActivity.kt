@@ -123,12 +123,12 @@ class ControlSetupActivity : ComponentActivity() {
                 BasicText("Control Center", style = TextStyle(fontFamily = Body, fontSize = 28.sp, color = Color.White))
                 Spacer(Modifier.height(6.dp))
                 BasicText(
-                    "Hold Home on any remote, over any app: the sound, Wi-Fi, who's watching, Do Not Disturb, a sleep timer and Power Off.",
+                    "Press the remote's Settings button over any app: the sound, Wi-Fi, who's watching, Do Not Disturb, a sleep timer and Power Off.",
                     style = TextStyle(fontFamily = Body, fontSize = 15.sp, color = Color.White.copy(alpha = 0.65f), lineHeight = 21.sp)
                 )
                 Spacer(Modifier.height(22.dp))
                 Step(
-                    Glyph.Power, "Hold Home",
+                    Glyph.Power, "Settings button",
                     if (serviceOn) "On" else "Switch on \"Neon Tokyo overlays\" on the TV's Accessibility page",
                     done = serviceOn, action = "Turn on", onClick = ::turnOn, modifier = Modifier.focusRequester(first)
                 )

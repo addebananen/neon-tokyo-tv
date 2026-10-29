@@ -84,7 +84,7 @@ fun OverlaySettings(onGoBack: () -> Unit) {
         SettingRow("Control Center") {
             Column {
                 Text(
-                    "Hold Home on any remote, over any app, for the sound (headphones, speakers, TV), Wi-Fi, profiles, Do Not Disturb, a sleep timer and Power Off. A short press of Home works as always.",
+                    "Press the Settings button (or hold Home) over any app for the sound (headphones, speakers, TV), Wi-Fi, profiles, Do Not Disturb, a sleep timer and Power Off. The TV's own settings are a button on the panel.",
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
                     color = Color.White.copy(0.6f),
                     modifier = Modifier.padding(bottom = 12.dp)
