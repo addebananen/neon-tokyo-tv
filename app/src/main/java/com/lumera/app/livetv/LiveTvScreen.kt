@@ -39,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -76,7 +77,9 @@ import com.lumera.app.remote_input.ServerInfo
 import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -151,10 +154,14 @@ fun LiveTvScreen(
                 onAction = { setup = true }
             )
             LiveTv.State.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val progress by LiveTv.progress.collectAsState()
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = NeonPalette.Magenta, modifier = Modifier.size(44.dp))
                     Spacer(Modifier.height(18.dp))
                     NeonText("Tuning in the channels", style = NeonType.headline(24.sp))
+                    Spacer(Modifier.height(8.dp))
+                    // A big provider's list takes a while; this shows it is still coming in
+                    Text(progress?.let { "$it…" } ?: " ", color = NeonPalette.Lilac, fontSize = 15.sp)
                 }
                 // Somewhere for the focus to rest while the list loads
                 Box(Modifier.size(1.dp).focusRequester(entryRequester).focusable())
@@ -174,25 +181,28 @@ fun LiveTvScreen(
             is LiveTv.State.Ready -> Unit
         }
 
-        val channels = when (val s = state) {
-            is LiveTv.State.Ready -> s.channels
-            is LiveTv.State.Failed -> s.channels
-            else -> emptyList()
+        // Worked out off the main thread when the list loads: a big provider's list froze the TV here
+        val index = when (val s = state) {
+            is LiveTv.State.Ready -> s.index
+            is LiveTv.State.Failed -> s.index
+            else -> ChannelIndex.EMPTY
         }
+        // Rebuilt every ten minutes, so a match that has started moves to the top; off the main thread too
+        val sports by produceState<Map<String, List<IptvChannel>>>(emptyMap(), index, guide, now / 600_000) {
+            value = withContext(Dispatchers.Default) { index.sports(guide, System.currentTimeMillis()) }
+        }
+        val channels = index.channels
         if (channels.isNotEmpty()) {
-            val byId = remember(channels) { channels.associateBy { it.id } }
-            val groups = remember(channels) { channels.map { it.group }.distinct() }
+            val byId = index.byId
+            val groups = index.groups
             val favouriteChannels = remember(favourites, byId) { favourites.mapNotNull { byId[it] } }
-            val shownGroups = groups.filter { it !in hidden }
-            val hiddenGroups = groups.filter { it in hidden }
-            val popular = remember(channels) { PopularChannels.sweden(channels) }
-            // Rebuilt every ten minutes, so a match that has started moves to the top
-            val sports = remember(channels, guide, now / 600_000) {
-                SportChannels.all.associate { it.key to SportChannels.find(it, channels, guide, now) }
-            }
-            val searchable = remember(channels) { channels.map { PopularChannels.normalize(it.name) + " " + it.name.lowercase() } }
+            val shownGroups = remember(groups, hidden) { groups.filter { it !in hidden } }
+            val hiddenGroups = remember(groups, hidden) { groups.filter { it in hidden } }
+            val shownCount = remember(index, hidden) { channels.count { it.group !in hidden } }
+            val popular = index.popular
+            val searchable = index.searchable
             val selected = group ?: if (favouriteChannels.isNotEmpty()) FAVOURITES else ALL
-            val list = remember(selected, channels, favouriteChannels, lists, query, sports) {
+            val list = remember(selected, channels, favouriteChannels, lists, query, sports, hidden) {
                 when {
                     selected == FAVOURITES -> favouriteChannels
                     selected == ALL -> channels.filter { it.group !in hidden }
@@ -207,7 +217,7 @@ fun LiveTvScreen(
                     else -> channels.filter { it.group == selected }
                 }
             }
-            val counts = remember(channels) { channels.groupingBy { it.group }.eachCount() }
+            val counts = index.counts
             // A channel picked on Neon Home: played at once, among the favourites when it is one
             val wanted by LiveTv.wanted.collectAsState()
             LaunchedEffect(wanted, byId) {
@@ -275,7 +285,7 @@ fun LiveTvScreen(
                             }
                         }
                         item(key = ALL) {
-                            GroupItem("All channels", channels.count { it.group !in hidden }, selected == ALL, onFocus = { group = ALL })
+                            GroupItem("All channels", shownCount, selected == ALL, onFocus = { group = ALL })
                         }
                         items(shownGroups, key = { "g:$it" }) { name ->
                             GroupItem(
