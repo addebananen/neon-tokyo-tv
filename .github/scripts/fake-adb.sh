@@ -92,6 +92,11 @@ case "$1" in
       "settings get "*) set -- $c; setting_get "$3" "$4" ;;
       "settings put "*) set -- $c; setting_put "$3" "$4" "$5" ;;
       "settings delete "*) set -- $c; setting_delete "$3" "$4" ;;
+      "ls "*"/lib/*/libneon_siri.so"*) grep -qx com.neontokyo.tv "$ST/installed" && echo "/system/app/lib/arm/libneon_siri.so" ;;
+      *"app_process /system/bin com.lumera.app.siri.SiriBridge com.neontokyo.tv"*) echo "$c" > "$ST/siri" ;;
+      "cat /data/local/tmp/neon-siri.log") [ -f "$ST/siri" ] && echo "Neon Tokyo Siri Remote bridge 1 running (pid 4242)" ;;
+      "pgrep -f com.lumera.app.siri.SiriBridge") [ -f "$ST/siri" ] && echo 4242 ;;
+      "pkill -f com.lumera.app.siri.SiriBridge") rm -f "$ST/siri" ;;
       *"MemTotal|MemAvailable"*) printf 'MemTotal: 2900000 kB\nMemAvailable: 900000 kB\n' ;;
       *"mCurrentFocus"*) echo "mCurrentFocus=Window{abc u0 $(cat "$ST/home" 2>/dev/null || echo launcher)}" ;;
       *) : ;;
