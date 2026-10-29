@@ -77,6 +77,8 @@ private val Body = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
 private val Ink = GlassInk
 private val Soft = Color.White.copy(alpha = 0.62f)
 private val Calm = Color(0xFF9B8CFF)
+/** Under every pane, so a busy picture or text behind never reads through the glass. */
+private val Backing = Color(0xB80B0A12)
 
 private const val PANEL_W = 396
 private const val GAP = 12
@@ -220,7 +222,7 @@ private fun ProfileChip(model: CcModel) {
     Row(
         Modifier
             .graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(1f, 0.5f) }
-            .glassPane(glassOf(model), shape, { lit }, white = true, panel = true)
+            .background(Backing, shape).glassPane(glassOf(model), shape, { lit }, white = true, panel = true)
             .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -265,7 +267,7 @@ private fun Button(model: CcModel, item: CcItem) {
         }
     when {
         item == CcItem.Power -> Box(
-            mod.fillMaxSize().glassPane(glass, shape, { lit }, white = true, panel = true),
+            mod.fillMaxSize().background(Backing, shape).glassPane(glass, shape, { lit }, white = true, panel = true),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -275,7 +277,7 @@ private fun Button(model: CcModel, item: CcItem) {
             }
         }
         round(item) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(mod.size(UNIT_H.dp).glassPane(glass, shape, { lit }, white = true, panel = true), contentAlignment = Alignment.Center) {
+            Box(mod.size(UNIT_H.dp).background(Backing, shape).glassPane(glass, shape, { lit }, white = true, panel = true), contentAlignment = Alignment.Center) {
                 NeonGlyph(glyphOf(item), { lerp(Color.White, Ink, lit) }, Modifier.size(26.dp), plain = true)
             }
             // The name of a round button shows under it while it has the focus
@@ -287,7 +289,7 @@ private fun Button(model: CcModel, item: CcItem) {
             )
         }
         else -> Row(
-            mod.fillMaxSize().glassPane(glass, shape, { lit }, white = true, panel = true).padding(start = 10.dp, end = 16.dp),
+            mod.fillMaxSize().background(Backing, shape).glassPane(glass, shape, { lit }, white = true, panel = true).padding(start = 10.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val on = activeOf(model, item)
@@ -437,7 +439,7 @@ private fun ListRow(model: CcModel, row: CcRow, focused: Boolean) {
             .padding(horizontal = 6.dp)
             .height(if (row.detail != null || row.battery != null) 62.dp else 54.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .glassPane(glassOf(model), shape, { lit }, white = true, panel = true)
+            .background(Backing, shape).glassPane(glassOf(model), shape, { lit }, white = true, panel = true)
             .padding(start = 12.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

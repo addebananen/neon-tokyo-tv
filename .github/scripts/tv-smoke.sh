@@ -1330,7 +1330,8 @@ sleep 1
 if overlay_on; then fail "the Control Center did not go away"; fi
 adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
   fail "the Control Center took the app out of front"
-adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show control:audio --es devices "Adrian's AirPods Pro,Erika – AirPods,JBL Flip 6" >/dev/null 2>&1
+# adb shell joins its words into one line for the TV's shell, so the device list is quoted twice
+adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show control:audio --es devices "'AirPods Pro,Erika AirPods,JBL Flip 6'" >/dev/null 2>&1
 sleep 2
 overlay_shot control-sound
 for page in wifi profiles sleep; do
