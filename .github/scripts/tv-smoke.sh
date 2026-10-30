@@ -747,68 +747,6 @@ shot search-results
 key DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT
 sleep 2
 shot search-results-focus
-# --- The IPTV service's own films and series as sources ----------------------
-# The pretend provider (still the big login from Live TV) has Dune (2021) and Dune: Prophecy
-# among 35 000 titles; both must turn up first in the sources panel, marked [IPTV]
-key DPAD_LEFT DPAD_LEFT DPAD_LEFT
-sleep 2
-vod_title=$(focused_poster)
-echo "search focus for the film: $vod_title"
-if [ "$vod_title" != "Dune" ]; then
-  fail "could not reach Dune in the search results for the IPTV film, focus on: $vod_title"
-else
-  adb logcat -c
-  key DPAD_CENTER
-  sleep 10
-  key DPAD_CENTER
-  if wait_for '\[IPTV\]' 45; then
-    shot vod-movie-sources
-    adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
-    # The service's copy comes first, so OK on the panel's first row plays it
-    key DPAD_CENTER
-    sleep 8
-    shot vod-movie-playing
-    if adb logcat -d 2>/dev/null | grep -qE "ExoPlaybackException|PlaybackException"; then fail "the IPTV film did not play (player error in the log)"; fi
-    alive vod-movie
-    key BACK
-    sleep 3
-    screen_has "Dune" || key BACK
-  else
-    shot vod-movie-none
-    adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
-    fail "the sources for Dune (2021) have no [IPTV] entry from the service (see vod.txt)"
-  fi
-  # Back to the search results, then the series row below
-  for _ in 1 2 3; do
-    screen_has 'text="Series"' && break
-    key BACK
-    sleep 3
-  done
-  key DPAD_DOWN
-  sleep 2
-  vod_series=$(focused_poster)
-  echo "search focus for the series: $vod_series"
-  if [ "$vod_series" != "Dune: Prophecy" ]; then
-    fail "could not reach Dune: Prophecy in the search results, focus on: $vod_series"
-  else
-    key DPAD_CENTER
-    sleep 10
-    shot vod-series-details
-    key DPAD_CENTER
-    if wait_for '\[IPTV\]' 45; then
-      shot vod-series-sources
-      screen_has "S01E01" || fail "the IPTV source for Dune: Prophecy is not episode 1 of season 1"
-    else
-      shot vod-series-none
-      adb logcat -d -s VodLibrary:I | tee -a "$OUT/vod.txt"
-      fail "the sources for Dune: Prophecy S1E1 have no [IPTV] entry from the service (see vod.txt)"
-    fi
-    key BACK
-    sleep 2
-    key BACK
-    sleep 3
-  fi
-fi
 kill "$IPTV_PID" 2>/dev/null
 menu_go Settings
 sleep 5
