@@ -1653,7 +1653,10 @@ adb shell settings put global animator_duration_scale 1
 adb shell screenrecord --time-limit 5 --size 1280x720 /sdcard/power-off.mp4 > "$OUT/power-off-record.txt" 2>&1 &
 REC_PID=$!
 sleep 1.5
-adb shell input keyevent KEYCODE_BACK KEYCODE_BACK
+# Two input commands side by side: one command sending both waits for the app to finish with
+# the first press before it sends the second, which on the software-drawn emulator can be
+# later than the app's 700 ms for a double press, where a remote's two presses are not
+adb shell 'input keyevent KEYCODE_BACK & input keyevent KEYCODE_BACK & wait'
 sleep 3
 wait "$REC_PID" 2>/dev/null
 adb shell settings put global animator_duration_scale 0
