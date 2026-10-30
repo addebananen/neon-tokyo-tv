@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.lang.ref.SoftReference
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -33,8 +34,9 @@ object VodLibrary {
     private class Library(val signature: String, val index: VodCatalog.Index)
 
     private val lock = Mutex()
-    private var movies: Library? = null
-    private var series: Library? = null
+    // Soft, so a big library gives its memory back when the TV needs it; the lists stay on disk
+    private var movies: SoftReference<Library>? = null
+    private var series: SoftReference<Library>? = null
     private val episodes = HashMap<String, List<VodEpisode>>()
 
     private val http by lazy {
@@ -121,7 +123,7 @@ object VodLibrary {
 
     private suspend fun library(context: Context, source: IptvSource.Xtream, movie: Boolean): VodCatalog.Index? = lock.withLock {
         val signature = "${source.base}|${source.username}"
-        val kept = if (movie) movies else series
+        val kept = (if (movie) movies else series)?.get()
         if (kept != null && kept.signature == signature) return@withLock kept.index
 
         val dir = File(context.applicationContext.filesDir, "livetv").apply { mkdirs() }
@@ -143,7 +145,7 @@ object VodLibrary {
         val index = VodCatalog.Index(items)
         Log.i(TAG, "${items.size} ${if (movie) "films" else "series"} from the service")
         val library = Library(signature, index)
-        if (movie) movies = library else { series = library; synchronized(episodes) { episodes.clear() } }
+        if (movie) movies = SoftReference(library) else { series = SoftReference(library); synchronized(episodes) { episodes.clear() } }
         index
     }
 
