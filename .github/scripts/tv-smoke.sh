@@ -513,7 +513,7 @@ key BACK
 sleep 1
 key BACK
 sleep 3
-if ! screen_has "Streaming services"; then fail "Back did not return from the folder to home"; fi
+if ! wait_for "Streaming services" 15; then fail "Back did not return from the folder to home"; fi
 shot hub-back
 
 # --- Browse rows ---------------------------------------------------------
@@ -1653,14 +1653,28 @@ adb shell settings put global animator_duration_scale 1
 adb shell screenrecord --time-limit 5 --size 1280x720 /sdcard/power-off.mp4 > "$OUT/power-off-record.txt" 2>&1 &
 REC_PID=$!
 sleep 1.5
-adb shell input keyevent KEYCODE_BACK KEYCODE_BACK
-sleep 3
+app_in_front() {
+  adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY"
+}
+# Two input commands side by side: one command sending both waits for the app to finish with
+# the first press before it sends the second, which on the software-drawn emulator can be
+# later than the app's 700 ms for a double press, where a remote's two presses are not. Each
+# command starts its own Java first, and on the emulator that alone can take them more than
+# 700 ms apart, so a pair that came apart is sent again, up to three times
+for attempt in 1 2 3; do
+  adb shell 'input keyevent KEYCODE_BACK & input keyevent KEYCODE_BACK & wait'
+  sleep 3
+  app_in_front || break
+  echo "double Back attempt $attempt: the presses came apart, sending them again"
+  menu_go Home
+  sleep 3
+done
 wait "$REC_PID" 2>/dev/null
 adb shell settings put global animator_duration_scale 0
 adb pull /sdcard/power-off.mp4 "$OUT/power-off.mp4" > /dev/null 2>&1 || true
 shot after-power-off noalive
 # Neon Home, still open from its own steps, may come back up behind: it is the same package
-if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY"; then
+if app_in_front; then
   fail "two quick presses of Back did not close the app"
 fi
 

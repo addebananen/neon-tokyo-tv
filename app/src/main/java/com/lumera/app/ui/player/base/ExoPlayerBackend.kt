@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
@@ -71,6 +72,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -458,7 +461,11 @@ class ExoPlayerBackend(
     @Composable
     override fun Content(modifier: Modifier) {
         val player by _playerReady.collectAsState()
-        val currentUiState by _uiState.collectAsState()
+        // Only what the view below uses: the position ticks twice a second while playing, and each
+        // tick would lay the subtitles out anew
+        val view by remember {
+            _uiState.map { Triple(it.isPlaying, it.subtitleVerticalOffsetPercent, it.subtitleSizePercent) }.distinctUntilChanged()
+        }.collectAsState(_uiState.value.let { Triple(it.isPlaying, it.subtitleVerticalOffsetPercent, it.subtitleSizePercent) })
         if (player != null) {
             AndroidView(
                 modifier = modifier.fillMaxSize(),
@@ -493,9 +500,10 @@ class ExoPlayerBackend(
                 update = { frame ->
                     val pv = frame.getChildAt(0) as? PlayerView
                     if (pv != null) {
-                        pv.keepScreenOn = player?.isPlaying == true
-                        applySubtitleOffset(pv, currentUiState.subtitleVerticalOffsetPercent)
-                        applySubtitleSize(pv, currentUiState.subtitleSizePercent)
+                        val (playing, offset, size) = view
+                        pv.keepScreenOn = playing
+                        applySubtitleOffset(pv, offset)
+                        applySubtitleSize(pv, size)
                         applySubtitleCaptionStyle(pv)
                     }
                 }
