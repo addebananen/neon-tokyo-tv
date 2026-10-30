@@ -120,6 +120,11 @@
             android:exported="true"
             android:permission="android.permission.WRITE_SECURE_SETTINGS" />
 
+        <!-- The in-app update's install session reports here (confirm screen, or failure) -->
+        <receiver
+            android:name="com.lumera.app.data.update.UpdateInstallReceiver"
+            android:exported="false" />
+
         <!-- Picture diagnostics and the gaming HUD over any app or console (Accessibility) -->
         <service
             android:name="com.lumera.app.overlay.NeonOverlayService"
