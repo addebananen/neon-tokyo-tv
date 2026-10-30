@@ -92,7 +92,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -143,9 +142,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
-import com.lumera.app.livetv.IptvChannel
-import com.lumera.app.livetv.LiveTv
-import com.lumera.app.livetv.Programme
 import com.lumera.app.domain.ContinueEntry
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -280,12 +276,6 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     val bt = remember { HomeBluetooth(appContext) }
     // What the Neon Tokyo profile of the same name has left to watch, for the row under the apps
     val watching = rememberHomeWatching(appContext, profile.name)
-    // The same profile's favourite Live TV channels, read from what the app keeps on the TV
-    var channelsTick by remember { mutableIntStateOf(0) }
-    val watchingProfile = watching?.profileId
-    val channels by produceState(emptyList<Pair<IptvChannel, Programme?>>(), watchingProfile, channelsTick) {
-        value = watchingProfile?.let { LiveTv.homeFavourites(appContext, it, HomeWatchingSource.SHOWN) }.orEmpty()
-    }
     val updateState by updates.state.collectAsState()
     var showUpdates by remember { mutableStateOf(false) }
     var showMotion by remember { mutableStateOf(false) }
@@ -316,7 +306,6 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     resumes++
-                    channelsTick++
                 }
                 Lifecycle.Event.ON_STOP -> {
                     inputs.stop()
@@ -863,8 +852,6 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         },
                         watching = watching,
                         onOpenWatching = { profileId, entry -> HomeWatchingSource.open(context, profileId, entry) },
-                        channels = channels,
-                        onOpenChannel = { channel -> watchingProfile?.let { HomeWatchingSource.openChannel(context, it, channel) } },
                         square = squareIcons,
                         namesAlways = namesAlways,
                         down = watchDown,
@@ -1113,8 +1100,6 @@ private fun HomeRows(
     onOpenApp: (HomeSlot) -> Unit,
     watching: HomeWatching?,
     onOpenWatching: (Int, ContinueEntry) -> Unit,
-    channels: List<Pair<IptvChannel, Programme?>> = emptyList(),
-    onOpenChannel: (IptvChannel) -> Unit = {},
     square: Boolean = false,
     namesAlways: Boolean = true,
     down: Boolean = false,
@@ -1125,9 +1110,9 @@ private fun HomeRows(
     val pack = LocalIconPack.current
     val tileShape = RoundedCornerShape(if (look.glassy && square) 22.dp else look.corner)
     val continues = watching != null && watching.entries.isNotEmpty()
-    // With Live TV under Continue watching the rows outgrow the screen: they scroll as the focus
-    // goes down, with room at the top for a focused tile's glow
-    val scrolls = (channels.isNotEmpty() && continues) || (consoleRow != null && (continues || channels.isNotEmpty()))
+    // With the consoles and Continue watching the rows outgrow the screen: they scroll as the
+    // focus goes down, with room at the top for a focused tile's glow
+    val scrolls = consoleRow != null && continues
     val room = 16.dp
     val watch: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1140,10 +1125,7 @@ private fun HomeRows(
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) { ContinueRow(watching, RoundedCornerShape(look.corner), onFocusColor, onSpot, onOpenWatching) }
         }
     }
-    val liveRow: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) { LiveTvRow(channels, RoundedCornerShape(look.corner), onFocusColor, onSpot, onOpenChannel) }
-    }
-    val rows = listOfNotNull(watch, consoleRow, continueRow.takeIf { continues }, liveRow.takeIf { channels.isNotEmpty() })
+    val rows = listOfNotNull(watch, consoleRow, continueRow.takeIf { continues })
     Column(
         modifier = Modifier
             .then(if (scrolls) Modifier.offset(y = -room).verticalScroll(rememberScrollState()).padding(top = room, bottom = room) else Modifier)
@@ -1342,80 +1324,6 @@ private fun HdmiLabel(console: Console, color: Color, modifier: Modifier = Modif
 @Composable
 private fun rememberLit(focused: Boolean): State<Float> =
     animateFloatAsState(if (focused) 1f else 0f, tween(if (focused) 220 else 320, easing = FastOutSlowInEasing), label = "GlassLit")
-
-/**
- * Live TV: the favourite channels of the Neon Tokyo profile with the home profile's name, with
- * what is on each now. OK opens the channel in Neon Tokyo, playing.
- */
-@Composable
-private fun LiveTvRow(
-    channels: List<Pair<IptvChannel, Programme?>>,
-    shape: RoundedCornerShape,
-    onFocusColor: (String?, String, Color) -> Unit,
-    onSpot: (Spot) -> Unit,
-    onOpen: (IptvChannel) -> Unit
-) {
-    val look = LocalHomeLook.current
-    val color = look.accent
-    RowTitle("Live TV")
-    Row(horizontalArrangement = Arrangement.spacedBy(Gap)) {
-        channels.forEach { (channel, now) ->
-            key(channel.id) {
-                NeonTile(
-                    width = BigTile.first,
-                    height = WatchTileHeight,
-                    shape = shape,
-                    color = color,
-                    onClick = { onOpen(channel) },
-                    onFocus = { onFocusColor(null, channel.name, color) },
-                    modifier = Modifier.animatePlacement(),
-                    onFocusRect = { onSpot(Spot(it, color)) }
-                ) { focused ->
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier
-                                .size(width = 74.dp, height = 46.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(look.text.copy(alpha = if (focused) 0.14f else 0.07f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (channel.logo.isNotBlank()) {
-                                AsyncImage(
-                                    model = channel.logo,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Fit,
-                                    modifier = Modifier.fillMaxSize().padding(5.dp)
-                                )
-                            } else {
-                                TileName(channel.name.take(3).uppercase(), 13.sp)
-                            }
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            TileName(channel.name, 13.sp)
-                            BasicText(
-                                text = now?.title ?: "Live",
-                                maxLines = 1,
-                                style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.text.copy(alpha = 0.75f))
-                            )
-                        }
-                    }
-                    // A small live light in the corner
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                            .size(6.dp)
-                            .background(color, CircleShape)
-                    )
-                }
-            }
-        }
-    }
-}
 
 /**
  * Continue watching: what the Neon Tokyo profile with the same name as the home profile left part

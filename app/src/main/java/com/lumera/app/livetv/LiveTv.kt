@@ -322,21 +322,6 @@ object LiveTv {
         prefs?.edit()?.putString("last.$profileId", channelId)?.apply()
     }
 
-    /**
-     * A profile's favourite channels as kept on the TV, with what is on each now, for the row on
-     * Neon Home; nothing is fetched for it.
-     */
-    suspend fun homeFavourites(context: Context, profileId: Int, max: Int): List<Pair<IptvChannel, Programme?>> = withContext(Dispatchers.IO) {
-        init(context)
-        if (source(context) == null) return@withContext emptyList()
-        val favourites = favourites(context, profileId)
-        if (favourites.isEmpty()) return@withContext emptyList()
-        val byId = (state.value as? State.Ready)?.index?.byId?.takeIf { it.isNotEmpty() } ?: readChannels().associateBy { it.id }
-        val guide = _guide.value.ifEmpty { readGuide().orEmpty() }
-        val now = System.currentTimeMillis()
-        favourites.mapNotNull { byId[it] }.take(max).map { it to guide[it.epgId]?.nowNext(now)?.now }
-    }
-
     // ---- Plumbing ----
 
     private fun <T> get(url: String, read: (InputStream) -> T): T {
