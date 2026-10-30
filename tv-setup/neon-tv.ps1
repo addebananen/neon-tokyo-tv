@@ -5,10 +5,12 @@ Neon Tokyo setup for a TCL Google TV, run from a Windows PC on the same network.
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step undo   # put it all back
   powershell -ExecutionPolicy Bypass -File neon-tv.ps1 -Step launcher -HomeScreen projectivy   # Projectivy on the Home button instead of Neon Home
 
-Steps: connect, inventory, debloat, launcher, tune, art, app, dream, extras, restart, report, undo.
+Steps: connect, inventory, debloat, launcher, tune, art, app, dream, extras, siri, restart, report, undo.
 extras turns on the Control Center (hold Home), picture diagnostics and the gaming HUD
 (Up+Down / Left+Right held 2 s), lets Neon Tokyo's own settings switch them, lets the Control
 Center name Wi-Fi networks and switch Do Not Disturb, and lets the music widget see what plays.
+siri starts the Siri Remote bridge: an Apple TV Siri Remote then runs the whole TV, scrolling
+like on an Apple TV. Run it again after the TV has restarted (not after standby).
 Nothing is uninstalled: apps are only disabled, and every change is written to
 %USERPROFILE%\NeonTV\undo.txt so -Step undo can reverse it. A factory reset also
 restores everything.
@@ -18,7 +20,7 @@ TVs with "Wireless debugging" instead of network ADB on port 5555: pair once wit
 using the address and code the TV shows under "Pair device with pairing code".
 #>
 param(
-    [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'extras', 'restart', 'report', 'undo')]
+    [ValidateSet('all', 'connect', 'inventory', 'debloat', 'launcher', 'tune', 'art', 'app', 'dream', 'extras', 'siri', 'restart', 'report', 'undo')]
     [string]$Step = 'all',
     # What the Home button opens: Neon Home, the home screen in the Neon Tokyo app, or Projectivy
     # Launcher. A Neon Tokyo too old to have Neon Home gets Projectivy.
@@ -425,6 +427,37 @@ function Set-Extras {
     Say 'Picture diagnostics: hold Up and Down together for 2 seconds. Gaming HUD: hold Left and Right. Back or the same buttons put them away.'
 }
 
+# The Siri Remote bridge. Android lets only privileged callers read a Bluetooth remote's HID
+# reports, which is where the Siri Remote puts its buttons and touch, so the bridge runs on the
+# TV as the shell user, like `adb shell` itself. It comes back by itself after a crash.
+function Start-Siri {
+    $apk = (Lines (Shell "pm path $NeonApp") | Select-Object -First 1) -replace '^package:', ''
+    if (-not $apk) { Say 'Neon Tokyo is not on the TV. Run -Step app first.'; return }
+    $dir = $apk -replace '/[^/]+$', ''
+    if (-not (Shell "ls $dir/lib/*/libneon_siri.so 2>/dev/null")) {
+        Say 'This Neon Tokyo version has no Siri Remote support yet. Run -Step app first.'
+        return
+    }
+    # Talking through Siri: the TV's speech recognizer asks Neon Tokyo for this, though the sound
+    # comes from the remote
+    Shell "pm grant $NeonApp android.permission.RECORD_AUDIO" | Out-Null
+    Shell 'pkill -f com.lumera.app.siri.SiriBridge' | Out-Null
+    Start-Sleep -Milliseconds 500
+    # In a loop that brings it back 2 s after a crash; it ends on its own when stopped (exit 4)
+    # or when one already runs (exit 3). Same command as SiriBridge.LAUNCH in the app.
+    $launch = 'cd /data/local/tmp; setsid sh -c ''while :; do CLASSPATH={0} app_process /system/bin com.lumera.app.siri.SiriBridge {1}; c=$?; [ $c -eq 3 ] || [ $c -eq 4 ] && break; echo bridge exited $c, restarting; sleep 2; done'' > /data/local/tmp/neon-siri.log 2>&1 < /dev/null &' -f $apk, $NeonApp
+    Shell $launch | Out-Null
+    Start-Sleep -Seconds 3
+    $log = Shell 'cat /data/local/tmp/neon-siri.log'
+    if ($log -match 'running') {
+        Say 'Siri Remote bridge is running.'
+        Say 'Pair the remote once: hold Back and Volume Up on it for 5 seconds, then pick Pair in Neon Tokyo > Settings > Personalization > Siri Remote (or the TV''s Settings > Remotes & accessories > Pair).'
+        Say 'Press any button on it afterwards and the TV is yours: swipe to scroll, click to pick, Power turns the TV off and on, hold Siri and talk to search or open apps.'
+    } else {
+        Say "The bridge did not start: $log"
+    }
+}
+
 function Show-Report {
     Say '--- Report ---'
     Say ('Home button opens: ' + ((Lines (Shell 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME')) | Select-Object -Last 1))
@@ -460,7 +493,7 @@ function Undo-All {
         Restore-Settings 'secure' (Join-Path $Before 'extras.txt')
         Shell "cmd notification disallow_listener $NeonListener" | Out-Null
         Shell "cmd notification disallow_dnd $NeonApp" | Out-Null
-        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP', 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION') { Shell "pm revoke $NeonApp $p" | Out-Null }
+        foreach ($p in 'android.permission.WRITE_SECURE_SETTINGS', 'android.permission.DUMP', 'android.permission.RECORD_AUDIO', 'android.permission.ACCESS_FINE_LOCATION', 'android.permission.ACCESS_COARSE_LOCATION') { Shell "pm revoke $NeonApp $p" | Out-Null }
     }
     # The Home button goes back to whatever it opened before, normally the Google TV home screen
     $was = Join-Path $Before 'home.txt'
@@ -470,6 +503,11 @@ function Undo-All {
     }
     # Neon Home's Home button entry goes off again; Neon Tokyo itself stays
     if ((Get-Homes) -match [regex]::Escape($NeonHome)) { Say "Neon Home: $(Switch-NeonHome 'off')" }
+    if (Shell 'pgrep -f com.lumera.app.siri.SiriBridge') {
+        Shell 'pkill -f com.lumera.app.siri.SiriBridge' | Out-Null
+        Say 'Siri Remote bridge: stopped (the remote stays paired; forget it under Remotes & accessories).'
+    }
+    Shell 'rm -rf /data/local/tmp/neon-siri /data/local/tmp/neon-siri.log' | Out-Null
     Shell 'input keyevent KEYCODE_HOME' | Out-Null
     Say 'Everything is back the way it was. Projectivy and Neon Tokyo stay installed; uninstall them on the TV if you want them gone.'
 }
@@ -488,7 +526,7 @@ try {
     Banner
     Connect-Tv
     switch ($Step) {
-        'all'       { Save-Inventory; Remove-Bloat; Install-NeonApp; Set-Launcher; Set-Tuning; Push-Art; Set-Screensaver; Set-Extras; Restart-Tv; Show-Report }
+        'all'       { Save-Inventory; Remove-Bloat; Install-NeonApp; Set-Launcher; Set-Tuning; Push-Art; Set-Screensaver; Set-Extras; Restart-Tv; Start-Siri; Show-Report }
         'connect'   { }
         'inventory' { Save-Inventory }
         'debloat'   { Save-Inventory; Remove-Bloat }
@@ -498,6 +536,7 @@ try {
         'app'       { Install-NeonApp }
         'dream'     { Set-Screensaver }
         'extras'    { Set-Extras }
+        'siri'      { Start-Siri }
         'restart'   { Restart-Tv; Show-Report }
         'report'    { Show-Report }
         'undo'      { Undo-All }

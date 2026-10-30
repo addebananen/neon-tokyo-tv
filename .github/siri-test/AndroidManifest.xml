@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Test helper for the Siri Remote voice test, never shipped: a speech recognizer that checks
+     the sound Neon Tokyo hands it, and an app called Hikari for the voice command to open -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.neontokyo.siritest">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+    <!-- Android checks the microphone permission of the recognizer as well as of the app asking,
+         even when the app hands it the sound (the TV's own recognizer has it) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- no QUERY_ALL_PACKAGES on purpose: Android checks the permission against the app asking,
+         which the recognizer must be able to see, and Neon Tokyo has to make itself seen -->
+    <application android:label="Siri test">
+        <service
+            android:name=".FakeRecognizer"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name=".Hikari"
+            android:label="Hikari"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

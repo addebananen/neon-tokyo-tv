@@ -70,6 +70,13 @@ check "the Control Center may name Wi-Fi networks and switch Do Not Disturb" 'gr
 run -Ip 192.168.1.77:41234 -Step extras
 check "running extras twice lists the overlays once" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader:com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService ]'
 
+run -Ip 192.168.1.77:41234 -Step siri
+check "the Siri Remote bridge runs as shell from the installed APK" 'grep -q "CLASSPATH=/system/app/com.neontokyo.tv.apk app_process /system/bin com.lumera.app.siri.SiriBridge com.neontokyo.tv; c=\$?" "$FAKE_ADB_STATE/siri"'
+check "voice search may use the speech recognizer" 'grep -q "android.permission.RECORD_AUDIO" "$FAKE_ADB_STATE/granted"'
+check "and says how to pair the remote" 'grep -q "hold Back and Volume Up" "$WORK/out.txt"'
+run -Ip 192.168.1.77:41234 -Step siri
+check "starting it again leaves one bridge" '[ -f "$FAKE_ADB_STATE/siri" ] && [ "$(grep -c "pkill -f com.lumera.app.siri.SiriBridge" "$FAKE_ADB_STATE/calls")" -ge 2 ]'
+
 run -Ip 192.168.1.77:41234 -Step report
 check "the report ran" 'grep -q "Report" "$WORK/out.txt"'
 
@@ -82,6 +89,7 @@ check "Neon Home's Home button entry is off after undo" '[ ! -f "$FAKE_ADB_STATE
 check "the Control Center's grants are taken back by undo" '! grep -qx android.permission.ACCESS_FINE_LOCATION "$FAKE_ADB_STATE/granted" && [ ! -f "$FAKE_ADB_STATE/dnd" ]'
 check "only the service that was there before is on after undo" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader ]'
 check "the permissions and the listener are taken back" '[ ! -s "$FAKE_ADB_STATE/granted" ] && [ ! -f "$FAKE_ADB_STATE/listener" ]'
+check "the Siri Remote bridge is stopped after undo" '[ ! -f "$FAKE_ADB_STATE/siri" ]'
 check "no step stopped with an error" '! grep -q "Stopped:" "$WORK/out.txt"'
 
 if [ "$failures" -gt 0 ]; then
