@@ -8,11 +8,11 @@ import java.io.File
 /**
  * The videos sent from a phone that the TV keeps: the screensaver's own, and each home profile's
  * background and screensaver video. A phone's film is large on a TV's small storage, so there are
- * never more than [MAX]: once a new one is on, those nothing plays any more go, and then the
- * oldest, until the new one and one other are left.
+ * never more than [MAX]: once a new one is on and there are more, those nothing plays any more
+ * go first, then the oldest, until the new one and [MAX] - 1 others are left.
  */
 object OwnVideos {
-    const val MAX = 2
+    const val MAX = 4
 
     private class Kept(val file: File, val inUse: Boolean, val drop: () -> Unit)
 
@@ -37,8 +37,10 @@ object OwnVideos {
             }
         }
         val others = kept.filter { it.file.absolutePath != newest.absolutePath }
-        val gone = others.filter { !it.inUse } +
-            others.filter { it.inUse }.sortedByDescending { it.file.lastModified() }.drop(MAX - 1)
+        val excess = others.size - (MAX - 1)
+        val gone = if (excess <= 0) emptyList() else others
+            .sortedWith(compareBy<Kept> { it.inUse }.thenBy { it.file.lastModified() })
+            .take(excess)
         gone.forEach { runCatching { it.drop() } }
         if (gone.isNotEmpty()) android.util.Log.i("OwnVideos", "removed ${gone.size} older video(s), ${kept.size - gone.size} kept")
         return gone.size
