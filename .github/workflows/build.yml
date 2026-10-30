@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+      TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
       SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
       SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
       SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -58,7 +60,11 @@ jobs:
           test -f "$ANDROID_HOME/ndk/27.0.12077973/source.properties"
 
       - name: Write local.properties
-        run: echo "tmdb.api_key=${TMDB_API_KEY}" > local.properties
+        run: |
+          echo "tmdb.api_key=${TMDB_API_KEY}" > local.properties
+          # Trakt sign-in (Settings › Integrations) only works when the build carries a Trakt app id
+          echo "TRAKT_CLIENT_ID=${TRAKT_CLIENT_ID}" >> local.properties
+          echo "TRAKT_CLIENT_SECRET=${TRAKT_CLIENT_SECRET}" >> local.properties
 
       - name: Decode signing key
         if: env.SIGNING_KEYSTORE_BASE64 != ''

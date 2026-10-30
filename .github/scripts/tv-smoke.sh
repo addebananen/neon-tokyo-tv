@@ -1242,6 +1242,21 @@ label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Ice Lake with square icons does not start on YouTube ($label has the focus)"
 key BACK; sleep 2
 
+# Each focus motion a profile can pick for liquid glass, on Deep Blue: the focus lands on YouTube,
+# moves right (so the motion knows which way it came) and back, and the home screen keeps it
+for motion in glow breathe tilt liquid rim drop layers; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style deepblue --es focus "$motion" >/dev/null 2>&1
+  sleep 5
+  key DPAD_RIGHT; sleep 2
+  label=$(focused_label)
+  { [ -n "$label" ] && [ "$label" != "YouTube" ]; } || fail "Deep Blue with the $motion focus motion did not move the focus right ($label has it)"
+  case "$motion" in tilt|layers) shot "focus-$motion" ;; esac
+  key DPAD_LEFT; sleep 2
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Deep Blue with the $motion focus motion did not come back to YouTube ($label has the focus)"
+  key BACK; sleep 2
+done
+
 # The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
 # on the All apps tab. Apps the emulator lacks keep their neon face
 for pack in original banner glass; do

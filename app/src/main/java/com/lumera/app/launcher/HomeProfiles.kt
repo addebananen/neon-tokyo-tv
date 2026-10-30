@@ -38,13 +38,67 @@ data class HomeProfile(
     /** Square glass icons rather than wide tiles. */
     val squareIcons: Boolean? = null,
     /** The apps' names and the buttons' words all the time, not only in focus. */
-    val names: Boolean? = null
+    val names: Boolean? = null,
+    /** What its liquid glass tiles play as the focus lands on them. */
+    val focus: GlassFocus? = null,
+    /** The layout it chose for each of the other styles it has worn, back again when it wears one. */
+    val looks: Map<HomeStyle, HomeLayout> = emptyMap()
 ) {
+    /** How it lays out its current style. */
+    val layout: HomeLayout get() = HomeLayout(glass, rowsDown, consolesOnHome, squareIcons, names, focus)
+
+    /**
+     * Wearing [next]: the layout chosen for this style is kept for when it comes back, and the one
+     * chosen for [next] before, if any, comes back with it.
+     */
+    fun wearing(next: HomeStyle): HomeProfile {
+        if (next == style) return this
+        val kept = if (layout.isEmpty) looks - style else looks + (style to layout)
+        val back = kept[next] ?: HomeLayout()
+        return copy(
+            style = next, glass = back.glass, rowsDown = back.rowsDown, consolesOnHome = back.consolesOnHome,
+            squareIcons = back.squareIcons, names = back.names, focus = back.focus, looks = kept - next
+        )
+    }
+
     val glassLook: HomeGlass get() = glass ?: style.glass
     val watchDown: Boolean get() = rowsDown ?: style.rowsDown
     val showConsoles: Boolean get() = consolesOnHome ?: style.consolesOnHome
     val square: Boolean get() = squareIcons ?: style.squareIcons
     val namesAlways: Boolean get() = names ?: style.namesAlways
+    val focusMotion: GlassFocus get() = focus ?: GlassFocus.Glow
+}
+
+/** A profile's own choices for how a style lays out its home screen, each null for what the style does. */
+data class HomeLayout(
+    val glass: HomeGlass? = null,
+    val rowsDown: Boolean? = null,
+    val consolesOnHome: Boolean? = null,
+    val squareIcons: Boolean? = null,
+    val names: Boolean? = null,
+    val focus: GlassFocus? = null
+) {
+    val isEmpty: Boolean get() = this == HomeLayout()
+
+    fun toJson(): JSONObject = JSONObject().apply {
+        glass?.let { put("glass", it.key) }
+        rowsDown?.let { put("rowsDown", it) }
+        consolesOnHome?.let { put("consolesOnHome", it) }
+        squareIcons?.let { put("squareIcons", it) }
+        names?.let { put("names", it) }
+        focus?.let { put("focus", it.key) }
+    }
+
+    companion object {
+        fun of(o: JSONObject) = HomeLayout(
+            glass = HomeGlass.of(o.optString("glass")),
+            rowsDown = o.flag("rowsDown"),
+            consolesOnHome = o.flag("consolesOnHome"),
+            squareIcons = o.flag("squareIcons"),
+            names = o.flag("names"),
+            focus = GlassFocus.of(o.optString("focus"))
+        )
+    }
 }
 
 /**
@@ -138,11 +192,8 @@ class HomeProfiles private constructor(private val context: Context) {
                 p.photo?.let { put("photo", it) }
                 p.background?.let { put("background", it) }
                 p.dreamVideo?.let { put("dreamVideo", it) }
-                p.glass?.let { put("glass", it.key) }
-                p.rowsDown?.let { put("rowsDown", it) }
-                p.consolesOnHome?.let { put("consolesOnHome", it) }
-                p.squareIcons?.let { put("squareIcons", it) }
-                p.names?.let { put("names", it) }
+                p.layout.toJson().let { l -> l.keys().forEach { put(it, l.get(it)) } }
+                if (p.looks.isNotEmpty()) put("looks", JSONObject().apply { p.looks.forEach { (style, look) -> put(style.key, look.toJson()) } })
             })
         }
         prefs.edit().putString(KEY_PROFILES, array.toString()).apply()
@@ -166,7 +217,14 @@ class HomeProfiles private constructor(private val context: Context) {
                     rowsDown = o.flag("rowsDown"),
                     consolesOnHome = o.flag("consolesOnHome"),
                     squareIcons = o.flag("squareIcons"),
-                    names = o.flag("names")
+                    names = o.flag("names"),
+                    focus = GlassFocus.of(o.optString("focus")),
+                    looks = o.optJSONObject("looks")?.let { looks ->
+                        looks.keys().asSequence().mapNotNull { key ->
+                            // A style since removed has nothing to come back to
+                            HomeStyle.entries.firstOrNull { it.key == key }?.let { it to HomeLayout.of(looks.getJSONObject(key)) }
+                        }.toMap()
+                    } ?: emptyMap()
                 )
             }
         }.getOrDefault(emptyList())
@@ -188,4 +246,4 @@ class HomeProfiles private constructor(private val context: Context) {
 }
 
 /** A choice kept only once it was made: null when [key] was never set. */
-private fun JSONObject.flag(key: String): Boolean? = if (has(key)) optBoolean(key) else null
+internal fun JSONObject.flag(key: String): Boolean? = if (has(key)) optBoolean(key) else null
