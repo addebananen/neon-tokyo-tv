@@ -148,6 +148,7 @@ object LiveTv {
             }
         }?.commit()
         dir.listFiles()?.forEach { it.delete() }
+        VodLibrary.forget()
         prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
         _guide.value = emptyMap()
         // A new service: its own channels are tuned in, not the old ones kept on screen meanwhile
@@ -160,6 +161,7 @@ object LiveTv {
         init(context)
         secure?.edit()?.clear()?.commit()
         dir.listFiles()?.forEach { it.delete() }
+        VodLibrary.forget()
         prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
         _guide.value = emptyMap()
         _state.value = State.Empty

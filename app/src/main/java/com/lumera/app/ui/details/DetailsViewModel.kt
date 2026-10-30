@@ -1,5 +1,6 @@
 package com.lumera.app.ui.details
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,6 +24,9 @@ import com.lumera.app.data.tmdb.TmdbVideoInfo
 import com.lumera.app.domain.AddonSubtitle
 import com.lumera.app.domain.episodeStreamId
 import com.lumera.app.data.trakt.TraktSyncManager
+import com.lumera.app.livetv.VodCatalog
+import com.lumera.app.livetv.VodLibrary
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.lumera.app.data.model.SeriesNextUpEntity
 import com.lumera.app.data.model.WatchHistoryEntity
@@ -43,10 +47,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 @HiltViewModel
 class DetailsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val dao: AddonDao,
     private val sourceSelectionStore: SourceSelectionStore,
     private val playbackTrackSelectionStore: PlaybackTrackSelectionStore,
@@ -620,6 +626,7 @@ class DetailsViewModel @Inject constructor(
      */
     private suspend fun fetchSources(type: String, id: String): Pair<List<Stream>, List<AddonSubtitle>> = coroutineScope {
         val streams = async { repository.getStreams(type, id) }
+        val service = async { serviceStreams(type, id) }
         val subtitles = async {
             try {
                 subtitleRepository.getSubtitles(type, id)
@@ -629,7 +636,31 @@ class DetailsViewModel @Inject constructor(
                 emptyList()
             }
         }
-        streams.await() to subtitles.await()
+        (service.await() + streams.await()) to subtitles.await()
+    }
+
+    /**
+     * The household IPTV service's own copy of this title, when it has one. Matched by TMDB id
+     * where both sides know it, else by name and year; never more than a short wait on top.
+     */
+    private suspend fun serviceStreams(type: String, id: String): List<Stream> {
+        val meta = _state.value.meta ?: return emptyList()
+        // Only for the title on screen: a prefetch can outlive a jump to another title
+        if (meta.type != type) return emptyList()
+        return try {
+            withTimeoutOrNull(SERVICE_TIMEOUT_MS) {
+                val tmdb = withTimeoutOrNull(5_000) {
+                    runCatching { tmdbService.ensureTmdbId(meta.id, meta.type) }.getOrNull()
+                }
+                // The episode as the title's own list numbers it, whatever shape its id has
+                val episode = meta.videos?.firstOrNull { it.id == id && it.season > 0 && it.episode > 0 }?.let { it.season to it.episode }
+                VodLibrary.streams(appContext, type, id, meta.name, meta.releaseInfo?.let(VodCatalog::yearIn), tmdb, episode)
+            }.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     // 2. Open Sources (Movie OR Specific Episode)
@@ -673,14 +704,17 @@ class DetailsViewModel @Inject constructor(
                 val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
                 val profile = activeProfileId?.let { dao.getProfileById(it) }
 
-                val streams = if (profile?.sourceSortingEnabled != false) {
+                // The household's own service is never filtered away: it is what they pay for
+                val (ownStreams, addonStreams) = rawStreams.partition { it.addonTransportUrl == VodLibrary.TRANSPORT }
+                val sortedStreams = if (profile?.sourceSortingEnabled != false) {
                     val enabledQualities = StreamSortingService.parseEnabledQualities(profile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
                     val excludePhrases = StreamSortingService.parseExcludePhrases(profile?.sourceExcludePhrases ?: "")
                     val addonSortOrders = dao.getAllAddons().firstOrNull()
                         ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
                     val excludedFormats = StreamSortingService.parseExcludedFormats(profile?.sourceExcludedFormats ?: "")
-                    streamSortingService.sortAndFilter(rawStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceMaxSizeGb ?: 0, excludedFormats)
-                } else rawStreams
+                    streamSortingService.sortAndFilter(addonStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceMaxSizeGb ?: 0, excludedFormats)
+                } else addonStreams
+                val streams = ownStreams + sortedStreams
 
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {
                     null
@@ -852,3 +886,6 @@ class DetailsViewModel @Inject constructor(
         }
     }
 }
+
+/** How long the sources wait on the household IPTV service; a first visit fetches its whole library. */
+private const val SERVICE_TIMEOUT_MS = 20_000L

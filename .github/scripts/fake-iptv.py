@@ -55,6 +55,56 @@ def big_streams():
     return _big["streams"]
 
 
+# The library: Dune and Dune: Prophecy are what the smoke test opens from Search. The big login
+# has 30 000 more films and 5 000 series around them, the size of a real provider's library.
+VOD = [
+    {"num": 1, "name": "SE - Dune (2021) 4K", "stream_id": 701, "stream_type": "movie", "container_extension": "ts",
+     "tmdb": "438631", "category_id": "10", "added": "1700000000", "rating": "8"},
+    {"num": 2, "name": "SE - Dune: Part Two (2024)", "stream_id": 702, "stream_type": "movie", "container_extension": "ts",
+     "tmdb": "", "category_id": "10", "added": "1700000000", "rating": "8"},
+]
+SERIES = [{"num": 1, "name": "SE - Dune: Prophecy", "series_id": 801, "releaseDate": "2024-11-17", "tmdb": "", "category_id": "20"}]
+EPISODES = {"801": {"seasons": [], "info": {"name": "Dune: Prophecy"}, "episodes": {"1": [
+    {"id": "9001", "episode_num": 1, "title": "The Hidden Hand", "container_extension": "ts", "season": 1},
+    {"id": "9002", "episode_num": 2, "title": "Two Wolves", "container_extension": "ts", "season": 1}]}}}
+BIG_FILMS, BIG_SERIES = 30_000, 5_000
+
+
+def vod(is_big):
+    if not is_big:
+        return json.dumps(VOD).encode()
+    if "vod" not in _big:
+        out = list(VOD)
+        for i in range(1, BIG_FILMS + 1):
+            out.append({"num": i + 10, "name": f"{COUNTRIES[i % 8]} - Big Film {i} ({1950 + i % 75})", "stream_id": 200000 + i,
+                        "stream_type": "movie", "container_extension": ["mkv", "mp4"][i % 2], "tmdb": str(900000 + i),
+                        "category_id": str(i % 40), "added": "1700000000", "rating": "6.5", "stream_icon": ""})
+        _big["vod"] = json.dumps(out).encode()
+    return _big["vod"]
+
+
+def series(is_big):
+    if not is_big:
+        return json.dumps(SERIES).encode()
+    if "series" not in _big:
+        out = list(SERIES)
+        for i in range(1, BIG_SERIES + 1):
+            out.append({"num": i + 10, "name": f"{COUNTRIES[i % 8]} - Big Series {i}", "series_id": 300000 + i,
+                        "releaseDate": f"{1990 + i % 35}-01-01", "tmdb": "", "category_id": str(i % 20), "cover": ""})
+        _big["series"] = json.dumps(out).encode()
+    return _big["series"]
+
+
+def library(action, q, is_big):
+    if action == "get_vod_streams":
+        return vod(is_big)
+    if action == "get_series":
+        return series(is_big)
+    if action == "get_series_info":
+        return json.dumps(EPISODES.get(q.get("series_id"), {"episodes": {}})).encode()
+    return None
+
+
 def big_guide():
     if "guide" not in _big:
         start = int(time.time()) // 3600 * 3600 - 2 * 3600
@@ -111,6 +161,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(big_categories()))
             if action == "get_live_streams":
                 return self.send(200, big_streams())
+            if library(action, q, True) is not None:
+                return self.send(200, library(action, q, True))
             return self.send(200, json.dumps({"user_info": {"auth": 1, "status": "Active", "allowed_output_formats": ["ts", "m3u8"]},
                                               "server_info": {"url": "10.0.2.2"}}))
         if big and url.path == "/xmltv.php":
@@ -123,6 +175,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps(CATEGORIES))
             if action == "get_live_streams":
                 return self.send(200, json.dumps(STREAMS))
+            if library(action, q, False) is not None:
+                return self.send(200, library(action, q, False))
             return self.send(200, json.dumps({"user_info": {"auth": 1, "status": "Active", "allowed_output_formats": ["ts", "m3u8"]},
                                               "server_info": {"url": "10.0.2.2"}}))
         if url.path == "/xmltv.php":
@@ -136,6 +190,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, "\n".join(lines), "audio/x-mpegurl")
         if url.path.startswith(f"/live/{USER}/{PASS}/") and STREAM is not None:
             return self.send(200, STREAM, "video/mp2t")
+        # Films and episodes play the same test card, for either login
+        for kind in ("movie", "series"):
+            for user in (USER, BIG_USER):
+                if url.path.startswith(f"/{kind}/{user}/{PASS}/") and STREAM is not None:
+                    return self.send(200, STREAM, "video/mp2t")
         self.send(404, "")
 
     def log_message(self, *args):
