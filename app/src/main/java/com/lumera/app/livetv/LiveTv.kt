@@ -8,6 +8,7 @@ import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -89,6 +90,8 @@ object LiveTv {
             .build()
     }
 
+    // Once only: two threads making the encrypted store at the same time can spoil its key
+    @Synchronized
     private fun init(context: Context) {
         if (prefs != null) return
         val app = context.applicationContext
@@ -157,12 +160,15 @@ object LiveTv {
     }
 
     /** Forgets the service and everything fetched from it; favourites stay for a service added later. */
-    fun remove(context: Context) {
-        init(context)
-        secure?.edit()?.clear()?.commit()
-        dir.listFiles()?.forEach { it.delete() }
-        VodLibrary.forget()
-        prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
+    suspend fun remove(context: Context) {
+        // The keystore and a big service's files are slow, so they are cleared off the main thread
+        withContext(NonCancellable + Dispatchers.IO) {
+            init(context)
+            secure?.edit()?.clear()?.commit()
+            dir.listFiles()?.forEach { it.delete() }
+            VodLibrary.forget()
+            prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
+        }
         _guide.value = emptyMap()
         _state.value = State.Empty
     }
