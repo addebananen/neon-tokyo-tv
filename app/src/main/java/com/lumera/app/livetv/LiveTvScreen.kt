@@ -500,7 +500,7 @@ fun LiveTvScreen(
         ServiceMenu(
             onRefresh = { menu = false; scope.launch { LiveTv.load(context, force = true) } },
             onChange = { menu = false; setup = true },
-            onRemove = { menu = false; LiveTv.remove(context) },
+            onRemove = { menu = false; scope.launch { LiveTv.remove(context) } },
             onDismiss = { menu = false }
         )
     }

@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
@@ -107,6 +108,16 @@ internal fun Modifier.glassFocusFx(
     )
     val runnerBrush = ShaderBrush(runner)
     val reach = max(size.width, size.height) * 0.62f
+    // Made once per size: the tilt's spot is moved, not made again, each frame of the landing
+    val spot = Brush.radialGradient(
+        0f to Color.White.copy(alpha = 0.36f), 1f to Color.Transparent,
+        center = Offset.Zero, radius = size.width * 0.32f
+    )
+    val shadowAt = Offset(center.x, center.y + size.height * 0.08f)
+    val shadow = Brush.radialGradient(
+        0f to Color(0x59001423), 1f to Color.Transparent,
+        center = shadowAt, radius = size.height * 0.32f
+    )
     onDrawBehind {
         val t = land()
         val l = lit()
@@ -115,14 +126,12 @@ internal fun Modifier.glassFocusFx(
                 // The spot slides from the side the focus came from towards the middle
                 val dir = from().let { if (it == 0f) 1f else it }
                 val x = size.width * (0.5f - 0.25f * dir + 0.4f * dir * easeOut(t))
-                drawPath(
-                    path,
-                    Brush.radialGradient(
-                        0f to Color.White.copy(alpha = 0.36f), 1f to Color.Transparent,
-                        center = Offset(x, size.height * 0.2f), radius = size.width * 0.32f
-                    ),
-                    alpha = l
-                )
+                val y = size.height * 0.2f
+                clipPath(path) {
+                    translate(x, y) {
+                        drawCircle(spot, radius = size.width * 0.32f, center = Offset.Zero, alpha = l)
+                    }
+                }
             }
             GlassFocus.Rim -> if (t > 0f && t < 1f) {
                 turn.setRotate(-40f + 360f * easeOut(t), center.x, center.y)
@@ -140,15 +149,7 @@ internal fun Modifier.glassFocusFx(
             }
             GlassFocus.Layers -> if (l > 0f) {
                 // The lifted icon's shadow on the glass under it
-                drawCircle(
-                    Brush.radialGradient(
-                        0f to Color(0x59001423), 1f to Color.Transparent,
-                        center = Offset(center.x, center.y + size.height * 0.08f), radius = size.height * 0.32f
-                    ),
-                    radius = size.height * 0.32f,
-                    center = Offset(center.x, center.y + size.height * 0.08f),
-                    alpha = l
-                )
+                drawCircle(shadow, radius = size.height * 0.32f, center = shadowAt, alpha = l)
             }
             else -> Unit
         }
