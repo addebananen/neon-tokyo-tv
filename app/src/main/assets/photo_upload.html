@@ -302,23 +302,61 @@ body.round .wide-only { display: none; }
 
   document.getElementById("again").addEventListener("click", function () { show("pick"); });
 
+  function canvasOf(w, h) {
+    var c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+    var cx = c.getContext("2d");
+    cx.imageSmoothingEnabled = true;
+    cx.imageSmoothingQuality = "high";
+    return c;
+  }
+  function render(source, sx, sy, sW, sH, outW, outH) {
+    // The chosen part on its own first, at its own size
+    var from = canvasOf(Math.min(sW, outW * 2), Math.min(sH, outH * 2));
+    from.getContext("2d").drawImage(source, sx, sy, sW, sH, 0, 0, from.width, from.height);
+    var grow = outW / from.width;
+    while (outW / from.width > 2.01) {
+      var next = canvasOf(from.width * 2, from.height * 2);
+      next.getContext("2d").drawImage(from, 0, 0, next.width, next.height);
+      from = next;
+    }
+    var out = canvasOf(outW, outH);
+    out.getContext("2d").drawImage(from, 0, 0, outW, outH);
+    if (grow > 1.2) sharpen(out, Math.min(0.6, 0.2 + (grow - 1) * 0.15));
+    return out;
+  }
+  // A light unsharp pass, so an enlarged photo doesn't look soft on a big screen
+  function sharpen(canvas, amount) {
+    var cx = canvas.getContext("2d");
+    var w = canvas.width, h = canvas.height;
+    try {
+      var image = cx.getImageData(0, 0, w, h), d = image.data, src = new Uint8ClampedArray(d);
+      var row = w * 4;
+      for (var yy = 1; yy < h - 1; yy++) {
+        for (var xx = 1; xx < w - 1; xx++) {
+          var i = yy * row + xx * 4;
+          for (var c = 0; c < 3; c++) {
+            var k = i + c;
+            var blur = (src[k - 4] + src[k + 4] + src[k - row] + src[k + row]) * 0.25;
+            d[k] = src[k] + (src[k] - blur) * amount;
+          }
+        }
+      }
+      cx.putImageData(image, 0, 0);
+    } catch (e) {}
+  }
+
   // ---- Sending ----
   var sendBtn = document.getElementById("send");
   sendBtn.addEventListener("click", function () {
     message("cropMsg", "");
     var scale = cover * z;
-    // A background goes up to 4K, for a 4K TV, but never larger than the part of the photo chosen
+    // A background is always made 4K, the TV's own size: a smaller photo is enlarged here in
+    // steps of at most double, each smoothed, then sharpened a little, which keeps its edges far
+    // cleaner than the TV stretching it in one go
     var outW = OUT_W, outH = OUT_H;
-    if (WIDE) {
-      outW = Math.max(1920, Math.min(3840, Math.round(sw / scale / 16) * 16));
-      outH = outW * 9 / 16;
-    }
-    var canvas = document.createElement("canvas");
-    canvas.width = outW; canvas.height = outH;
-    var ctx = canvas.getContext("2d");
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, -x / scale, -y / scale, sw / scale, sh / scale, 0, 0, outW, outH);
-    var data = canvas.toDataURL("image/jpeg", 0.9).split(",")[1];
+    if (WIDE) { outW = 3840; outH = 2160; }
+    var data = render(img, -x / scale, -y / scale, sw / scale, sh / scale, outW, outH).toDataURL("image/jpeg", 0.92).split(",")[1];
     var form = new FormData();
     form.append("image", data);
     sendBtn.disabled = true;

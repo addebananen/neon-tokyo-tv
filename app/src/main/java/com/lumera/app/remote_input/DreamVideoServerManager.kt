@@ -23,8 +23,9 @@ class DreamVideoServerManager {
     companion object {
         private const val PORT_START = 8080
         private const val PORT_END = 8090
-        // A phone on weak Wi-Fi can pause for a while in the middle of a big video
-        private const val READ_TIMEOUT_MS = 30_000
+        // A phone on weak Wi-Fi can pause in the middle of a piece; one quiet for longer than this
+        // is given up, and the phone carries on from where the TV got to
+        private const val READ_TIMEOUT_MS = 15_000
     }
 
     /** The phone's page follows this, see [DreamVideoUploadServer.state]. */
