@@ -4,6 +4,7 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -88,6 +89,39 @@ class BluetoothHelper : AccessibilityService() {
             return true
         }
 
+        /**
+         * The TV's Bluetooth page. Some TVs (the TCL on Android TV 14) don't answer Android's
+         * standard link to it, so their settings app is searched for its accessories page, and
+         * failing that the settings open at the top and the hand finds its way from there.
+         */
+        fun settingsIntent(context: Context): Intent {
+            val pm = context.packageManager
+            val standard = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            val answers = pm.resolveActivity(standard, 0)?.activityInfo
+            if (answers != null && answers.exported && answers.permission == null) return standard
+            val top = Intent(Settings.ACTION_SETTINGS)
+            val settingsApp = top.resolveActivity(pm)?.packageName
+            val pages = listOfNotNull(settingsApp, "com.android.tv.settings").distinct().flatMap { pkg ->
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES).activities.orEmpty().toList()
+                }.getOrDefault(emptyList())
+            }.filter { it.exported && it.permission == null }
+            val page = BT_PAGES.firstNotNullOfOrNull { pattern ->
+                pages.firstOrNull { pattern.containsMatchIn(it.name) && !NOT_THE_LIST.containsMatchIn(it.name) }
+            }
+            return page?.let { Intent().setClassName(it.packageName, it.name) } ?: top
+        }
+
+        /** The accessories page's class names on TV settings apps, best first. */
+        private val BT_PAGES = listOf(
+            Regex("""\.accessories\.AccessoriesActivity$"""),
+            Regex("""ConnectedDevices\w*Activity$""", RegexOption.IGNORE_CASE),
+            Regex("""Accessor\w*Activity$""", RegexOption.IGNORE_CASE),
+            Regex("""Bluetooth\w*Settings\w*Activity$""", RegexOption.IGNORE_CASE)
+        )
+        private val NOT_THE_LIST = Regex("Pair|Picker|Rename|Unpair|Add|Forget|Detail|Remove", RegexOption.IGNORE_CASE)
+
         fun cancel() {
             SettingsHand.pending = null
             lent?.idle()
@@ -119,6 +153,8 @@ internal class SettingsHand(private val svc: AccessibilityService, private val o
         var opened = false
         var openedAt = 0L
         var settingsApp: String? = null
+        /** Rows pressed on the way to the Bluetooth list. */
+        var steps = 0
     }
 
     /** A job was just set: look now, and give up by itself if the page never shows the row. */
@@ -179,14 +215,25 @@ internal class SettingsHand(private val svc: AccessibilityService, private val o
             }
         }
         // The list: open this one
-        find(root) { it == job.name.lowercase() }?.let { row ->
-            if (click(row)) {
-                // The settings app this job opened, to know when Back has left it
-                job.settingsApp = root.packageName?.toString()
-                job.opened = true
-                job.openedAt = SystemClock.uptimeMillis()
-                if (job.task == BluetoothHelper.Task.Wifi) handler.postDelayed({ if (pending === job) step() }, 400L)
+        val row = find(root) { it == job.name.lowercase() }
+        if (row == null) {
+            // Settings opened at the top, on a TV without a direct link: on to its Bluetooth list
+            if (job.task != BluetoothHelper.Task.Wifi && job.steps < MAX_STEPS) {
+                find(root) { it in TO_BLUETOOTH }?.let { way ->
+                    if (click(way)) {
+                        job.steps++
+                        job.settingsApp = root.packageName?.toString()
+                    }
+                }
             }
+            return
+        }
+        if (click(row)) {
+            // The settings app this job opened, to know when Back has left it
+            job.settingsApp = root.packageName?.toString()
+            job.opened = true
+            job.openedAt = SystemClock.uptimeMillis()
+            if (job.task == BluetoothHelper.Task.Wifi) handler.postDelayed({ if (pending === job) step() }, 400L)
         }
     }
 
@@ -255,6 +302,12 @@ internal class SettingsHand(private val svc: AccessibilityService, private val o
         private val CONNECT = setOf("connect", "anslut", "koppla", "koppla till")
         private val DISCONNECT = setOf("disconnect", "koppla från", "koppla bort")
         private val CONFIRM = setOf("ok", "yes", "ja", "disconnect", "koppla från")
+        private const val MAX_STEPS = 2
+        /** The rows that lead from the top of TV settings to its Bluetooth list ("Bluetooth" alone can be the on/off switch). */
+        private val TO_BLUETOOTH = setOf(
+            "remotes & accessories", "remotes and accessories", "accessories",
+            "fjärrkontroller och tillbehör", "fjärrkontroller & tillbehör", "tillbehör"
+        )
         private val WIFI_CONNECT = setOf("connect", "anslut", "connect to network", "anslut till nätverket", "anslut till nätverk")
 
         /** The one job at a time, whichever service presses it. */

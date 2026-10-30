@@ -1,9 +1,7 @@
 package com.lumera.app.launcher
 
 import android.Manifest
-import android.content.Intent
 import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -318,7 +316,7 @@ internal fun HomeBluetoothDialog(
                             mine = mine,
                             onClick = {
                                 if (!mine) bt.take(device.address, profile.id, true)
-                                if (device.connected) HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                                if (device.connected) HomeApps.start(context, BluetoothHelper.settingsIntent(context))
                                 else onConnect(device)
                             },
                             onMine = { bt.take(device.address, profile.id, !mine) },
@@ -343,7 +341,7 @@ internal fun HomeBluetoothDialog(
                         UpdateButton(
                             if (on && permitted) "Pair a new device" else "Bluetooth settings",
                             if (permitted && (!on || devices.isEmpty())) Modifier.focusRequester(first) else Modifier
-                        ) { HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
+                        ) { HomeApps.start(context, BluetoothHelper.settingsIntent(context)) }
                     }
                     UpdateButton("Close", if (!bt.available) Modifier.focusRequester(first) else Modifier, onClick = onDismiss)
                 }
