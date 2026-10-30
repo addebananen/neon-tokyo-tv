@@ -294,7 +294,7 @@ private fun VideoWaiting(
                 PhotoStepRow(3, "Send it to the TV", done = checking)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Made 1080p at up to 60 fps for the TV. It keeps two videos of your own; older ones go.",
+                    "Made 1080p at up to 60 fps for the TV. It keeps four videos of your own; older ones go.",
                     style = MaterialTheme.typography.bodySmall,
                     color = NeonPalette.Lilac.copy(alpha = 0.75f)
                 )
@@ -433,8 +433,8 @@ private fun VideoReady(
             if (removed > 0) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (removed == 1) "The TV keeps two videos of your own, so an older one was removed."
-                    else "The TV keeps two videos of your own, so $removed older ones were removed.",
+                    if (removed == 1) "The TV keeps four videos of your own, so an older one was removed."
+                    else "The TV keeps four videos of your own, so $removed older ones were removed.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = NeonPalette.Lilac.copy(alpha = 0.8f)
                 )

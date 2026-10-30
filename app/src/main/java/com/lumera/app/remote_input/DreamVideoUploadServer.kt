@@ -55,6 +55,10 @@ class DreamVideoUploadServer(
     @Volatile
     private var expectedId = ""
 
+    // The piece being read now
+    @Volatile
+    private var reading: java.io.InputStream? = null
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val base = "/$token"
     private val page: String by lazy {
@@ -80,7 +84,12 @@ class DreamVideoUploadServer(
             "", "/" -> if (session.method == Method.GET) servePage() else notFound()
             "/status" -> json("{\"state\":\"$state\",\"received\":$arrived,\"id\":\"$expectedId\",\"room\":${DreamVideo.roomFor(context)}}")
             "/video" -> if (session.method == Method.POST) receiveVideo(session) else notFound()
-            "/piece" -> if (session.method == Method.POST) receivePiece(session) else notFound()
+            "/piece" -> if (session.method == Method.POST) {
+                // The phone sends one piece at a time, so one still being read is from a connection
+                // it gave up on: dropped now, rather than holding the next piece up until it times out
+                reading?.let { runCatching { it.close() } }
+                receivePiece(session)
+            } else notFound()
             "/awake.mp4" -> asset("dream_video_awake.mp4", "video/mp4")
             "/skyline.webp" -> resource(R.drawable.nt_skyline, "image/webp")
             "/kanit-medium.ttf" -> resource(R.font.kanit_medium, "font/ttf")
@@ -171,8 +180,9 @@ class DreamVideoUploadServer(
         }
         // Not where the video has got to: say where that is, and the phone sends from there
         if (offset != arrived || offset + length > total) return early(placed())
+        val input = session.inputStream
+        reading = input
         try {
-            val input = session.inputStream
             val buffer = ByteArray(256 * 1024)
             var lastReport = 0L
             java.io.RandomAccessFile(upload, "rw").use { out ->
@@ -199,6 +209,8 @@ class DreamVideoUploadServer(
             val soFar = arrived
             mainHandler.post { listener.onProgress(soFar, total) }
             return early(placed())
+        } finally {
+            if (reading === input) reading = null
         }
         if (arrived == total) {
             state = STATE_CHECKING

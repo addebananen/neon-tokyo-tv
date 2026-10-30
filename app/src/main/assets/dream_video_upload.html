@@ -211,9 +211,12 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
   // drops, the piece is sent again from where the TV has got to instead of the whole video
   // The size of a piece follows the Wi-Fi: about ten seconds' worth, so a slow link still
   // gets whole pieces through and a fast one isn't held up by asking after each
-  var MB = 1024 * 1024, piece = 2 * MB, MIN_PIECE = 256 * 1024, MAX_PIECE = 16 * MB;
+  var MB = 1024 * 1024, piece = 512 * 1024, MIN_PIECE = 64 * 1024, MAX_PIECE = 16 * MB;
   // A piece is only given up when nothing has moved for this long, however slow it is
   var STALL = 45000;
+  // A piece the phone says is all sent but the TV hasn't answered for: given up much sooner, as
+  // an iPhone can count a piece as sent that never left it
+  var UNANSWERED = 12000;
   var bar = document.getElementById("bar"), pct = document.getElementById("pct");
   var sendingText = document.getElementById("sendingText");
   var sendId = 0, wakeLock = null, waking = null, reached = 0, inflight = null, moved = 0;
@@ -268,8 +271,24 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     // Getting further, however slowly, is never a reason to give up
     if (from > reached) { reached = from; tries = 0; }
     var to = Math.min(file.size, from + piece);
+    // The piece is read into memory before it goes: an iPhone sending straight from a video in
+    // its library can stall after the first bytes, while it sends bytes it holds without a hitch
+    readPiece(file.slice(from, to), function (body) {
+      if (id !== sendId) return;
+      if (body === null) { failed("Your phone couldn't read that video. Pick it again, or try another one."); return; }
+      sendPiece(file, from, to, body, id, tries);
+    });
+  }
+  function readPiece(blob, done) {
+    if (blob.arrayBuffer) { blob.arrayBuffer().then(done, function () { done(null); }); return; }
+    var reader = new FileReader();
+    reader.onload = function () { done(reader.result); };
+    reader.onerror = function () { done(null); };
+    reader.readAsArrayBuffer(blob);
+  }
+  function sendPiece(file, from, to, body, id, tries) {
     var xhr = new XMLHttpRequest();
-    var started = Date.now(), watch = null;
+    var started = Date.now(), watch = null, allSent = false;
     moved = started;
     inflight = xhr;
     function stop() { clearInterval(watch); if (inflight === xhr) inflight = null; }
@@ -280,6 +299,7 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     xhr.setRequestHeader("X-Id", fileId);
     xhr.upload.onprogress = function (e) {
       moved = Date.now();
+      if (e.lengthComputable && e.loaded >= e.total) allSent = true;
       if (id === sendId) progress(from + e.loaded, file.size);
     };
     xhr.onload = function () {
@@ -310,9 +330,9 @@ p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
     // Nothing moving for a while: give the piece up and ask the TV where to go on from
     watch = setInterval(function () {
       if (id !== sendId) { stop(); xhr.abort(); return; }
-      if (document.visibilityState === "visible" && Date.now() - moved > STALL) xhr.abort();
+      if (document.visibilityState === "visible" && Date.now() - moved > (allSent ? UNANSWERED : STALL)) xhr.abort();
     }, 2000);
-    xhr.send(file.slice(from, to));
+    xhr.send(body);
   }
   // A piece that broke off: ask the TV how much it has, and go on from there
   function again(file, id, tries) {
