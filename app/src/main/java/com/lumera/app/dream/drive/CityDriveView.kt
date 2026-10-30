@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.opengl.EGL14
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.os.Build
 import android.util.Log
 import android.widget.FrameLayout
 import com.lumera.app.R
@@ -175,7 +176,10 @@ class CityDriveView(context: Context) : FrameLayout(context) {
      */
     private class ConfigChooser : GLSurfaceView.EGLConfigChooser {
         override fun chooseConfig(egl: EGL10, display: EGLDisplay): EGLConfig {
-            for (attribs in CHOICES) {
+            // The emulator's software GPU falls over under 4x multisampling at screensaver size,
+            // taking the whole emulator with it, so the test emulator draws the city unsmoothed
+            val emulator = Build.HARDWARE == "ranchu" || Build.HARDWARE == "goldfish"
+            for (attribs in if (emulator) CHOICES.drop(1) else CHOICES.toList()) {
                 val count = IntArray(1)
                 if (!egl.eglChooseConfig(display, attribs, null, 0, count) || count[0] <= 0) continue
                 val configs = arrayOfNulls<EGLConfig>(count[0])
