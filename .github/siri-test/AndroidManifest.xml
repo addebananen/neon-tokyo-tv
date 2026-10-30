@@ -7,6 +7,9 @@
     <!-- Android checks the microphone permission of the recognizer as well as of the app asking,
          even when the app hands it the sound (the TV's own recognizer has it) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- and checks it against the app asking, which the recognizer must be able to see (the
+         TV's Google recognizer sees every app) -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <application android:label="Siri test">
         <service
             android:name=".FakeRecognizer"

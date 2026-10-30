@@ -28,9 +28,6 @@ adb logcat -c
 adb install -r -g "$APK" > /dev/null || { fail "Neon Tokyo did not install"; exit 1; }
 adb install -r -g siritest.apk > /dev/null || { fail "the test recognizer did not install"; exit 1; }
 adb shell settings put secure voice_recognition_service com.neontokyo.siritest/.FakeRecognizer
-# the TV's recognizer is a system app that may use the microphone from the background; a plain
-# app only while it is in use, so the stand-in gets the same standing (Neon Tokyo's own stays as is)
-adb shell appops set com.neontokyo.siritest RECORD_AUDIO allow
 adb shell mkdir -p /data/local/tmp/neon-siri $SIM
 adb push "$LIB" /data/local/tmp/neon-siri/libneon_siri.so > /dev/null
 python3 .github/scripts/siri-sim.py make sim > /dev/null || { fail "could not make the pretend remote's scripts"; exit 1; }
