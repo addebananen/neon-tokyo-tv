@@ -81,6 +81,8 @@ private val Calm = Color(0xFF9B8CFF)
 /** The panel's sheet of liquid glass, which everything sits on. */
 private val SheetShape = RoundedCornerShape(36.dp)
 private const val SHEET_PAD = 18
+/** Under the sheet's glass, so text behind it doesn't read through and clutter the buttons. */
+private val SheetSmoke = Color(0xB80A0B12)
 
 private const val PANEL_W = 396
 private const val GAP = 12
@@ -146,6 +148,7 @@ internal fun ControlPanel(model: CcModel, shown: Boolean) {
                     transformOrigin = TransformOrigin(1f, 0f)
                 }
                 // One sheet of glass under it all, so what is behind doesn't show between the buttons
+                .background(SheetSmoke, SheetShape)
                 .glassPane(HomeGlass.Liquid, SheetShape, { 0f }, panel = true)
                 .padding(SHEET_PAD.dp)
                 .width(PANEL_W.dp)
