@@ -15,7 +15,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
-import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -333,7 +332,7 @@ class HomeBluetooth(private val context: Context) {
         if (!disconnect && connectDirect(device)) return BtConnect.Direct
         val task = if (disconnect) BluetoothHelper.Task.Disconnect else BluetoothHelper.Task.Connect
         val helper = BluetoothHelper.request(context, nameOf(device), task, back)
-        if (!HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))) {
+        if (!HomeApps.start(context, BluetoothHelper.settingsIntent(context))) {
             BluetoothHelper.cancel()
             return BtConnect.Failed
         }

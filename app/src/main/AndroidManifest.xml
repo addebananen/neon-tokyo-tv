@@ -56,6 +56,11 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- The TV's settings app, to find its Bluetooth page when the standard link isn't answered -->
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
+        <package android:name="com.android.tv.settings" />
         <!-- ...and the TV's HDMI inputs, whose input services belong to the TV's own apps -->
         <intent>
             <action android:name="android.media.tv.TvInputService" />

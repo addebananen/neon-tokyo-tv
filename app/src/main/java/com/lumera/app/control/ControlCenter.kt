@@ -463,7 +463,7 @@ class ControlCenter(private val service: AccessibilityService, private val actio
                 closeNow()
                 sendSound(device, disconnect = false)
             }
-            row.key == "bt-settings" -> { closeNow(); start(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) }
+            row.key == "bt-settings" -> { closeNow(); start(BluetoothHelper.settingsIntent(service)) }
             row.key.startsWith("wifi:") -> {
                 if (row.checked) return back()
                 closeNow()
