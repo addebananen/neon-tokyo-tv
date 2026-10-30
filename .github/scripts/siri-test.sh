@@ -28,6 +28,9 @@ adb logcat -c
 adb install -r -g "$APK" > /dev/null || { fail "Neon Tokyo did not install"; exit 1; }
 adb install -r -g siritest.apk > /dev/null || { fail "the test recognizer did not install"; exit 1; }
 adb shell settings put secure voice_recognition_service com.neontokyo.siritest/.FakeRecognizer
+# the TV's recognizer is a system app that may use the microphone from the background; a plain
+# app only while it is in use, so the stand-in gets the same standing (Neon Tokyo's own stays as is)
+adb shell appops set com.neontokyo.siritest RECORD_AUDIO allow
 adb shell mkdir -p /data/local/tmp/neon-siri $SIM
 adb push "$LIB" /data/local/tmp/neon-siri/libneon_siri.so > /dev/null
 python3 .github/scripts/siri-sim.py make sim > /dev/null || { fail "could not make the pretend remote's scripts"; exit 1; }
@@ -83,6 +86,9 @@ grep -q "voice action: OpenApp(packageName=com.neontokyo.siritest" "$OUT/voice.l
 top=$(adb shell dumpsys activity activities | grep -m1 -E "topResumedActivity|mResumedActivity" | tr -d '\r')
 echo "$top" | grep -q "com.neontokyo.siritest/.Hikari" && ok "voice: Hikari is on screen" || fail "voice: Hikari did not open ($top)"
 adb exec-out screencap -p > "$OUT/after-voice.png"
+# whose microphone permission Android checked, should the recognizer have said no
+adb logcat -d | grep -iE "RecognitionService|without permission|AppOps.*(RECORD_AUDIO|siritest|neontokyo)|PermissionChecker" > "$OUT/voice-permissions.txt"
+grep -q "voice recognizer error" "$OUT/voice.log" && cat "$OUT/voice-permissions.txt"
 
 # --- Power: off, and on again from the remote --------------------------------
 wakefulness() { adb shell dumpsys power | grep -m1 -o "mWakefulness=[A-Za-z]*" | cut -d= -f2; }
