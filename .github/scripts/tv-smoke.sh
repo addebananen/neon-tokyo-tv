@@ -513,7 +513,7 @@ key BACK
 sleep 1
 key BACK
 sleep 3
-if ! screen_has "Streaming services"; then fail "Back did not return from the folder to home"; fi
+if ! wait_for "Streaming services" 15; then fail "Back did not return from the folder to home"; fi
 shot hub-back
 
 # --- Browse rows ---------------------------------------------------------
