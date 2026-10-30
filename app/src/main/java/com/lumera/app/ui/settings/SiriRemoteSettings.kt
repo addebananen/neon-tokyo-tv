@@ -35,11 +35,18 @@ fun SiriRemoteSettings(onGoBack: () -> Unit) {
     var status by remember { mutableStateOf(SiriStatus(running = false)) }
     var pairing by remember { mutableStateOf(false) }
     var voiceLast by remember { mutableStateOf<String?>(null) }
+    // self-start after a reboot via Shizuku: (turned on, Shizuku running, Shizuku granted)
+    var selfStart by remember { mutableStateOf(Triple(false, false, false)) }
     LaunchedEffect(Unit) {
         val voicePrefs = context.getSharedPreferences(com.lumera.app.siri.VoiceActivity.PREFS, android.content.Context.MODE_PRIVATE)
         while (true) {
             status = SiriRemoteClient.status()
             voiceLast = voicePrefs.getString(com.lumera.app.siri.VoiceActivity.LAST, null)
+            selfStart = Triple(
+                com.lumera.app.siri.ShizukuBridge.isEnabled(context),
+                com.lumera.app.siri.ShizukuBridge.available(),
+                com.lumera.app.siri.ShizukuBridge.granted()
+            )
             if (status.connected) pairing = false
             delay(1_500L)
         }
@@ -127,6 +134,33 @@ fun SiriRemoteSettings(onGoBack: () -> Unit) {
                     onOptionSelected = {
                         status = status.copy(wakeFromRemote = it)
                         scope.launch { SiriRemoteClient.configure("wakeFromRemote" to it) }
+                    },
+                    onBack = onGoBack
+                )
+                Spacer(Modifier.height(12.dp))
+                val (selfOn, shizukuUp, shizukuOk) = selfStart
+                Text(
+                    "Start the remote again after the TV restarts, without a PC. This needs the free Shizuku app: install it, start it once on the TV, then turn this on and allow Neon when Shizuku asks." +
+                        when {
+                            !shizukuUp -> " Shizuku is not running yet."
+                            !shizukuOk && selfOn -> " Waiting for you to allow Neon in Shizuku."
+                            selfOn && shizukuOk -> " On: Neon will start the remote by itself."
+                            else -> ""
+                        },
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = Color.White.copy(0.6f),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                VoidSegmentedControl(
+                    options = listOf("Start at restart (Shizuku)" to true, "Off" to false),
+                    selectedOption = selfOn,
+                    onOptionSelected = { on ->
+                        com.lumera.app.siri.ShizukuBridge.setEnabled(context, on)
+                        selfStart = selfStart.copy(first = on)
+                        if (on) {
+                            if (!com.lumera.app.siri.ShizukuBridge.granted()) com.lumera.app.siri.ShizukuBridge.requestPermission()
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.lumera.app.siri.ShizukuBridge.startBridge(context) }
+                        }
                     },
                     onBack = onGoBack
                 )
