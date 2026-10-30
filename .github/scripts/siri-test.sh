@@ -77,6 +77,7 @@ frames=$(sed -n 's/.*voice: \([0-9]*\) frames.*/\1/p' "$OUT/voice.log" | tail -1
 rms=$(sed -n 's/.*voice: .* rms \([0-9]*\),.*/\1/p' "$OUT/voice.log" | tail -1)
 [ "${frames:-0}" -ge 75 ] && ok "voice: $frames frames reached the voice screen" || fail "voice: only ${frames:-0} of 80 frames reached the voice screen"
 [ "${rms:-0}" -ge 1500 ] && ok "voice: decoded sound is loud enough (rms $rms)" || fail "voice: decoded sound too quiet (rms ${rms:-0}), the decoder did not work"
+grep -q "voice: introduced to com.neontokyo.siritest: true" "$OUT/voice.log" && ok "voice: Neon Tokyo lets the recognizer see it" || fail "voice: Neon Tokyo could not bind to the recognizer"
 grep -q "fake recognizer: listening, source true, 16000 Hz, 1 ch" "$OUT/voice.log" && ok "voice: the recognizer got the sound at 16 kHz mono" || fail "voice: the recognizer did not get the sound as it expects"
 grep -q "voice heard: öppna Hikari" "$OUT/voice.log" && ok "voice: the tone came through clean (440 Hz)" || fail "voice: the sound arrived changed: $(grep 'fake recognizer: [0-9]' "$OUT/voice.log")"
 grep -q "voice action: OpenApp(packageName=com.neontokyo.siritest" "$OUT/voice.log" && ok "voice: 'öppna Hikari' opens the app" || fail "voice: the command was not understood"

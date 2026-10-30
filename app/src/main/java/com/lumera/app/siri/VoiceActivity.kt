@@ -2,7 +2,9 @@ package com.lumera.app.siri
 
 import android.Manifest
 import android.app.SearchManager
+import android.content.ComponentName
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.MediaCodec
@@ -10,8 +12,11 @@ import android.media.MediaFormat
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.provider.Settings
 import android.speech.RecognitionListener
+import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
@@ -80,6 +85,8 @@ class VoiceActivity : ComponentActivity() {
     @Volatile private var press = 0
     /** Recognizers tried for this press, so a failing one hands over to the next. */
     private var attempt = 0
+    /** Our link to the TV's recognizer, see [introduce]. */
+    private var introduced: ServiceConnection? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,6 +128,7 @@ class VoiceActivity : ComponentActivity() {
         val mine = ++press
         val t = tap
         thread(name = "siri-voice") { pump(t, mine) }
+        introduce()
         if (!listen(0)) {
             remember("no speech recognizer on this TV")
             Log.w(TAG, "voice: no speech recognizer on this TV")
@@ -274,6 +282,27 @@ class VoiceActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Android checks the microphone permission along the chain recognizer -> Neon Tokyo, and the
+     * recognizer has to be able to see Neon Tokyo's package for that (Android 11+ hides apps from
+     * each other). Google's sees every app; one that does not would turn every voice search down.
+     * Binding to an app's service lets that app see us, so we bind to the TV's recognizer first.
+     */
+    private fun introduce() {
+        if (introduced != null) return
+        val name = Settings.Secure.getString(contentResolver, "voice_recognition_service")
+            ?.let { ComponentName.unflattenFromString(it) } ?: return
+        val conn = object : ServiceConnection {
+            override fun onServiceConnected(n: ComponentName?, b: IBinder?) {}
+            override fun onServiceDisconnected(n: ComponentName?) {}
+        }
+        val bound = runCatching {
+            bindService(Intent(RecognitionService.SERVICE_INTERFACE).setComponent(name), conn, BIND_AUTO_CREATE)
+        }.getOrDefault(false)
+        if (bound) introduced = conn else runCatching { unbindService(conn) }
+        Log.i(TAG, "voice: introduced to ${name.packageName}: $bound")
+    }
+
     private fun closeSource() {
         runCatching { sourceForRecognizer?.close() }
         sourceForRecognizer = null
@@ -362,6 +391,8 @@ class VoiceActivity : ComponentActivity() {
 
     override fun onDestroy() {
         stopAll()
+        introduced?.let { runCatching { unbindService(it) } }
+        introduced = null
         super.onDestroy()
     }
 
