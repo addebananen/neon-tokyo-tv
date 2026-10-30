@@ -254,6 +254,9 @@ interface AddonDao {
     @Query("SELECT * FROM watch_history WHERE $WATCHING AND scrobbled = 1 AND watched = 1")
     suspend fun getScrobbledWatchedItems(): List<WatchHistoryEntity>
 
+    @Query("SELECT * FROM watch_history WHERE $WATCHING AND scrobbled = 0")
+    suspend fun getUnscrobbledItems(): List<WatchHistoryEntity>
+
     @Query("SELECT id FROM watch_history WHERE $WATCHING AND watched = 1")
     fun getWatchedIds(): Flow<List<String>>
 
