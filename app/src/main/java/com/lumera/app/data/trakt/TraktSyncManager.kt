@@ -7,6 +7,10 @@ import com.lumera.app.data.model.WatchHistoryEntity
 import com.lumera.app.data.model.WatchlistEntity
 import com.lumera.app.data.model.trakt.TraktIds
 import com.lumera.app.data.model.trakt.TraktPlaybackItem
+import com.lumera.app.data.model.trakt.TraktScrobbleEpisode
+import com.lumera.app.data.model.trakt.TraktScrobbleMovie
+import com.lumera.app.data.model.trakt.TraktScrobbleRequest
+import com.lumera.app.data.model.trakt.TraktScrobbleShow
 import com.lumera.app.data.model.trakt.TraktSyncEpisode
 import com.lumera.app.data.model.trakt.TraktSyncItem
 import com.lumera.app.data.model.trakt.TraktSyncRequest
@@ -14,6 +18,7 @@ import com.lumera.app.data.model.trakt.TraktSyncSeason
 import com.lumera.app.data.model.trakt.TraktWatchlistItem
 import com.lumera.app.data.remote.TraktSyncApiService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -29,6 +34,9 @@ class TraktSyncManager @Inject constructor(
 ) {
     companion object {
         private const val TAG = "TraktSyncManager"
+        // Half-seen titles handed to Trakt per run; each is its own request, kept under Trakt's 1 POST/s
+        private const val MAX_PAUSED_PUSH = 30
+        private const val PAUSED_PUSH_GAP_MS = 1_100L
     }
 
     private val syncMutex = Mutex()
@@ -222,6 +230,95 @@ class TraktSyncManager @Inject constructor(
     }
 
     // ── Watch History (mark as watched) ──
+
+    /**
+     * Hands Trakt what this profile watched before it was linked (or while Trakt was out of reach):
+     * finished titles go into the watched history with their own dates, half-seen ones become
+     * paused playback so other apps on the same Trakt account offer to resume them.
+     * Runs before the pulls, which would otherwise read a local item Trakt has never seen as
+     * one cleared on Trakt. Items Trakt can't place (no IMDb id) stay local.
+     */
+    suspend fun pushLocalHistory() {
+        if (traktAuthManager.getAccessToken() == null) return
+        withContext(Dispatchers.IO) {
+            try {
+                val pending = dao.getUnscrobbledItems().filter { it.id.startsWith("tt") }
+                if (pending.isEmpty()) return@withContext
+                val (finished, started) = pending.partition { it.watched }
+                if (finished.isNotEmpty()) pushWatchedHistory(finished)
+                started
+                    // Trakt keeps no playback under 1%, and the next pull would then drop the local one
+                    .filter { it.duration > 0L && it.position * 100 >= it.duration }
+                    .sortedByDescending { it.lastWatched }
+                    .take(MAX_PAUSED_PUSH)
+                    .forEach { item ->
+                        pushPaused(item)
+                        delay(PAUSED_PUSH_GAP_MS)
+                    }
+            } catch (e: Exception) {
+                Log.w(TAG, "Local history push failed", e)
+            }
+        }
+    }
+
+    private suspend fun pushWatchedHistory(items: List<WatchHistoryEntity>) {
+        val movies = mutableListOf<TraktSyncItem>()
+        val episodesByShow = mutableMapOf<String, MutableMap<Int, MutableList<TraktSyncEpisode>>>()
+        val sent = mutableListOf<WatchHistoryEntity>()
+        for (item in items) {
+            val watchedAt = isoTimestamp(item.lastWatched)
+            if (item.type == "series") {
+                val (showId, season, episode) = parseEpisodeId(item.id) ?: continue
+                episodesByShow.getOrPut(showId) { mutableMapOf() }
+                    .getOrPut(season) { mutableListOf() }
+                    .add(TraktSyncEpisode(episode, watchedAt))
+            } else {
+                movies.add(TraktSyncItem(ids = TraktIds(imdb = item.id), watchedAt = watchedAt))
+            }
+            sent.add(item)
+        }
+        if (sent.isEmpty()) return
+        val shows = episodesByShow.map { (showId, seasons) ->
+            TraktSyncItem(
+                ids = TraktIds(imdb = showId),
+                seasons = seasons.map { (number, episodes) -> TraktSyncSeason(number, episodes) }
+            )
+        }
+        val response = traktSyncApi.addToHistory(
+            TraktSyncRequest(movies = movies.ifEmpty { null }, shows = shows.ifEmpty { null })
+        )
+        Log.i(TAG, "Pushed ${sent.size} watched items: ${response.code()}")
+        if (response.isSuccessful) sent.forEach { dao.upsertHistory(it.copy(scrobbled = true)) }
+    }
+
+    private suspend fun pushPaused(item: WatchHistoryEntity) {
+        val progress = (item.position.toFloat() / item.duration * 100f).coerceIn(0f, 100f)
+        val request = if (item.type == "series") {
+            val (showId, season, episode) = parseEpisodeId(item.id) ?: return
+            TraktScrobbleRequest(
+                show = TraktScrobbleShow(ids = TraktIds(imdb = showId)),
+                episode = TraktScrobbleEpisode(season = season, number = episode),
+                progress = progress
+            )
+        } else {
+            TraktScrobbleRequest(movie = TraktScrobbleMovie(ids = TraktIds(imdb = item.id)), progress = progress)
+        }
+        val response = traktSyncApi.scrobblePause(request)
+        Log.d(TAG, "Pushed paused ${item.title} at ${"%.0f".format(progress)}%: ${response.code()}")
+        if (response.isSuccessful) dao.upsertHistory(item.copy(scrobbled = true))
+    }
+
+    /** "tt123:2:5" or "tt123:2:5:0" (with stream index) is show tt123, season 2, episode 5. */
+    private fun parseEpisodeId(id: String): Triple<String, Int, Int>? {
+        val parts = normalizePlaybackId(id).split(":")
+        if (parts.size < 3) return null
+        val season = parts[parts.size - 2].toIntOrNull() ?: return null
+        val episode = parts.last().toIntOrNull() ?: return null
+        return Triple(parts.dropLast(2).joinToString(":"), season, episode)
+    }
+
+    private fun isoTimestamp(epochMs: Long): String? =
+        if (epochMs > 0L) java.time.Instant.ofEpochMilli(epochMs).toString() else null
 
     /**
      * Mark a movie as watched on Trakt.

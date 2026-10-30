@@ -83,7 +83,8 @@ class MainViewModel @Inject constructor(
         if (!traktAuthManager.isConnected.value) return
 
         traktSyncJob = viewModelScope.launch(Dispatchers.IO) {
-            // Immediate full sync on login
+            // Immediate full sync on login; what was watched here before Trakt was linked goes up first
+            traktSyncManager.pushLocalHistory()
             traktSyncManager.syncWatchlist()
             traktSyncManager.syncPlaybackProgress()
             traktSyncManager.syncSeriesNextUp()
