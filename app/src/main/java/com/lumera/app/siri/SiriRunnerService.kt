@@ -7,7 +7,7 @@ import android.util.Log
  * run the one shell command Neon hands it — the bridge's launch loop — and return its output.
  * Shizuku only starts it after the owner has granted Neon access.
  */
-class SiriRunnerService : ISiriRunner.Stub {
+class SiriRunnerService : ISiriRunner.Stub() {
     override fun run(command: String): String {
         Log.i("NeonSiriRunner", "running: $command")
         return runCatching {
