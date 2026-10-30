@@ -419,7 +419,7 @@ private fun ListPage(model: CcModel, page: CcPage) {
         Spacer(Modifier.height(8.dp))
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 430.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 390.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             userScrollEnabled = false
         ) {
