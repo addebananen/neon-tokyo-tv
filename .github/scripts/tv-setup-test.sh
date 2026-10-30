@@ -66,6 +66,7 @@ run -Ip 192.168.1.77:41234 -Step extras
 check "the overlays are on, next to the service that was there" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader:com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService ]'
 check "Neon Tokyo may switch them and ask the TV about video" 'grep -qx android.permission.WRITE_SECURE_SETTINGS "$FAKE_ADB_STATE/granted" && grep -qx android.permission.DUMP "$FAKE_ADB_STATE/granted"'
 check "the music widget may see what plays" 'grep -q NowPlayingListener "$FAKE_ADB_STATE/listener"'
+check "the Control Center may name Wi-Fi networks and switch Do Not Disturb" 'grep -qx android.permission.ACCESS_FINE_LOCATION "$FAKE_ADB_STATE/granted" && grep -q com.neontokyo.tv "$FAKE_ADB_STATE/dnd"'
 run -Ip 192.168.1.77:41234 -Step extras
 check "running extras twice lists the overlays once" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader:com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService ]'
 
@@ -85,6 +86,7 @@ check "window animations restored" '[ "$(setting global/window_animation_scale)"
 check "Ambient mode is the screensaver again" '[ "$(setting secure/screensaver_components)" = com.google.android.apps.tv.dreamx/.service.Backdrop ]'
 check "the Google TV home screen opens on Home again" 'grep -q launcherx "$FAKE_ADB_STATE/home"'
 check "Neon Home's Home button entry is off after undo" '[ ! -f "$FAKE_ADB_STATE/neonhome" ]'
+check "the Control Center's grants are taken back by undo" '! grep -qx android.permission.ACCESS_FINE_LOCATION "$FAKE_ADB_STATE/granted" && [ ! -f "$FAKE_ADB_STATE/dnd" ]'
 check "only the service that was there before is on after undo" '[ "$(setting secure/enabled_accessibility_services)" = com.example.reader/.Reader ]'
 check "the permissions and the listener are taken back" '[ ! -s "$FAKE_ADB_STATE/granted" ] && [ ! -f "$FAKE_ADB_STATE/listener" ]'
 check "the Siri Remote bridge is stopped after undo" '[ ! -f "$FAKE_ADB_STATE/siri" ]'

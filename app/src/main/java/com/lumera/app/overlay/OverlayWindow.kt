@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
@@ -36,6 +37,8 @@ internal class OverlayWindow(
     private val context: Context,
     private val gravity: Int,
     private val exitMs: Long,
+    /** The whole screen, for a panel that dims what is behind it. */
+    private val fullScreen: Boolean = false,
     private val content: @Composable (shown: Boolean) -> Unit
 ) : LifecycleOwner, SavedStateRegistryOwner {
     private val registry = LifecycleRegistry(this)
@@ -63,11 +66,13 @@ internal class OverlayWindow(
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             // Right-aligned in a window as wide as the screen: a window that wraps its content is
             // measured at the narrow dialog width first, which squeezed the HUD's chips
-            setContent { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) { content(shown.value) } }
+            setContent {
+                Box(if (fullScreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) { content(shown.value) }
+            }
         }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (fullScreen) WindowManager.LayoutParams.MATCH_PARENT else WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -125,5 +130,6 @@ internal class OverlayWindow(
     companion object {
         const val RIGHT = Gravity.END or Gravity.CENTER_VERTICAL
         const val TOP_RIGHT = Gravity.END or Gravity.TOP
+        const val FULL = Gravity.FILL
     }
 }

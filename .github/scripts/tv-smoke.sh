@@ -136,6 +136,28 @@ if focused and focused[-1]:
 '
 }
 
+# focused_poster: the content description inside the focused element (a poster's title)
+focused_poster() {
+  timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
+  adb shell cat /sdcard/ui.xml 2>/dev/null | python3 -c '
+import re, sys
+xml = sys.stdin.read()
+nodes = re.findall(r"<node [^>]*>", xml)
+def box(node):
+    m = re.search(r"bounds=\"\[(\d+),(\d+)\]\[(\d+),(\d+)\]\"", node)
+    return tuple(map(int, m.groups())) if m else None
+focused = [box(n) for n in nodes if "focused=\"true\"" in n]
+if focused and focused[-1]:
+    x1, y1, x2, y2 = focused[-1]
+    for n in nodes:
+        t = re.search(r"content-desc=\"([^\"]*)\"", n)
+        b = box(n)
+        if t and t.group(1) and b and b[0] >= x1 - 12 and b[1] >= y1 - 12 and b[2] <= x2 + 12 and b[3] <= y2 + 12:
+            print(t.group(1))
+            break
+'
+}
+
 # focused_width: the width in pixels of the element that has the D-pad focus
 focused_width() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
@@ -289,6 +311,35 @@ video_from_phone() {
   state=$(curl -s -m 5 "$base/status")
   echo "$state" | grep -q '"done"' || fail "the phone was told $state instead of done"
   adb forward --remove tcp:18081 >/dev/null 2>&1
+  return 0
+}
+
+# video_from_phone_page: a large phone video, sent by the real upload page in a real browser at an
+# address that, like the TV's own, is not "secure" (so the page gets no screen wake lock), thrown
+# away halfway and picked again. The TV must end up with it whole, made 1920x1080 for its screen
+video_from_phone_page() {
+  local ip port token video
+  read -r ip port token < <(photo_address)
+  if [ -z "${token:-}" ]; then fail "the video dialog shows no address the second time"; return 1; fi
+  adb forward tcp:18082 tcp:"$port" >/dev/null
+  if ! command -v ffmpeg >/dev/null; then fail "no ffmpeg on the test machine to make a large video"; return 1; fi
+  video="$OUT/phone-video.mp4"
+  # An upright phone film at 60 frames a second, about 250 MB: noise keeps it from squeezing
+  ffmpeg -loglevel error -y -f lavfi -i "testsrc2=s=720x1280:r=60,noise=alls=50:allf=t+u" \
+    -f lavfi -i "sine=frequency=440:sample_rate=48000" -t 5 -c:v libx264 -preset ultrafast -crf 6 \
+    -pix_fmt yuv420p -c:a aac -shortest "$video"
+  echo "large phone video: $(stat -c %s "$video") bytes"
+  adb logcat -c
+  NODE_PATH="${PHONE_NODE_PATH:-}" timeout 600 node "$(dirname "$0")/phone-page-test.js" \
+    "http://tv.lan:18082/$token" "$video" "http://127.0.0.1:18082/$token/status" 2>&1 | tee "$OUT/phone-page.txt"
+  grep -q "^FAIL" "$OUT/phone-page.txt" && sed -n 's/^FAIL: //p' "$OUT/phone-page.txt" | while read -r why; do fail "phone page: $why"; done
+  grep -q "page ends on \"done\"" "$OUT/phone-page.txt" || fail "the phone page never finished sending the large video"
+  if ! wait_for "Your video is on" 60; then fail "the TV never took the large video"; rm -f "$video"; return 1; fi
+  made=$(adb logcat -d -s DreamVideoShrink:I | grep -o "shrunk .*" | tail -n 1)
+  echo "large video made: ${made:-nothing}"
+  echo "$made" | grep -q "as 1920x1080" || fail "the large upright video was not made 1920x1080 for the TV (${made:-not made})"
+  rm -f "$video"
+  adb forward --remove tcp:18082 >/dev/null 2>&1
   return 0
 }
 
@@ -462,7 +513,7 @@ key BACK
 sleep 1
 key BACK
 sleep 3
-if ! screen_has "Streaming services"; then fail "Back did not return from the folder to home"; fi
+if ! wait_for "Streaming services" 15; then fail "Back did not return from the folder to home"; fi
 shot hub-back
 
 # --- Browse rows ---------------------------------------------------------
@@ -624,12 +675,69 @@ else
     shot livetv-search
     screen_has "Neon Sport" || fail "searching for sport did not find Neon Sport"
     screen_has "Morning Neon" && fail "searching for sport still lists Neon One" || true
+    # A provider the size of a real one (40 000 channels, a 15 000 channel guide) froze the TV on
+    # "Tuning in the channels": change to it from Service settings and check the TV keeps up
+    key DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN DPAD_DOWN
+    sleep 2
+    label=$(focused_label)
+    if [ "$label" != "Service settings" ]; then
+      fail "could not reach Service settings in Live TV, focus on: $label"
+    else
+      key DPAD_CENTER
+      sleep 2
+      key DPAD_DOWN
+      sleep 1
+      key DPAD_CENTER
+      sleep 3
+      shot livetv-big-setup
+      read -r ip port token < <(photo_address)
+      if [ -z "${token:-}" ]; then
+        fail "Change service did not open the setup dialog"
+      else
+        adb forward tcp:18082 tcp:"$port" >/dev/null
+        adb logcat -c
+        big_started=$(date +%s)
+        big=$(curl -s -m 30 -d kind=xtream -d server="10.0.2.2:$IPTV_PORT" -d user=big -d pass=tokyo "http://127.0.0.1:18082/$token")
+        echo "big login: $big"
+        adb forward --remove tcp:18082 >/dev/null 2>&1
+        sleep 4
+        shot livetv-big-loading
+        if wait_for "40000 channels" 240; then
+          echo "big provider: list shown after $(( $(date +%s) - big_started )) s" | tee "$OUT/livetv-big.txt"
+          shot livetv-big-list
+          # The guide comes in after the list; wait for it, then the list must still answer the remote
+          t=0
+          until adb logcat -d -s LiveTv:I | grep -q "Guide for"; do
+            [ "$t" -ge 240 ] && break
+            sleep 5
+            t=$((t + 5))
+          done
+          adb logcat -d -s LiveTv:I LiveTv:W | tee -a "$OUT/livetv-big.txt"
+          adb logcat -d -s LiveTv:I | grep -q "Guide for" || fail "the big provider's guide did not load (see livetv-big.txt)"
+          before=$(focused_label)
+          key DPAD_DOWN DPAD_DOWN DPAD_DOWN
+          sleep 2
+          after=$(focused_label)
+          echo "focus moved from '$before' to '$after'" | tee -a "$OUT/livetv-big.txt"
+          [ -n "$after" ] && [ "$after" != "$before" ] || fail "Live TV did not answer the remote with 40 000 channels"
+          key DPAD_RIGHT
+          sleep 2
+          shot livetv-big-channels
+          adb shell dumpsys meminfo "$PKG" 2>/dev/null | grep -E "TOTAL|Java Heap" | tee -a "$OUT/livetv-big.txt"
+        else
+          fail "40 000 channels from the big provider did not show within four minutes"
+          shot livetv-big-failed
+        fi
+        adb logcat -d 2>/dev/null | grep -E "ANR in $PKG|FATAL EXCEPTION|OutOfMemoryError" | tee -a "$OUT/livetv-big.txt" | grep -q . &&
+          fail "the big provider made the app stop answering or crash (see livetv-big.txt)" || true
+        alive livetv-big
+      fi
+    fi
   else
     fail "the Live TV channels did not load from the pretend provider"
     shot livetv-failed
   fi
 fi
-kill "$IPTV_PID" 2>/dev/null
 menu_go Search
 sleep 6
 shot search-tab
@@ -639,6 +747,69 @@ shot search-results
 key DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT
 sleep 2
 shot search-results-focus
+# --- The IPTV service's own films and series as sources ----------------------
+# The pretend provider (still the big login from Live TV) has Dune (2021) and Dune: Prophecy
+# among 35 000 titles; both must turn up first in the sources panel, marked [IPTV]
+key DPAD_LEFT DPAD_LEFT DPAD_LEFT
+sleep 2
+vod_title=$(focused_poster)
+echo "search focus for the film: $vod_title"
+if [ "$vod_title" != "Dune" ]; then
+  fail "could not reach Dune in the search results for the IPTV film, focus on: $vod_title"
+else
+  adb logcat -c
+  key DPAD_CENTER
+  sleep 10
+  key DPAD_CENTER
+  if wait_for '\[IPTV\]' 45; then
+    shot vod-movie-sources
+    adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
+    # The service's copy comes first, so OK on the panel's first row plays it
+    key DPAD_CENTER
+    sleep 8
+    shot vod-movie-playing
+    if adb logcat -d 2>/dev/null | grep -qE "ExoPlaybackException|PlaybackException"; then fail "the IPTV film did not play (player error in the log)"; fi
+    alive vod-movie
+    key BACK
+    sleep 3
+    screen_has "Dune" || key BACK
+  else
+    shot vod-movie-none
+    adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
+    fail "the sources for Dune (2021) have no [IPTV] entry from the service (see vod.txt)"
+  fi
+  # Back to the search results, then the series row below
+  for _ in 1 2 3; do
+    screen_has 'text="Series"' && break
+    key BACK
+    sleep 3
+  done
+  key DPAD_DOWN
+  sleep 2
+  vod_series=$(focused_poster)
+  echo "search focus for the series: $vod_series"
+  if [ "$vod_series" != "Dune: Prophecy" ]; then
+    fail "could not reach Dune: Prophecy in the search results, focus on: $vod_series"
+  else
+    key DPAD_CENTER
+    sleep 10
+    shot vod-series-details
+    key DPAD_CENTER
+    if wait_for '\[IPTV\]' 45; then
+      shot vod-series-sources
+      screen_has "S01E01" || fail "the IPTV source for Dune: Prophecy is not episode 1 of season 1"
+    else
+      shot vod-series-none
+      adb logcat -d -s VodLibrary:I | tee -a "$OUT/vod.txt"
+      fail "the sources for Dune: Prophecy S1E1 have no [IPTV] entry from the service (see vod.txt)"
+    fi
+    key BACK
+    sleep 2
+    key BACK
+    sleep 3
+  fi
+fi
+kill "$IPTV_PID" 2>/dev/null
 menu_go Settings
 sleep 5
 shot settings
@@ -687,6 +858,23 @@ if focus_down_to "Preview" 8; then
         sleep 2
         screen_has "Change video" || fail "Settings offers no Change video once a video is on"
         shot settings-video
+        # The same, once more, with a large video from the real phone page
+        key DPAD_DOWN
+        sleep 1
+        # Down lands under the row's focused button: step left first, then along to Change video
+        for _ in 1 2; do [ "$(focused_label)" = "Change video" ] && break; key DPAD_LEFT; sleep 0.8; done
+        if focus_right_to "Change video" 3; then
+          key DPAD_CENTER
+          if wait_for "Your own video" 12; then
+            if video_from_phone_page; then shot video-large-ready; fi
+            key BACK
+            sleep 3
+          else
+            fail "Change video did not open the video dialog"
+          fi
+        else
+          fail "could not reach Change video"
+        fi
       fi
     else
       fail "Your video did not open the video dialog"
@@ -1054,6 +1242,21 @@ label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Ice Lake with square icons does not start on YouTube ($label has the focus)"
 key BACK; sleep 2
 
+# Each focus motion a profile can pick for liquid glass, on Deep Blue: the focus lands on YouTube,
+# moves right (so the motion knows which way it came) and back, and the home screen keeps it
+for motion in glow breathe tilt liquid rim drop layers; do
+  adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style deepblue --es focus "$motion" >/dev/null 2>&1
+  sleep 5
+  key DPAD_RIGHT; sleep 2
+  label=$(focused_label)
+  { [ -n "$label" ] && [ "$label" != "YouTube" ]; } || fail "Deep Blue with the $motion focus motion did not move the focus right ($label has it)"
+  case "$motion" in tilt|layers) shot "focus-$motion" ;; esac
+  key DPAD_LEFT; sleep 2
+  label=$(focused_label)
+  [ "$label" = "YouTube" ] || fail "Deep Blue with the $motion focus motion did not come back to YouTube ($label has the focus)"
+  key BACK; sleep 2
+done
+
 # The app icon packs: the apps' own icons and banners, read from the apps on the TV, on Home and
 # on the All apps tab. Apps the emulator lacks keep their neon face
 for pack in original banner glass; do
@@ -1310,6 +1513,46 @@ overlay_on || fail "the gaming HUD did not open"
 overlay_shot overlay-hud
 sleep 6
 if overlay_on; then fail "the gaming HUD did not go by itself after 6 seconds"; fi
+
+# Its setup card, which Neon Home shows once on a real TV: with the overlays on, only the Wi-Fi
+# names are left to allow
+adb shell am start -n "$PKG/com.lumera.app.control.ControlSetupActivity" >> "$OUT/overlay.txt" 2>&1
+sleep 2.5
+overlay_shot control-setup
+adb shell input keyevent BACK
+sleep 1
+
+# The Control Center: a held Home opens it on a real remote; here the broadcast the Siri Remote
+# bridge sends does. Each list page is opened straight away, with made-up headphones for the sound
+adb shell pm grant "$PKG" android.permission.ACCESS_FINE_LOCATION >> "$OUT/overlay.txt" 2>&1
+adb shell pm grant "$PKG" android.permission.ACCESS_COARSE_LOCATION >> "$OUT/overlay.txt" 2>&1
+adb shell screenrecord --time-limit 5 --size 1280x720 --bit-rate 6000000 /sdcard/control.mp4 >> "$OUT/overlay.txt" 2>&1 &
+recorder=$!
+sleep 0.5
+overlay control
+sleep 2
+overlay_on || fail "the Control Center did not open"
+overlay_shot control-center
+sleep 1
+overlay off
+wait "$recorder" 2>/dev/null || true
+adb pull /sdcard/control.mp4 "$OUT/control-center.mp4" > /dev/null 2>&1 || true
+sleep 1
+if overlay_on; then fail "the Control Center did not go away"; fi
+adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
+  fail "the Control Center took the app out of front"
+# adb shell joins its words into one line for the TV's shell, so the device list is quoted twice
+adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show control:audio --es devices "'AirPods Pro,Erika AirPods,JBL Flip 6'" >/dev/null 2>&1
+sleep 2
+overlay_shot control-sound
+for page in wifi profiles sleep; do
+  overlay "control:$page"
+  sleep 1.5
+  overlay_shot "control-$page"
+done
+overlay off
+sleep 1
+if overlay_on; then fail "the Control Center did not go away from a list page"; fi
 adb shell settings put global animator_duration_scale 0
 if [ -z "$overlay_before" ] || [ "$overlay_before" = null ]; then
   adb shell settings delete secure enabled_accessibility_services > /dev/null 2>&1
@@ -1318,7 +1561,7 @@ else
 fi
 sleep 1
 
-adb logcat -d -s NeonOverlay Dumps >> "$OUT/overlay.txt" 2>&1
+adb logcat -d -s NeonOverlay Dumps ControlCenter >> "$OUT/overlay.txt" 2>&1
 
 if [ "$MODE" = full ]; then
 # --- Fast scrolling stress: hold-down equivalent ------------------------------
@@ -1410,14 +1653,28 @@ adb shell settings put global animator_duration_scale 1
 adb shell screenrecord --time-limit 5 --size 1280x720 /sdcard/power-off.mp4 > "$OUT/power-off-record.txt" 2>&1 &
 REC_PID=$!
 sleep 1.5
-adb shell input keyevent KEYCODE_BACK KEYCODE_BACK
-sleep 3
+app_in_front() {
+  adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY"
+}
+# Two input commands side by side: one command sending both waits for the app to finish with
+# the first press before it sends the second, which on the software-drawn emulator can be
+# later than the app's 700 ms for a double press, where a remote's two presses are not. Each
+# command starts its own Java first, and on the emulator that alone can take them more than
+# 700 ms apart, so a pair that came apart is sent again, up to three times
+for attempt in 1 2 3; do
+  adb shell 'input keyevent KEYCODE_BACK & input keyevent KEYCODE_BACK & wait'
+  sleep 3
+  app_in_front || break
+  echo "double Back attempt $attempt: the presses came apart, sending them again"
+  menu_go Home
+  sleep 3
+done
 wait "$REC_PID" 2>/dev/null
 adb shell settings put global animator_duration_scale 0
 adb pull /sdcard/power-off.mp4 "$OUT/power-off.mp4" > /dev/null 2>&1 || true
 shot after-power-off noalive
 # Neon Home, still open from its own steps, may come back up behind: it is the same package
-if adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY"; then
+if app_in_front; then
   fail "two quick presses of Back did not close the app"
 fi
 

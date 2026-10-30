@@ -350,7 +350,7 @@ internal fun HomeBluetoothDialog(
                 if (bt.available && permitted && devices.isNotEmpty()) {
                     BasicText(
                         "Devices marked as yours pop up in the corner when they're switched on, on your home screen only." +
-                            if (Build.VERSION.SDK_INT >= 33 && !BluetoothHelper.canTurnOn(context)) " This TV connects from its own Bluetooth page; Connect opens it." else "",
+                            if (Build.VERSION.SDK_INT >= 33 && !BluetoothHelper.available(context)) " This TV connects from its own Bluetooth page; Connect opens it." else "",
                         style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = look.dim),
                         modifier = Modifier.padding(top = 2.dp)
                     )

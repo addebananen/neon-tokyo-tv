@@ -6,6 +6,7 @@ import android.util.Log
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import androidx.lifecycle.lifecycleScope
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -727,15 +728,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (!isFinishing) stoppedAt = SystemClock.elapsedRealtime()
+        if (!isFinishing) {
+            stoppedAt = SystemClock.elapsedRealtime()
+            // Looked up while away, so coming back does not wait on the database
+            lifecycleScope.launch(Dispatchers.IO) { splashOnReturn = splashEnabled() }
+        }
     }
+
+    @Volatile
+    private var splashOnReturn = true
 
     // Back after a while away (Home pressed, the TV asleep), the app switches on with its intro
     override fun onRestart() {
         super.onRestart()
         val away = SystemClock.elapsedRealtime() - stoppedAt
         if (stoppedAt == 0L || away < INTRO_AGAIN_AFTER_MS || splashOverlay != null || poweringOff) return
-        if (!NeonIntroView.animationsOn(this) || !splashEnabled()) return
+        if (!NeonIntroView.animationsOn(this) || !splashOnReturn) return
         attachSplashOverlay()
         // Everything under it is already there, so it leaves as soon as it has played
         onSplashAppReady()

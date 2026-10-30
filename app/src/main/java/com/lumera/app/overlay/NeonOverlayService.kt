@@ -1,6 +1,7 @@
 package com.lumera.app.overlay
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -14,6 +15,10 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
+import com.lumera.app.control.CcPage
+import com.lumera.app.control.ControlCenter
+import com.lumera.app.launcher.BluetoothHelper
+import com.lumera.app.launcher.SettingsHand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,13 +38,17 @@ import kotlinx.coroutines.withContext
  * it only watches the buttons for its two chords and which app is in front.
  *
  * Hold Up and Down together for 2 s: picture diagnostics. Hold Left and Right: the gaming HUD.
- * The same chord again, or Back for diagnostics, puts them away.
+ * The same chord again, or Back for diagnostics, puts them away. Settings (or a held Home): the Control Center
+ * ([ControlCenter]), which also holds the sleep timer.
  */
 class NeonOverlayService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val chords = ChordDetector(ChordDetector.DEFAULT)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var probe: SignalProbe
+    private var control: ControlCenter? = null
+    /** The hand that presses on the TV's settings pages for the Control Center, lent while this runs. */
+    private val hand = SettingsHand(this) { handOff() }
 
     private var foreground: String? = null
     private var keyLagMs: Int? = null
@@ -56,14 +65,31 @@ class NeonOverlayService : AccessibilityService() {
     /** A console was just started from Neon Home: the HUD comes when its input shows. */
     private var hudWhenConsole = 0L
 
-    /** From a PC: `adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show diagnostics|hud|off|report`. */
+    /**
+     * From a PC: `adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show diagnostics|hud|off|report`.
+     * `--es show control` opens the Control Center (the Siri Remote's held TV button sends it), and
+     * `control:audio|wifi|profiles|sleep` opens it on that page; `--es devices "AirPods,JBL"`
+     * fills its sound list for a preview.
+     */
     private val fromAdb = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getStringExtra("show")) {
                 "diagnostics" -> showDiagnostics()
                 "hud" -> showHud()
-                "off" -> { hideDiagnostics(); hideHud() }
+                "off" -> { hideDiagnostics(); hideHud(); control?.close() }
+                "control" -> control?.toggle()
                 // What diagnostics read now, printed by am broadcast
+                "control:audio", "control:wifi", "control:profiles", "control:sleep", "control:main" -> {
+                    val page = when (intent.getStringExtra("show")) {
+                        "control:audio" -> CcPage.Audio
+                        "control:wifi" -> CcPage.Wifi
+                        "control:profiles" -> CcPage.Profiles
+                        "control:sleep" -> CcPage.Sleep
+                        else -> CcPage.Main
+                    }
+                    val devices = intent.getStringExtra("devices")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+                    control?.open(page, devices)
+                }
                 "report" -> resultData = Dumps.readings(build(layer = null, audioMs = AudioLatency.recent()))
             }
         }
@@ -77,6 +103,12 @@ class NeonOverlayService : AccessibilityService() {
         probe = SignalProbe(this)
         gestures = OverlayPrefs.gestures(this)
         instance = this
+        control?.detach()
+        control = ControlCenter(this, object : ControlCenter.Actions {
+            override fun diagnostics() = showDiagnostics()
+            override fun hud() = showHud()
+        }).also { it.attach() }
+        BluetoothHelper.lent = hand
         // Only the shell and the system hold DUMP, so no app can open the overlays this way
         runCatching { unregisterReceiver(fromAdb) }
         ContextCompat.registerReceiver(this, fromAdb, IntentFilter(ACTION_ADB), "android.permission.DUMP", handler, ContextCompat.RECEIVER_EXPORTED)
@@ -87,6 +119,8 @@ class NeonOverlayService : AccessibilityService() {
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             keyLagMs = (SystemClock.uptimeMillis() - event.eventTime).toInt().takeIf { it in 0..2_000 }
         }
+        // The Control Center first: while it shows, the remote is its own
+        control?.onKey(event)?.let { return it }
         // Back puts diagnostics away and goes no further
         if (event.keyCode == KeyEvent.KEYCODE_BACK && (diagnostics?.isShowing == true || backHeld)) {
             if (event.action == KeyEvent.ACTION_DOWN) backHeld = true
@@ -108,6 +142,10 @@ class NeonOverlayService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (SettingsHand.pending != null) {
+            handOn()
+            hand.step()
+        }
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         // The TV's volume bar and other system panels sit over the app, which stays in front
@@ -127,12 +165,39 @@ class NeonOverlayService : AccessibilityService() {
 
     override fun onInterrupt() = Unit
 
+    private var handWatching = false
+
+    /** While the hand works it follows the page as it changes; the rest of the time it doesn't look. */
+    private fun handOn() {
+        if (handWatching) return
+        handWatching = true
+        serviceInfo?.let { info ->
+            info.eventTypes = info.eventTypes or AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            info.flags = info.flags or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            serviceInfo = info
+        }
+    }
+
+    private fun handOff() {
+        if (!handWatching) return
+        handWatching = false
+        serviceInfo?.let { info ->
+            info.eventTypes = info.eventTypes and AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED.inv()
+            info.flags = info.flags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()
+            serviceInfo = info
+        }
+    }
+
     override fun onDestroy() {
         if (instance === this) instance = null
         runCatching { unregisterReceiver(fromAdb) }
         handler.removeCallbacksAndMessages(null)
         diagnostics?.close()
         hud?.close()
+        control?.detach()
+        control = null
+        if (BluetoothHelper.lent === hand) BluetoothHelper.lent = null
+        hand.stop()
         scope.cancel()
         super.onDestroy()
     }
@@ -278,6 +343,13 @@ class NeonOverlayService : AccessibilityService() {
         private var instance: NeonOverlayService? = null
 
         val running: Boolean get() = instance != null
+
+        /** For Settings' button: opens the Control Center now, false when the service is off. */
+        fun openControlCenter(): Boolean {
+            val service = instance ?: return false
+            service.handler.post { service.control?.open() }
+            return true
+        }
 
         /** For Settings' buttons: shows it now, false when the service is off. */
         fun show(action: ChordAction): Boolean {

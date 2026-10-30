@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+      TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
       SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
       SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
       SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -79,7 +81,11 @@ jobs:
           ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973" cargo ndk -t x86 --platform 26 -o ../../siri-x86 build --release
 
       - name: Write local.properties
-        run: echo "tmdb.api_key=${TMDB_API_KEY}" > local.properties
+        run: |
+          echo "tmdb.api_key=${TMDB_API_KEY}" > local.properties
+          # Trakt sign-in (Settings › Integrations) only works when the build carries a Trakt app id
+          echo "TRAKT_CLIENT_ID=${TRAKT_CLIENT_ID}" >> local.properties
+          echo "TRAKT_CLIENT_SECRET=${TRAKT_CLIENT_SECRET}" >> local.properties
 
       - name: Decode signing key
         if: env.SIGNING_KEYSTORE_BASE64 != ''
@@ -159,6 +165,13 @@ jobs:
           # which resolve when the resource table carries the package name
           "$BT/aapt2" dump resources neon-tokyo-test.apk 2>/dev/null | grep -m1 "Package name" || true
 
+      # A real browser for the phone's upload page, and ffmpeg to make a large phone video for it
+      - name: Phone page tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+          npm install --prefix "$RUNNER_TEMP/phone" --no-save --silent playwright-core@1.48.2
+          echo "PHONE_NODE_PATH=$RUNNER_TEMP/phone/node_modules" >> "$GITHUB_ENV"
+
       # Everyday builds run the quick test; the build for a release on main runs all of it
       - name: Run TV smoke test
         uses: reactivecircus/android-emulator-runner@v2
@@ -173,7 +186,7 @@ jobs:
           ram-size: 3072M
           disk-size: 4096M
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: bash .github/scripts/tv-smoke.sh neon-tokyo-test.apk tv-shots
 

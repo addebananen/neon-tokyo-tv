@@ -37,6 +37,17 @@
     <uses-permission android:name="android.permission.DUMP"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- The Control Center names the Wi-Fi networks, which Android only tells an app allowed to
+         know where the TV is. Granted over ADB by neon-tv.ps1; nothing is located -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <!-- The Control Center's Do Not Disturb switches the TV's own once neon-tv.ps1 allowed it -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -120,6 +131,11 @@
             android:name="com.lumera.app.launcher.NeonHomeSwitch"
             android:exported="true"
             android:permission="android.permission.WRITE_SECURE_SETTINGS" />
+
+        <!-- The in-app update's install session reports here (confirm screen, or failure) -->
+        <receiver
+            android:name="com.lumera.app.data.update.UpdateInstallReceiver"
+            android:exported="false" />
 
         <!-- Picture diagnostics and the gaming HUD over any app or console (Accessibility) -->
         <service
@@ -214,6 +230,14 @@
             android:launchMode="singleTask"
             android:excludeFromRecents="true"
             android:theme="@style/Theme.NeonVoice" />
+
+        <!-- Setting the Control Center up with the remote: Accessibility and Wi-Fi names -->
+        <activity
+            android:name="com.lumera.app.control.ControlSetupActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NeonSheet" />
 
         <activity
             android:name=".dream.NeonDreamPreviewActivity"

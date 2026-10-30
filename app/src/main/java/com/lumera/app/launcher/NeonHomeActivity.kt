@@ -38,6 +38,7 @@ class NeonHomeActivity : ComponentActivity() {
 
     // And in another glass, and laid out otherwise
     private var previewGlass by mutableStateOf<HomeGlass?>(null)
+    private var previewFocus by mutableStateOf<GlassFocus?>(null)
     private var previewLayout by mutableStateOf<Set<String>?>(null)
 
     // And with other apps on the Home row, without changing the ones Adrian put there
@@ -67,6 +68,20 @@ class NeonHomeActivity : ComponentActivity() {
     }
 
     private var stoppedAt = 0L
+
+    override fun onResume() {
+        super.onResume()
+        // New on this TV: the Control Center asks once, with the remote, for what it still needs
+        if (!preview && com.lumera.app.control.ControlSetupActivity.dueOnHome(this)) {
+            window.decorView.postDelayed({
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) &&
+                    com.lumera.app.control.ControlSetupActivity.dueOnHome(this)
+                ) {
+                    com.lumera.app.control.ControlSetupActivity.open(this)
+                }
+            }, SETUP_DELAY_MS)
+        }
+    }
 
     override fun onStop() {
         super.onStop()
@@ -129,6 +144,7 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewTint = intent.getStringExtra(EXTRA_TINT)?.let(IconTint::of)
         if (preview) previewTiles = tilesOf(intent)
         if (preview) previewGlass = HomeGlass.of(intent.getStringExtra(EXTRA_GLASS))
+        if (preview) previewFocus = GlassFocus.of(intent.getStringExtra(EXTRA_FOCUS))
         if (preview) previewLayout = layoutOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         HomeWidgets.preview(if (preview) widgetsOf(intent) else null)
@@ -144,6 +160,7 @@ class NeonHomeActivity : ComponentActivity() {
                 previewTiles = previewTiles,
                 previewGlass = previewGlass,
                 previewLayout = previewLayout,
+                previewFocus = previewFocus,
                 previewWake = previewWake,
                 previewBluetooth = previewBluetooth,
                 previewBluetoothList = previewBluetoothList
@@ -161,6 +178,7 @@ class NeonHomeActivity : ComponentActivity() {
             previewTint = null
             previewTiles = null
             previewGlass = null
+            previewFocus = null
             previewLayout = null
             HomeWidgets.preview(null)
             homePresses.intValue++
@@ -171,6 +189,7 @@ class NeonHomeActivity : ComponentActivity() {
             intent.getStringExtra(EXTRA_TINT)?.let { previewTint = IconTint.of(it) }
             tilesOf(intent)?.let { previewTiles = it }
             HomeGlass.of(intent.getStringExtra(EXTRA_GLASS))?.let { previewGlass = it }
+            GlassFocus.of(intent.getStringExtra(EXTRA_FOCUS))?.let { previewFocus = it }
             layoutOf(intent)?.let { previewLayout = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
             widgetsOf(intent)?.let { HomeWidgets.preview(it) }
@@ -192,6 +211,9 @@ class NeonHomeActivity : ComponentActivity() {
         intent.getStringExtra(EXTRA_LAYOUT)?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
 
     companion object {
+        /** The intro has played and the home screen settled before the setup card comes. */
+        private const val SETUP_DELAY_MS = 4_000L
+
         /** The key of a [HomeStyle] to show a preview in. */
         const val EXTRA_STYLE = "style"
 
@@ -203,6 +225,9 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** The key of a [HomeGlass] to show a preview in. */
         const val EXTRA_GLASS = "glass"
+
+        /** The key of a [GlassFocus] the liquid glass tiles of a preview play. */
+        const val EXTRA_FOCUS = "focus"
 
         /**
          * How to lay a preview out, separated by commas: down (Watch & listen at the foot),

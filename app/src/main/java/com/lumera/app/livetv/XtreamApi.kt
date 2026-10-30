@@ -24,6 +24,10 @@ object XtreamApi {
     fun streamUrl(source: IptvSource.Xtream, streamId: String, format: String) =
         "${source.base}/live/${enc(source.username)}/${enc(source.password)}/$streamId.$format"
 
+    /** Where a film ("movie") or an episode ("series") of the service's library plays from. */
+    fun vodUrl(source: IptvSource.Xtream, kind: String, id: String, ext: String) =
+        "${source.base}/$kind/${enc(source.username)}/${enc(source.password)}/$id.$ext"
+
     fun pickFormat(account: Account): String =
         if (account.formats.isEmpty() || "ts" in account.formats) "ts" else if ("m3u8" in account.formats) "m3u8" else account.formats.first()
 
@@ -87,6 +91,7 @@ object XtreamApi {
     fun readStreams(
         reader: Reader,
         categories: Map<String, String>,
+        onProgress: ((Int) -> Unit)? = null,
         url: (streamId: String) -> String
     ): List<IptvChannel> {
         val out = ArrayList<IptvChannel>()
@@ -123,6 +128,7 @@ object XtreamApi {
                     epgId = epg,
                     number = number ?: (out.size + 1)
                 )
+                if (onProgress != null && out.size % 2000 == 0) onProgress(out.size)
             }
             json.endArray()
         }

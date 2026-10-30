@@ -41,6 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -66,11 +67,13 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Glow
 import androidx.tv.material3.Surface
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -448,7 +451,8 @@ internal fun HomeWidgetsDialog(profile: HomeProfile, onDismiss: () -> Unit) {
     val look = LocalHomeLook.current
     var setup by remember(profile.id) { mutableStateOf(HomeWidgets.get(context, profile.id)) }
     var picking by remember { mutableStateOf(false) }
-    val apps = remember { HomeApps.load(context) }
+    // Listing the TV's apps reads every app's name, which is slow, so the menu opens first
+    val apps by produceState(emptyList<InstalledApp>()) { value = withContext(Dispatchers.IO) { HomeApps.load(context) } }
     val first = remember { FocusRequester() }
     fun save(next: WidgetSetup) {
         setup = next

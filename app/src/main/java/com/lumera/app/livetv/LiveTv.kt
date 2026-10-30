@@ -8,6 +8,7 @@ import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,8 +37,12 @@ object LiveTv {
         /** No service added yet. */
         object Empty : State()
         object Loading : State()
-        data class Ready(val channels: List<IptvChannel>, val refreshing: Boolean = false) : State()
-        data class Failed(val message: String, val channels: List<IptvChannel> = emptyList()) : State()
+        class Ready(val index: ChannelIndex, val refreshing: Boolean = false) : State() {
+            val channels get() = index.channels
+        }
+        class Failed(val message: String, val index: ChannelIndex = ChannelIndex.EMPTY) : State() {
+            val channels get() = index.channels
+        }
     }
 
     /** The type Neon Home puts on the request to open a channel in the app. */
@@ -50,12 +55,18 @@ object LiveTv {
     private const val GUIDE_FRESH_MS = 6 * 60 * 60_000L
     private const val GUIDE_BEHIND_MS = 3 * 60 * 60_000L
     private const val GUIDE_AHEAD_MS = 24 * 60 * 60_000L
+    /** Programmes this soon keep their description; later ones only need a title and a time. */
+    private const val GUIDE_DETAIL_MS = 3 * 60 * 60_000L
 
     private val _state = MutableStateFlow<State>(State.Loading)
     val state: StateFlow<State> = _state.asStateFlow()
 
     private val _guide = MutableStateFlow<Map<String, List<Programme>>>(emptyMap())
     val guide: StateFlow<Map<String, List<Programme>>> = _guide.asStateFlow()
+
+    private val _progress = MutableStateFlow<String?>(null)
+    /** What the first load of a service is doing, for the screen to show under its spinner. */
+    val progress: StateFlow<String?> = _progress.asStateFlow()
 
     private val _wanted = MutableStateFlow<String?>(null)
     /** A channel Neon Home asked to play; Live TV opens and plays it, then clears this. */
@@ -79,6 +90,8 @@ object LiveTv {
             .build()
     }
 
+    // Once only: two threads making the encrypted store at the same time can spoil its key
+    @Synchronized
     private fun init(context: Context) {
         if (prefs != null) return
         val app = context.applicationContext
@@ -138,17 +151,24 @@ object LiveTv {
             }
         }?.commit()
         dir.listFiles()?.forEach { it.delete() }
+        VodLibrary.forget()
         prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
         _guide.value = emptyMap()
+        // A new service: its own channels are tuned in, not the old ones kept on screen meanwhile
+        _state.value = State.Loading
         null
     }
 
     /** Forgets the service and everything fetched from it; favourites stay for a service added later. */
-    fun remove(context: Context) {
-        init(context)
-        secure?.edit()?.clear()?.commit()
-        dir.listFiles()?.forEach { it.delete() }
-        prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
+    suspend fun remove(context: Context) {
+        // The keystore and a big service's files are slow, so they are cleared off the main thread
+        withContext(NonCancellable + Dispatchers.IO) {
+            init(context)
+            secure?.edit()?.clear()?.commit()
+            dir.listFiles()?.forEach { it.delete() }
+            VodLibrary.forget()
+            prefs?.edit()?.remove("channels.at")?.remove("guide.at")?.apply()
+        }
         _guide.value = emptyMap()
         _state.value = State.Empty
     }
@@ -164,30 +184,41 @@ object LiveTv {
                 _state.value = State.Empty
                 return@withContext
             }
-            val kept = (state.value as? State.Ready)?.channels?.takeIf { it.isNotEmpty() } ?: readChannels()
+            val keptIndex = (state.value as? State.Ready)?.index?.takeIf { it.channels.isNotEmpty() }
+                ?: readChannels().takeIf { it.isNotEmpty() }?.let { ChannelIndex.build(it) }
+                ?: ChannelIndex.EMPTY
+            val kept = keptIndex.channels
             if (_guide.value.isEmpty()) readGuide()?.let { _guide.value = it }
             val now = System.currentTimeMillis()
             val channelsAt = prefs?.getLong("channels.at", 0L) ?: 0L
             val stale = force || kept.isEmpty() || now - channelsAt > CHANNELS_FRESH_MS
-            var channels = kept
+            var index = keptIndex
             if (stale) {
-                _state.value = if (kept.isEmpty()) State.Loading else State.Ready(kept, refreshing = true)
+                _state.value = if (kept.isEmpty()) State.Loading else State.Ready(keptIndex, refreshing = true)
                 try {
+                    val started = System.currentTimeMillis()
                     val fetched = fetchChannels(source)
                     if (fetched.channels.isEmpty()) {
-                        _state.value = State.Failed("The service sent no live channels", kept)
+                        _state.value = State.Failed("The service sent no live channels", keptIndex)
                         return@withContext
                     }
-                    channels = fetched.channels
-                    writeChannels(channels)
+                    _progress.value = "Sorting ${count(fetched.channels.size)} channels"
+                    index = ChannelIndex.build(fetched.channels)
+                    writeChannels(fetched.channels)
                     prefs?.edit()?.putLong("channels.at", now)?.putString("guide.url", fetched.guideUrl)?.apply()
-                } catch (e: Exception) {
+                    Log.i(TAG, "${fetched.channels.size} channels in ${index.groups.size} groups, ready in ${System.currentTimeMillis() - started} ms")
+                } catch (e: Throwable) {
+                    // An OutOfMemoryError too: a list too big for the TV must not take the app down
                     Log.w(TAG, "Channels could not be fetched: ${e.javaClass.simpleName}")
-                    _state.value = if (kept.isNotEmpty()) State.Ready(kept) else State.Failed(describe(e))
+                    _state.value = if (kept.isNotEmpty()) State.Ready(keptIndex)
+                    else State.Failed(if (e is Exception) describe(e) else "The channel list is too big for this TV")
                     return@withContext
+                } finally {
+                    _progress.value = null
                 }
             }
-            _state.value = State.Ready(channels)
+            val channels = index.channels
+            _state.value = State.Ready(index)
             val guideAt = prefs?.getLong("guide.at", 0L) ?: 0L
             if (stale || _guide.value.isEmpty() || now - guideAt > GUIDE_FRESH_MS) refreshGuide(source, channels)
         }
@@ -197,18 +228,24 @@ object LiveTv {
 
     private fun fetchChannels(source: IptvSource): Fetched = when (source) {
         is IptvSource.Xtream -> {
+            _progress.value = "Signing in"
             val account = get(XtreamApi.apiUrl(source)) { XtreamApi.readAccount(it.reader()) }
             if (!account.ok) throw IOException("login")
             val format = XtreamApi.pickFormat(account)
-            val categories = get(XtreamApi.apiUrl(source, "get_live_categories")) { XtreamApi.readCategories(it.reader()) }
+            _progress.value = "Reading the channel groups"
+            val categories = get(XtreamApi.apiUrl(source, "get_live_categories")) { XtreamApi.readCategories(it.reader().buffered()) }
+            _progress.value = "Fetching the channels"
             val streams = get(XtreamApi.apiUrl(source, "get_live_streams")) { stream ->
-                XtreamApi.readStreams(stream.reader(), categories) { XtreamApi.streamUrl(source, it, format) }
+                XtreamApi.readStreams(stream.reader().buffered(), categories, onProgress = { _progress.value = "${count(it)} channels so far" }) {
+                    XtreamApi.streamUrl(source, it, format)
+                }
             }
             // In the order the provider lists its groups, and by number within each
             val order = categories.values.withIndex().associate { it.value to it.index }
             Fetched(streams.sortedWith(compareBy<IptvChannel>({ order[it.group] ?: Int.MAX_VALUE }, { it.number })), XtreamApi.guideUrl(source))
         }
         is IptvSource.M3u -> {
+            _progress.value = "Fetching the playlist"
             val result = get(source.url) { M3uParser.parse(it.reader().buffered()) }
             Fetched(result.channels, source.epgUrl.ifBlank { result.epgUrl })
         }
@@ -222,12 +259,17 @@ object LiveTv {
         if (wanted.isEmpty()) return
         val now = System.currentTimeMillis()
         try {
-            val guide = get(url) { stream -> XmlTvParser.parse(unzipped(stream), wanted, now - GUIDE_BEHIND_MS, now + GUIDE_AHEAD_MS) }
+            val started = System.currentTimeMillis()
+            val guide = get(url) { stream ->
+                XmlTvParser.parse(unzipped(stream), wanted, now - GUIDE_BEHIND_MS, now + GUIDE_AHEAD_MS, detailUntil = now + GUIDE_DETAIL_MS)
+            }
             if (guide.isEmpty()) return
             _guide.value = guide
             writeGuide(guide)
             prefs?.edit()?.putLong("guide.at", now)?.apply()
-        } catch (e: Exception) {
+            Log.i(TAG, "Guide for ${guide.size} channels, ${guide.values.sumOf { it.size }} programmes, in ${System.currentTimeMillis() - started} ms")
+        } catch (e: Throwable) {
+            // A guide too big for the TV leaves the channels without one rather than closing the app
             Log.w(TAG, "Guide could not be fetched: ${e.javaClass.simpleName}")
         }
     }
@@ -289,8 +331,7 @@ object LiveTv {
         if (source(context) == null) return@withContext emptyList()
         val favourites = favourites(context, profileId)
         if (favourites.isEmpty()) return@withContext emptyList()
-        val kept = (state.value as? State.Ready)?.channels?.takeIf { it.isNotEmpty() } ?: readChannels()
-        val byId = kept.associateBy { it.id }
+        val byId = (state.value as? State.Ready)?.index?.byId?.takeIf { it.isNotEmpty() } ?: readChannels().associateBy { it.id }
         val guide = _guide.value.ifEmpty { readGuide().orEmpty() }
         val now = System.currentTimeMillis()
         favourites.mapNotNull { byId[it] }.take(max).map { it to guide[it.epgId]?.nowNext(now)?.now }
@@ -317,6 +358,9 @@ object LiveTv {
         return if (first == 0x1f && second == 0x8b) GZIPInputStream(buffered, 64 * 1024) else buffered
     }
 
+    /** 12 400, as the TV shows a big number. */
+    private fun count(n: Int) = String.format(java.util.Locale.US, "%,d", n).replace(',', ' ')
+
     private fun describe(e: Exception): String = when {
         e.message == "login" -> "Wrong username or password"
         e is java.net.UnknownHostException -> "The server could not be found"
@@ -328,22 +372,22 @@ object LiveTv {
     }
 
     private fun readChannels(): List<IptvChannel> = runCatching {
-        File(dir, "channels.json").takeIf { it.exists() }?.reader()?.use {
+        File(dir, "channels.json").takeIf { it.exists() }?.bufferedReader()?.use {
             gson.fromJson<List<IptvChannel>>(it, object : TypeToken<List<IptvChannel>>() {}.type)
         }
     }.getOrNull().orEmpty()
 
     private fun writeChannels(channels: List<IptvChannel>) {
-        runCatching { File(dir, "channels.json").writer().use { gson.toJson(channels, it) } }
+        runCatching { File(dir, "channels.json").bufferedWriter().use { gson.toJson(channels, it) } }
     }
 
     private fun readGuide(): Map<String, List<Programme>>? = runCatching {
-        File(dir, "guide.json").takeIf { it.exists() }?.reader()?.use {
+        File(dir, "guide.json").takeIf { it.exists() }?.bufferedReader()?.use {
             gson.fromJson<Map<String, List<Programme>>>(it, object : TypeToken<Map<String, List<Programme>>>() {}.type)
         }
     }.getOrNull()
 
     private fun writeGuide(guide: Map<String, List<Programme>>) {
-        runCatching { File(dir, "guide.json").writer().use { gson.toJson(guide, it) } }
+        runCatching { File(dir, "guide.json").bufferedWriter().use { gson.toJson(guide, it) } }
     }
 }

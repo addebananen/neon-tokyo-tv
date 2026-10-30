@@ -4,15 +4,18 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 
 /** The overlays' choices in Settings. */
 object OverlayPrefs {
+    private const val ACCESSIBILITY_DETAILS = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
     private const val PREFS = "neon_overlay"
     private const val GESTURES = "gestures"
     private const val HUD_SECONDS = "hud_seconds"
     private const val HUD_ON_CONSOLE = "hud_on_console"
+    private const val CONTROL_CENTER = "control_center"
 
     /** How long the gaming HUD stays; 0 keeps it until it is put away. */
     val HUD_CHOICES = listOf(4, 6, 10, 0)
@@ -27,6 +30,10 @@ object OverlayPrefs {
 
     fun hudOnConsole(context: Context): Boolean = prefs(context).getBoolean(HUD_ON_CONSOLE, false)
     fun setHudOnConsole(context: Context, on: Boolean) = prefs(context).edit().putBoolean(HUD_ON_CONSOLE, on).apply()
+
+    /** Holding Home opens the Control Center. */
+    fun controlCenter(context: Context): Boolean = prefs(context).getBoolean(CONTROL_CENTER, true)
+    fun setControlCenter(context: Context, on: Boolean) = prefs(context).edit().putBoolean(CONTROL_CENTER, on).apply()
 
     /** True while the overlay service runs: the TV turned it on under Accessibility. */
     fun serviceOn(context: Context): Boolean {
@@ -50,10 +57,22 @@ object OverlayPrefs {
         if (on) Settings.Secure.putInt(resolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
     }.isSuccess
 
-    /** The TV's Accessibility page, where the service is switched on by hand. */
-    fun openAccessibility(context: Context): Boolean = runCatching {
-        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }.isSuccess
+    /**
+     * The TV's Accessibility page, where the service is switched on by hand: the service's own
+     * page where the TV has one (Android 12 and later), else the list it sits in. The SDK hides
+     * the action's name, so it is spelled out.
+     */
+    fun openAccessibility(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val own = Intent(ACCESSIBILITY_DETAILS)
+                .putExtra(Intent.EXTRA_COMPONENT_NAME, ComponentName(context, NeonOverlayService::class.java).flattenToString())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (own.resolveActivity(context.packageManager) != null && runCatching { context.startActivity(own) }.isSuccess) return true
+        }
+        return runCatching {
+            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.isSuccess
+    }
 }
 
 /**

@@ -24,4 +24,11 @@
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
     </style>
+
+    <!-- A card over whatever shows: the Control Center's setup -->
+    <style name="Theme.NeonSheet" parent="Theme.Lumera">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

@@ -326,7 +326,7 @@ private fun ProfileEditor(
             Spacer(Modifier.weight(1f))
             PanelNote(profile.style.blurb, look, modifier = Modifier.width(200.dp))
         }
-        // A style brings its own glass and layout; the rows under it then change them
+        // A style brings its own glass and layout, or the ones this profile chose for it before; the rows under it then change them
         OptionRow("Style", look) {
             HomeStyle.entries.forEach { style ->
                 PanelButton(
@@ -335,7 +335,7 @@ private fun ProfileEditor(
                     primary = style == profile.style,
                     modifier = if (style == profile.style) Modifier.focusRequester(styleList) else Modifier
                 ) {
-                    change { it.copy(style = style, glass = null, rowsDown = null, consolesOnHome = null, squareIcons = null, names = null) }
+                    change { it.wearing(style) }
                 }
             }
         }
@@ -359,6 +359,14 @@ private fun ProfileEditor(
         OptionRow("Tiles", look) {
             PanelButton("Wide", look, primary = !profile.square) { change { it.copy(squareIcons = false) } }
             PanelButton("Square icons", look, primary = profile.square) { change { it.copy(squareIcons = true) } }
+        }
+        // How liquid glass tiles come forward in focus; the other glass keeps its own
+        if (profile.glassLook == HomeGlass.Liquid) {
+            OptionRow("Focus", look) {
+                GlassFocus.entries.forEach { motion ->
+                    PanelButton(motion.title, look, primary = motion == profile.focusMotion) { change { it.copy(focus = motion) } }
+                }
+            }
         }
         OptionRow("App icons", look) {
             IconPack.values().forEach { pack ->
