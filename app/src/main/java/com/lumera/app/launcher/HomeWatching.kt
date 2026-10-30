@@ -72,17 +72,6 @@ internal object HomeWatchingSource {
             .putExtra(MainActivity.EXTRA_OPEN_LOGO, entry.logo ?: "")
         HomeApps.start(context, intent)
     }
-
-    /** Opens [channel] in Neon Tokyo, logged in as [profileId], playing on Live TV. */
-    fun openChannel(context: Context, profileId: Int, channel: com.lumera.app.livetv.IptvChannel) {
-        val intent = Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(MainActivity.EXTRA_OPEN_PROFILE, profileId)
-            .putExtra(MainActivity.EXTRA_OPEN_TYPE, com.lumera.app.livetv.LiveTv.OPEN_TYPE)
-            .putExtra(MainActivity.EXTRA_OPEN_ID, channel.id)
-            .putExtra(MainActivity.EXTRA_OPEN_NAME, channel.name)
-        HomeApps.start(context, intent)
-    }
 }
 
 /**
