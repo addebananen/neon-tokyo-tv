@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -77,8 +78,11 @@ private val Body = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
 private val Ink = GlassInk
 private val Soft = Color.White.copy(alpha = 0.62f)
 private val Calm = Color(0xFF9B8CFF)
-/** Under every pane, so a busy picture or text behind never reads through the glass. */
-private val Backing = Color(0xB80B0A12)
+/** The panel's sheet of liquid glass, which everything sits on. */
+private val SheetShape = RoundedCornerShape(36.dp)
+private const val SHEET_PAD = 18
+/** Under the sheet's glass, so text behind it doesn't read through and clutter the buttons. */
+private val SheetSmoke = Color(0xB80A0B12)
 
 private const val PANEL_W = 396
 private const val GAP = 12
@@ -99,8 +103,15 @@ private fun entrance(shown: Boolean): Float {
 /** Each part comes a beat after the one before it. */
 private fun stagger(enter: Float, index: Int): Float = ((enter * 1.4f) - index * 0.07f).coerceIn(0f, 1f)
 
-/** The glass the panel is made of: the home profile's own, or smoked glass when it has none. */
-private fun glassOf(model: CcModel): HomeGlass = model.profile?.glassLook?.takeIf { it != HomeGlass.Off } ?: HomeGlass.Frost
+/**
+ * A button on the sheet: clear liquid glass lit at its rim at rest, a white plate in focus, the
+ * way Apple TV's buttons turn.
+ */
+private fun Modifier.ccPane(shape: Shape, lit: () -> Float): Modifier =
+    glassPane(HomeGlass.Liquid, shape, lit).drawBehind {
+        val l = lit()
+        if (l > 0f) drawOutline(shape.createOutline(size, layoutDirection, this), Color.White.copy(alpha = 0.94f), alpha = l)
+    }
 
 /**
  * The Control Center over whatever the TV shows: the picture behind dims a little towards the
@@ -128,7 +139,6 @@ internal fun ControlPanel(model: CcModel, shown: Boolean) {
             Modifier
                 .align(Alignment.TopEnd)
                 .padding(top = 22.dp, end = 30.dp)
-                .width(PANEL_W.dp)
                 .graphicsLayer {
                     alpha = enter
                     translationY = -(1f - enter) * 18.dp.toPx()
@@ -137,6 +147,11 @@ internal fun ControlPanel(model: CcModel, shown: Boolean) {
                     scaleY = s
                     transformOrigin = TransformOrigin(1f, 0f)
                 }
+                // One sheet of glass under it all, so what is behind doesn't show between the buttons
+                .background(SheetSmoke, SheetShape)
+                .glassPane(HomeGlass.Liquid, SheetShape, { 0f }, panel = true)
+                .padding(SHEET_PAD.dp)
+                .width(PANEL_W.dp)
         ) {
             AnimatedContent(
                 targetState = model.page,
@@ -183,6 +198,8 @@ private fun MainPage(model: CcModel, enter: Float) {
                 }
             }
         }
+        // Room for the name under a round button in focus
+        Spacer(Modifier.height(22.dp))
     }
 }
 
@@ -222,7 +239,7 @@ private fun ProfileChip(model: CcModel) {
     Row(
         Modifier
             .graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(1f, 0.5f) }
-            .background(Backing, shape).glassPane(glassOf(model), shape, { lit }, white = true, panel = true)
+            .ccPane(shape) { lit }
             .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -253,7 +270,6 @@ private fun Button(model: CcModel, item: CcItem) {
         dip.snapTo(0.94f)
         dip.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
     }
-    val glass = glassOf(model)
     val shape: Shape = when {
         item == CcItem.Power -> RoundedCornerShape(30.dp)
         round(item) -> CircleShape
@@ -267,7 +283,7 @@ private fun Button(model: CcModel, item: CcItem) {
         }
     when {
         item == CcItem.Power -> Box(
-            mod.fillMaxSize().background(Backing, shape).glassPane(glass, shape, { lit }, white = true, panel = true),
+            mod.fillMaxSize().ccPane(shape) { lit },
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -277,7 +293,7 @@ private fun Button(model: CcModel, item: CcItem) {
             }
         }
         round(item) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Box(mod.size(UNIT_H.dp).background(Backing, shape).glassPane(glass, shape, { lit }, white = true, panel = true), contentAlignment = Alignment.Center) {
+            Box(mod.size(UNIT_H.dp).ccPane(shape) { lit }, contentAlignment = Alignment.Center) {
                 NeonGlyph(glyphOf(item), { lerp(Color.White, Ink, lit) }, Modifier.size(26.dp), plain = true)
             }
             // The name of a round button shows under it while it has the focus
@@ -289,7 +305,7 @@ private fun Button(model: CcModel, item: CcItem) {
             )
         }
         else -> Row(
-            mod.fillMaxSize().background(Backing, shape).glassPane(glass, shape, { lit }, white = true, panel = true).padding(start = 10.dp, end = 16.dp),
+            mod.fillMaxSize().ccPane(shape) { lit }.padding(start = 10.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val on = activeOf(model, item)
@@ -439,7 +455,7 @@ private fun ListRow(model: CcModel, row: CcRow, focused: Boolean) {
             .padding(horizontal = 6.dp)
             .height(if (row.detail != null || row.battery != null) 62.dp else 54.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .background(Backing, shape).glassPane(glassOf(model), shape, { lit }, white = true, panel = true)
+            .ccPane(shape) { lit }
             .padding(start = 12.dp, end = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
