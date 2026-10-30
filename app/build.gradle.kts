@@ -204,4 +204,9 @@ dependencies {
     implementation("ch.acra:acra-http:5.11.4")
     implementation("ch.acra:acra-toast:5.11.4")
 
+    // Shizuku: an app the owner installs and starts once on the TV, then grants access to; it lets
+    // Neon ask it to (re)start the Siri Remote bridge as the shell user, so no PC is needed.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
 }

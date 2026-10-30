@@ -1,0 +1,286 @@
+<title>Siri Remote Feel Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: the TV on top, the Siri Remote under it, both driven by the same Rust engine as the TV. */
+:root {
+  --night: #0b0716;
+  --panel: #150d27;
+  --line: #2a1d46;
+  --ink: #efe9ff;
+  --muted: #a99cc9;
+  --magenta: #ff3fb4;
+  --cyan: #39e6ff;
+  --violet: #8a5cff;
+  --alu-hi: #eceef1;
+  --alu-lo: #b9bdc4;
+  --pad: #121214;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "Zen Kaku Gothic New", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+  overflow-x: hidden;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 22px; }
+header h1 { font-family: var(--display); font-weight: 700; font-size: clamp(26px, 5vw, 40px); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+header h1 span { color: var(--magenta); text-shadow: 0 0 18px color-mix(in srgb, var(--magenta) 60%, transparent); }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 22px; align-items: start; }
+@media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); justify-items: center; } .stage > * { width: 100%; } .remote-col { width: auto; } }
+
+/* ---------- TV ---------- */
+.tv { position: relative; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 14px; overflow: hidden; background: radial-gradient(120% 90% at 70% 0%, #2a1050 0%, #120a24 55%, #07040f 100%); border: 1px solid var(--line); box-shadow: 0 30px 80px -30px #000, 0 0 0 6px #050309; }
+.tv .sky { position: absolute; inset: auto 0 0 0; height: 38%; background: linear-gradient(to top, #ff3fb422, transparent); pointer-events: none; }
+.rows { position: absolute; inset: 0; padding: 6% 0 0; transition: transform .28s cubic-bezier(.2,.8,.2,1); }
+.row { margin-bottom: 3.2%; }
+.row h3 { font-family: var(--display); font-weight: 500; font-size: clamp(10px, 1.6vw, 14px); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 1.2% 5%; }
+.rail { display: flex; gap: 1.8%; padding-left: 5%; transition: transform .26s cubic-bezier(.2,.8,.2,1); will-change: transform; }
+.tile { flex: 0 0 15.5%; aspect-ratio: 16 / 10; border-radius: 8px; position: relative; transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s; background: var(--g); }
+.tile b { position: absolute; left: 8%; bottom: 8%; font-family: var(--display); font-size: clamp(8px, 1.3vw, 12px); letter-spacing: .04em; color: #fff; text-shadow: 0 1px 6px #0009; }
+.tile.focus { transform: scale(1.12); box-shadow: 0 0 0 2px #fff, 0 0 24px 4px color-mix(in srgb, var(--cyan) 70%, transparent); z-index: 2; }
+.tile.press { animation: press .22s ease; }
+@keyframes press { 50% { transform: scale(1.04); } }
+.osd { position: absolute; left: 50%; top: 7%; translate: -50% 0; font-family: var(--display); font-size: clamp(11px, 1.8vw, 15px); padding: 6px 14px; border-radius: 999px; background: #0009; border: 1px solid #ffffff22; backdrop-filter: blur(6px); opacity: 0; transition: opacity .2s; white-space: nowrap; }
+.osd.show { opacity: 1; }
+.vol { position: absolute; right: 4%; top: 20%; bottom: 20%; width: 8px; border-radius: 4px; background: #ffffff22; opacity: 0; transition: opacity .25s; }
+.vol.show { opacity: 1; }
+.vol i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px; background: linear-gradient(var(--cyan), var(--magenta)); transition: height .12s; }
+.off { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .35s; display: grid; place-items: center; }
+.off.on { opacity: 1; }
+.off span { width: 60%; height: 2px; background: #fff; box-shadow: 0 0 20px #fff; transform: scaleX(0); }
+.off.on span { animation: crt .5s ease forwards; }
+@keyframes crt { 0% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(0); opacity: 0; } }
+
+.under { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--panel); }
+.seg button { font: 500 13px var(--body); color: var(--muted); background: none; border: 0; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { color: var(--night); background: var(--cyan); }
+.seg button:focus-visible, .rbtn:focus-visible { outline: 2px solid var(--magenta); outline-offset: 2px; }
+.log { font-family: var(--display); font-size: 13px; color: var(--muted); min-height: 1.6em; font-variant-numeric: tabular-nums; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; }
+.log em { font-style: normal; color: var(--cyan); }
+
+/* ---------- Siri Remote (gen 3, USB-C) ---------- */
+.remote-col { display: grid; justify-items: center; gap: 12px; }
+.remote { width: 200px; height: 560px; border-radius: 34px; position: relative; background: linear-gradient(90deg, var(--alu-lo), var(--alu-hi) 30%, var(--alu-hi) 70%, var(--alu-lo)); box-shadow: inset 0 1px 0 #fff, inset 0 -2px 6px #0003, 0 30px 60px -20px #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+.power { position: absolute; top: 22px; right: 26px; width: 26px; height: 26px; }
+.padwrap { position: absolute; top: 62px; left: 50%; translate: -50% 0; width: 164px; height: 164px; border-radius: 50%; background: var(--pad); box-shadow: inset 0 0 0 1px #000, 0 1px 0 #fff8; touch-action: none; cursor: grab; }
+.padwrap::before { content: ""; position: absolute; inset: 30px; border-radius: 50%; background: #18181b; box-shadow: inset 0 0 0 1px #2a2a2e; }
+.padwrap .dot { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #55555c; }
+.padwrap .finger { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: radial-gradient(circle, #ffffff55, #ffffff00 70%); pointer-events: none; opacity: 0; transition: opacity .15s; }
+.padwrap.touching .finger { opacity: 1; }
+.padwrap.clicked { transform: scale(.985); }
+.grid-btns { position: absolute; top: 250px; left: 50%; translate: -50% 0; display: grid; grid-template-columns: 54px 54px; gap: 16px 22px; }
+.rbtn { width: 54px; height: 54px; border-radius: 50%; border: 0; background: radial-gradient(circle at 50% 35%, #2b2b2f, #121214); color: #e9e9ee; display: grid; place-items: center; cursor: pointer; box-shadow: inset 0 1px 0 #ffffff1a, 0 1px 0 #fff8; touch-action: none; }
+.rbtn:active, .rbtn.down { background: #050506; }
+.rbtn svg { width: 22px; height: 22px; fill: currentColor; }
+.volpill { grid-row: span 2; width: 54px; height: 124px; border-radius: 27px; display: grid; grid-template-rows: 1fr 1fr; overflow: hidden; background: radial-gradient(circle at 50% 30%, #2b2b2f, #121214); box-shadow: inset 0 1px 0 #ffffff1a, 0 1px 0 #fff8; }
+.volpill .rbtn { width: 54px; height: 62px; border-radius: 0; background: transparent; box-shadow: none; font: 700 22px var(--display); }
+.siri { position: absolute; right: -5px; top: 150px; width: 8px; height: 46px; border-radius: 4px; background: linear-gradient(90deg, #9fa3aa, #d6d9de); border: 0; cursor: pointer; padding: 0; }
+.power svg { width: 26px; height: 26px; }
+.hint { font-size: 13px; color: var(--muted); text-align: center; max-width: 30ch; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 26px; border-top: 1px solid var(--line); padding-top: 18px; }
+.notes div { min-width: 0; }
+.notes h4 { font-family: var(--display); font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 0 0 4px; }
+.notes p { margin: 0; color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .rail, .rows, .tile, .off span { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Siri Remote <span>feel test</span></h1>
+    <p>Swipe on the clickpad as you would on an Apple TV. Slow slides step one tile at a time, quick flicks glide and slow down, a touch stops the glide. Tap the centre to click, tap the ring's edges for arrows. This runs the exact Rust engine that goes on the TV.</p>
+  </header>
+
+  <div class="stage">
+    <div>
+      <div class="tv" id="tv">
+        <div class="sky"></div>
+        <div class="rows" id="rows"></div>
+        <div class="osd" id="osd"></div>
+        <div class="vol" id="vol"><i id="volbar"></i></div>
+        <div class="off" id="off"><span></span></div>
+      </div>
+      <div class="under">
+        <div class="seg" role="group" aria-label="Scrolling speed">
+          <button id="sp-075" data-speed="0.75" aria-pressed="false">Calmer</button>
+          <button id="sp-100" data-speed="1" aria-pressed="true">Apple TV</button>
+          <button id="sp-135" data-speed="1.35" aria-pressed="false">Quicker</button>
+        </div>
+        <div class="seg" role="group" aria-label="Glide">
+          <button id="gl-on" data-glide="1" aria-pressed="true">Glide</button>
+          <button id="gl-off" data-glide="0" aria-pressed="false">Stop on lift</button>
+        </div>
+      </div>
+      <div class="log" id="log">Waiting for your finger…</div>
+    </div>
+
+    <div class="remote-col">
+      <div class="remote" id="remote">
+        <button class="rbtn power" id="b-power" data-mask="16" aria-label="Power" style="width:26px;height:26px;background:none;box-shadow:none;color:#3a3a40"><svg viewBox="0 0 24 24"><path d="M11 2h2v10h-2zM6.3 5.3l1.4 1.4A7 7 0 1 0 16.3 6.7l1.4-1.4A9 9 0 1 1 6.3 5.3z"/></svg></button>
+        <div class="padwrap" id="pad" aria-label="Clickpad">
+          <span class="dot" style="left:80px;top:10px"></span><span class="dot" style="left:80px;bottom:10px"></span>
+          <span class="dot" style="top:80px;left:10px"></span><span class="dot" style="top:80px;right:10px"></span>
+          <span class="finger" id="finger"></span>
+        </div>
+        <button class="siri" id="b-siri" data-mask="32" aria-label="Siri"></button>
+        <div class="grid-btns">
+          <button class="rbtn" id="b-back" data-mask="64" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4-1.4 1.4L5.2 12 14 3.2z"/></svg></button>
+          <button class="rbtn" id="b-tv" data-mask="1" aria-label="TV"><svg viewBox="0 0 24 24"><path d="M3 5h18v12H3zm2 2v8h14V7zM8 19h8v2H8z"/></svg></button>
+          <button class="rbtn" id="b-play" data-mask="256" aria-label="Play or pause"><svg viewBox="0 0 24 24"><path d="M4 5l8 7-8 7zM14 5h2.5v14H14zm4.5 0H21v14h-2.5z"/></svg></button>
+          <div class="volpill"><button class="rbtn" id="b-volup" data-mask="2" aria-label="Volume up">+</button><button class="rbtn" id="b-voldown" data-mask="4" aria-label="Volume down">−</button></div>
+          <button class="rbtn" id="b-mute" data-mask="128" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M3 9h4l5-4v14l-5-4H3zm13.6.2 1.4-1.4 2 2 2-2 1.4 1.4-2 2 2 2-1.4 1.4-2-2-2 2-1.4-1.4 2-2z"/></svg></button>
+        </div>
+      </div>
+      <p class="hint">Hold TV for quick settings, press it twice for recent apps. Hold Back to go Home.</p>
+    </div>
+  </div>
+
+  <section class="notes">
+    <div><h4>Scrolling</h4><p>About a fifth of the pad per tile when you slide slowly. The faster the finger, the less travel each tile takes, up to three times less.</p></div>
+    <div><h4>Glide</h4><p>Lift during a quick swipe and focus keeps moving, slowing down over about a third of a second. Touch the pad and it stops where it is.</p></div>
+    <div><h4>Circle to scrub</h4><p>Run a finger round the outer ring: clockwise steps forward, anti-clockwise back, like seeking in a film on the Apple TV.</p></div>
+    <div><h4>On the TV</h4><p>The same engine runs in Neon Tokyo's Siri Remote bridge and presses these keys in every app, on Neon Home and over the consoles.</p></div>
+  </section>
+</div>
+
+<script>
+const WASM = "__WASM__";
+const KEY = { HOME: 3, BACK: 4, UP: 19, DOWN: 20, LEFT: 21, RIGHT: 22, OK: 23, VUP: 24, VDOWN: 25, SEARCH: 84, PLAY: 85, MUTE: 164, SETTINGS: 176, APPS: 187 };
+const NAMES = { 3: "Home", 4: "Back", 19: "↑", 20: "↓", 21: "←", 22: "→", 23: "OK", 24: "Vol +", 25: "Vol −", 84: "Search", 85: "Play/Pause", 164: "Mute", 176: "Quick settings", 187: "Recent apps" };
+const ROWS = [
+  ["Continue watching", ["Akira", "Tokyo Drift", "Blade Runner", "Your Name", "Drive", "Ghost in the Shell", "Lost in Translation", "Perfect Days", "Cowboy Bebop", "Paprika", "Weathering", "Spirited Away", "Collateral", "Heat"]],
+  ["Apps", ["YouTube", "Spotify", "Stremio", "YT Music", "Netflix", "Disney+", "Max", "Prime Video", "Live TV", "Play Store", "Media", "Settings"]],
+  ["Consoles", ["Switch 2", "Xbox 360", "Xbox", "Wii U", "Wii", "Steam PC"]],
+  ["Night drive", ["Shibuya", "Shinjuku", "Ginza", "Akihabara", "Roppongi", "Odaiba", "Harajuku", "Ikebukuro", "Asakusa", "Yokohama"]]
+];
+const HUES = [[320, 270], [190, 250], [280, 330], [200, 300], [345, 25], [250, 190]];
+const rowsEl = document.getElementById("rows");
+const rails = ROWS.map(([title, items], r) => {
+  const row = document.createElement("div"); row.className = "row";
+  row.innerHTML = `<h3>${title}</h3>`;
+  const rail = document.createElement("div"); rail.className = "rail";
+  items.forEach((name, i) => {
+    const [a, b] = HUES[(i + r * 2) % HUES.length];
+    const t = document.createElement("div"); t.className = "tile";
+    t.style.setProperty("--g", `linear-gradient(135deg, hsl(${a} 85% 55%), hsl(${b} 70% 22%))`);
+    t.innerHTML = `<b>${name}</b>`; rail.appendChild(t);
+  });
+  row.appendChild(rail); rowsEl.appendChild(row); return rail;
+});
+const pos = rails.map(() => 0); let row = 0;
+function render() {
+  rails.forEach((rail, r) => {
+    [...rail.children].forEach((t, i) => t.classList.toggle("focus", r === row && i === pos[r]));
+    const first = Math.max(0, Math.min(pos[r] - 1, rail.children.length - 5));
+    rail.style.transform = `translateX(${-first * 17.3}%)`;
+  });
+  const top = Math.max(0, Math.min(row - 1, ROWS.length - 2));
+  rowsEl.style.transform = `translateY(${-top * 24}%)`;
+}
+render();
+let osdTimer, volTimer, volume = 12, muted = false, screenOn = true;
+function osd(text) { const o = document.getElementById("osd"); o.textContent = text; o.classList.add("show"); clearTimeout(osdTimer); osdTimer = setTimeout(() => o.classList.remove("show"), 1100); }
+function showVol() { const v = document.getElementById("vol"); document.getElementById("volbar").style.height = (muted ? 0 : volume / 30 * 100) + "%"; v.classList.add("show"); clearTimeout(volTimer); volTimer = setTimeout(() => v.classList.remove("show"), 1200); }
+const logEl = document.getElementById("log"); const recent = [];
+function log(name) { recent.push(name); if (recent.length > 14) recent.shift(); logEl.innerHTML = recent.map((n, i) => i === recent.length - 1 ? `<em>${n}</em>` : n).join("  "); }
+
+function act(code) {
+  if (!screenOn) return;
+  const n = rails[row].children.length;
+  if (code === KEY.LEFT) pos[row] = Math.max(0, pos[row] - 1);
+  else if (code === KEY.RIGHT) pos[row] = Math.min(n - 1, pos[row] + 1);
+  else if (code === KEY.UP) row = Math.max(0, row - 1);
+  else if (code === KEY.DOWN) row = Math.min(rails.length - 1, row + 1);
+  else if (code === KEY.OK) { const t = rails[row].children[pos[row]]; t.classList.remove("press"); void t.offsetWidth; t.classList.add("press"); osd("Open " + t.textContent); }
+  else if (code === KEY.HOME) { row = 0; pos.fill(0); osd("Home"); }
+  else if (code === KEY.BACK) osd("Back");
+  else if (code === KEY.VUP) { muted = false; volume = Math.min(30, volume + 1); showVol(); }
+  else if (code === KEY.VDOWN) { muted = false; volume = Math.max(0, volume - 1); showVol(); }
+  else if (code === KEY.MUTE) { muted = !muted; showVol(); }
+  else if (code in NAMES) osd(NAMES[code]);
+  render();
+}
+
+let ex, mem32;
+function read(ptr) { if (!mem32 || mem32.buffer !== ex.memory.buffer) mem32 = new Int32Array(ex.memory.buffer); const o = ptr >> 2; return mem32.subarray(o + 1, o + 1 + mem32[o]); }
+function apply(ptr) {
+  const v = read(ptr);
+  for (let i = 1; i + 3 < v.length; i += 4) {
+    const kind = v[i], code = v[i + 1], repeat = v[i + 2], canceled = v[i + 3] & 1;
+    if (kind === 0 && code !== KEY.BACK) { act(code); if (!repeat) log(NAMES[code] || code); }
+    else if (kind === 1 && code === KEY.BACK && !canceled) { act(code); log("Back"); }
+    else if (kind === 2) { screenOn = !screenOn; document.getElementById("off").classList.toggle("on", !screenOn); log(screenOn ? "Power on" : "Power off"); }
+  }
+}
+const now = () => performance.now() / 1000;
+let speed = 1, glide = 1;
+function reset() { apply(ex.sim_reset(now(), speed, glide)); }
+
+const bytes = Uint8Array.from(atob(WASM), c => c.charCodeAt(0));
+WebAssembly.instantiate(bytes, {}).then(({ instance }) => {
+  ex = instance.exports; reset();
+  const loop = () => { apply(ex.sim_tick(now())); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+}).catch(e => { logEl.textContent = "The engine did not load in this browser: " + e.message; });
+
+// clickpad: the unit disc, y up, like the remote reports it
+const pad = document.getElementById("pad"), finger = document.getElementById("finger");
+let touch = null;
+function padPoint(e) { const r = pad.getBoundingClientRect(); const R = r.width / 2; return { x: (e.clientX - r.left - R) / R, y: -(e.clientY - r.top - R) / R, px: e.clientX - r.left, py: e.clientY - r.top }; }
+pad.addEventListener("pointerdown", e => {
+  if (!ex) return; pad.setPointerCapture(e.pointerId); const p = padPoint(e);
+  touch = { t: now(), x: p.x, y: p.y, travel: 0, lx: p.x, ly: p.y };
+  pad.classList.add("touching"); finger.style.left = p.px + "px"; finger.style.top = p.py + "px";
+  apply(ex.sim_touch(p.x, p.y, 1, now()));
+});
+pad.addEventListener("pointermove", e => {
+  if (!touch) return; const p = padPoint(e);
+  touch.travel += Math.hypot(p.x - touch.lx, p.y - touch.ly); touch.lx = p.x; touch.ly = p.y;
+  finger.style.left = p.px + "px"; finger.style.top = p.py + "px";
+  apply(ex.sim_touch(Math.max(-1.2, Math.min(1.2, p.x)), Math.max(-1.2, Math.min(1.2, p.y)), 1, now()));
+});
+function endTouch() {
+  if (!touch) return; const t = now(); apply(ex.sim_touch(0, 0, 0, t)); pad.classList.remove("touching");
+  // a short tap stands in for pressing the clickpad in: centre is OK, the ring's edges are arrows
+  if (t - touch.t < 0.25 && touch.travel < 0.1) {
+    const r = Math.hypot(touch.x, touch.y);
+    const mask = r < 0.62 ? 0x0008 : Math.abs(touch.x) > Math.abs(touch.y) ? (touch.x > 0 ? 0x0400 : 0x1000) : (touch.y > 0 ? 0x0200 : 0x0800);
+    pad.classList.add("clicked"); apply(ex.sim_buttons(mask, t));
+    setTimeout(() => { apply(ex.sim_buttons(0, now())); pad.classList.remove("clicked"); }, 70);
+  }
+  touch = null;
+}
+pad.addEventListener("pointerup", endTouch); pad.addEventListener("pointercancel", endTouch);
+
+document.querySelectorAll("[data-mask]").forEach(b => {
+  const mask = +b.dataset.mask;
+  b.addEventListener("pointerdown", e => { if (!ex) return; e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add("down"); apply(ex.sim_buttons(mask, now())); });
+  const up = () => { if (!b.classList.contains("down")) return; b.classList.remove("down"); apply(ex.sim_buttons(0, now())); };
+  b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up);
+  b.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && !e.repeat && ex) { e.preventDefault(); apply(ex.sim_buttons(mask, now())); } });
+  b.addEventListener("keyup", e => { if ((e.key === "Enter" || e.key === " ") && ex) apply(ex.sim_buttons(0, now())); });
+});
+document.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => {
+  speed = +b.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", x === b)); reset();
+}));
+document.querySelectorAll("[data-glide]").forEach(b => b.addEventListener("click", () => {
+  glide = +b.dataset.glide; document.querySelectorAll("[data-glide]").forEach(x => x.setAttribute("aria-pressed", x === b)); reset();
+}));
+// arrow keys on a keyboard click the ring, for a quick check on a computer
+const KEYMASK = { ArrowUp: 0x0200, ArrowRight: 0x0400, ArrowDown: 0x0800, ArrowLeft: 0x1000 };
+addEventListener("keydown", e => { if (KEYMASK[e.key] && ex && !e.repeat) { e.preventDefault(); apply(ex.sim_buttons(KEYMASK[e.key], now())); } });
+addEventListener("keyup", e => { if (KEYMASK[e.key] && ex) apply(ex.sim_buttons(0, now())); });
+</script>

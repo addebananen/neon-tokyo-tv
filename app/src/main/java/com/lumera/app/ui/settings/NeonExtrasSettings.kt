@@ -181,6 +181,8 @@ fun NeonExtrasSettings(onGoBack: () -> Unit) {
     Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
     Spacer(Modifier.height(15.dp))
 
+    SiriRemoteSettings(onGoBack = onGoBack)
+
     OverlaySettings(onGoBack = onGoBack)
 }
 

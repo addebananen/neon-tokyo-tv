@@ -12,9 +12,16 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Neon Home asks the TV to uninstall an app; the TV asks to be sure itself -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Start the Siri Remote bridge again after the TV restarts (through Shizuku) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Shizuku: the owner-installed helper that can run the bridge as the shell user -->
+    <uses-permission android:name="moe.shizu.manager.permission.API_V23" />
     <!-- Neon Home's Bluetooth corner: which paired headphones and speakers are on, and connecting
          them. Android 12 and later ask once; older ones need the two legacy permissions -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Voice search through the Siri Remote: the speech recognizer asks its caller for this,
+         though the sound comes from the remote, never the TV's own microphone -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- Only granted over ADB, by hand: lets Neon Tokyo turn BluetoothHelper on for a press -->
@@ -56,9 +63,19 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- The TV's settings app, to find its Bluetooth page when the standard link isn't answered -->
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
+        <package android:name="com.android.tv.settings" />
         <!-- ...and the TV's HDMI inputs, whose input services belong to the TV's own apps -->
         <intent>
             <action android:name="android.media.tv.TvInputService" />
+        </intent>
+        <!-- Voice search with the Siri Remote: without this the TV's speech recognizer is
+             invisible to the app, and SpeechRecognizer says there is none -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
@@ -119,6 +136,11 @@
             android:name="com.lumera.app.launcher.NeonHomeSwitch"
             android:exported="true"
             android:permission="android.permission.WRITE_SECURE_SETTINGS" />
+
+        <!-- The in-app update's install session reports here (confirm screen, or failure) -->
+        <receiver
+            android:name="com.lumera.app.data.update.UpdateInstallReceiver"
+            android:exported="false" />
 
         <!-- Picture diagnostics and the gaming HUD over any app or console (Accessibility) -->
         <service
@@ -205,6 +227,15 @@
             </intent-filter>
         </service>
 
+        <!-- Opened by the Siri Remote bridge (shell) when Siri is held -->
+        <activity
+            android:name=".siri.VoiceActivity"
+            android:exported="true"
+            android:taskAffinity="com.neontokyo.voice"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.NeonVoice" />
+
         <!-- Setting the Control Center up with the remote: Accessibility and Wi-Fi names -->
         <activity
             android:name="com.lumera.app.control.ControlSetupActivity"
@@ -227,6 +258,27 @@
             android:name=".data.torrent.TorrentService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
+
+        <!-- Starts the Siri Remote bridge again after a reboot (via Shizuku), if the owner turned
+             it on in the Siri Remote settings -->
+        <receiver
+            android:name="com.lumera.app.siri.SiriBootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Shizuku: how Neon reaches the owner-installed helper -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

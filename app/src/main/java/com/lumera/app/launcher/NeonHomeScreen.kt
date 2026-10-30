@@ -1004,7 +1004,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         btCorner = false
                         if (device.address.startsWith(PREVIEW_DEVICE)) return@BluetoothCorner
                         if (btOwners[device.address].isNullOrEmpty()) bt.take(device.address, profile.id, true)
-                        if (device.connected) HomeApps.start(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                        if (device.connected) HomeApps.start(context, BluetoothHelper.settingsIntent(context))
                         else connectBluetooth(device)
                         focusFirst++
                     },
