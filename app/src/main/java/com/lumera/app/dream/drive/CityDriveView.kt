@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.opengl.EGL14
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.os.Build
 import android.util.Log
 import android.widget.FrameLayout
 import com.lumera.app.R
@@ -45,9 +46,11 @@ class CityDriveView(context: Context) : FrameLayout(context) {
         // The city is drawn at 720 lines and scaled up by the display hardware, which keeps a TV's
         // GPU at an even pace; the clock over it stays sharp at the screen's own resolution
         val metrics = resources.displayMetrics
-        if (metrics.heightPixels > RENDER_LINES && metrics.widthPixels > metrics.heightPixels) {
-            val w = (RENDER_LINES.toDouble() * metrics.widthPixels / metrics.heightPixels).roundToInt()
-            surface.holder.setFixedSize(w, RENDER_LINES)
+        // The test emulator draws on the CPU and falls over at full size, so it gets fewer lines
+        val lines = if (EMULATOR) EMULATOR_LINES else RENDER_LINES
+        if (metrics.heightPixels > lines && metrics.widthPixels > metrics.heightPixels) {
+            val w = (lines.toDouble() * metrics.widthPixels / metrics.heightPixels).roundToInt()
+            surface.holder.setFixedSize(w, lines)
         }
         addView(surface, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(hud, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -175,7 +178,9 @@ class CityDriveView(context: Context) : FrameLayout(context) {
      */
     private class ConfigChooser : GLSurfaceView.EGLConfigChooser {
         override fun chooseConfig(egl: EGL10, display: EGLDisplay): EGLConfig {
-            for (attribs in CHOICES) {
+            // The emulator's software GPU falls over under 4x multisampling at screensaver size,
+            // taking the whole emulator with it, so the test emulator draws the city unsmoothed
+            for (attribs in if (EMULATOR) CHOICES.drop(1) else CHOICES.toList()) {
                 val count = IntArray(1)
                 if (!egl.eglChooseConfig(display, attribs, null, 0, count) || count[0] <= 0) continue
                 val configs = arrayOfNulls<EGLConfig>(count[0])
@@ -216,5 +221,7 @@ class CityDriveView(context: Context) : FrameLayout(context) {
     private companion object {
         const val TAG = "CityDrive"
         const val RENDER_LINES = 720
+        const val EMULATOR_LINES = 360
+        val EMULATOR = Build.HARDWARE == "ranchu" || Build.HARDWARE == "goldfish"
     }
 }
