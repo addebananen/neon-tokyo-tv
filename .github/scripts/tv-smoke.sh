@@ -1490,6 +1490,17 @@ sleep 0.5
 # since uiautomator unbinds every accessibility service while it reads the screen
 overlay() { adb shell am broadcast -a com.neontokyo.tv.OVERLAY --es show "$1" >/dev/null 2>&1; }
 overlay_shot() { step=$((step + 1)); adb exec-out screencap -p > "$OUT/$(printf "%02d-%s" "$step" "$1").png"; }
+# The window goes 220 ms after the panel is told to, on the main thread; the software-drawn emulator
+# can hold that thread behind a slow frame of glass, so this waits up to 5 s and logs how long it took
+overlay_gone() {
+  local n=0
+  while overlay_on; do
+    [ "$n" -ge 10 ] && return 1
+    sleep 0.5
+    n=$((n + 1))
+  done
+  echo "$1 gone after $((n * 5 / 10)).$((n * 5 % 10)) s more" >> "$OUT/overlay.txt"
+}
 overlay diagnostics
 sleep 2.5
 overlay_on || fail "picture diagnostics did not open"
@@ -1538,7 +1549,7 @@ overlay off
 wait "$recorder" 2>/dev/null || true
 adb pull /sdcard/control.mp4 "$OUT/control-center.mp4" > /dev/null 2>&1 || true
 sleep 1
-if overlay_on; then fail "the Control Center did not go away"; fi
+overlay_gone control || fail "the Control Center did not go away"
 adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
   fail "the Control Center took the app out of front"
 # adb shell joins its words into one line for the TV's shell, so the device list is quoted twice
@@ -1552,7 +1563,7 @@ for page in wifi profiles sleep; do
 done
 overlay off
 sleep 1
-if overlay_on; then fail "the Control Center did not go away from a list page"; fi
+overlay_gone control-list || fail "the Control Center did not go away from a list page"
 adb shell settings put global animator_duration_scale 0
 if [ -z "$overlay_before" ] || [ "$overlay_before" = null ]; then
   adb shell settings delete secure enabled_accessibility_services > /dev/null 2>&1
