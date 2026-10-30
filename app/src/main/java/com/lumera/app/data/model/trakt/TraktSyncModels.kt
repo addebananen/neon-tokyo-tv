@@ -44,7 +44,8 @@ data class TraktSyncRequest(
 
 data class TraktSyncItem(
     val ids: TraktIds,
-    val seasons: List<TraktSyncSeason>? = null
+    val seasons: List<TraktSyncSeason>? = null,
+    @SerializedName("watched_at") val watchedAt: String? = null
 )
 
 data class TraktSyncSeason(
@@ -53,7 +54,8 @@ data class TraktSyncSeason(
 )
 
 data class TraktSyncEpisode(
-    val number: Int
+    val number: Int,
+    @SerializedName("watched_at") val watchedAt: String? = null
 )
 
 /**
