@@ -26,7 +26,7 @@ adb logcat -c
 
 # --- what the test needs on the emulator ------------------------------------
 adb install -r -g "$APK" > /dev/null || { fail "Neon Tokyo did not install"; exit 1; }
-adb install -r siritest.apk > /dev/null || { fail "the test recognizer did not install"; exit 1; }
+adb install -r -g siritest.apk > /dev/null || { fail "the test recognizer did not install"; exit 1; }
 adb shell settings put secure voice_recognition_service com.neontokyo.siritest/.FakeRecognizer
 adb shell mkdir -p /data/local/tmp/neon-siri $SIM
 adb push "$LIB" /data/local/tmp/neon-siri/libneon_siri.so > /dev/null

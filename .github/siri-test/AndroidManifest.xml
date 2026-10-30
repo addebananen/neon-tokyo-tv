@@ -4,6 +4,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.neontokyo.siritest">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+    <!-- Android checks the microphone permission of the recognizer as well as of the app asking,
+         even when the app hands it the sound (the TV's own recognizer has it) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application android:label="Siri test">
         <service
             android:name=".FakeRecognizer"
