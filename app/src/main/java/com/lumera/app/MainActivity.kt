@@ -726,6 +726,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Neon Tokyo itself is one of the apps the app switcher (Home twice) goes back to
+    override fun onPause() {
+        super.onPause()
+        if (!isFinishing) com.lumera.app.launcher.RecentApps.seen(this, packageName)
+    }
+
     override fun onStop() {
         super.onStop()
         if (!isFinishing) {

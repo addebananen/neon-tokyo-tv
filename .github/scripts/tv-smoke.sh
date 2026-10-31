@@ -158,6 +158,27 @@ if focused and focused[-1]:
 '
 }
 
+# find_poster NAME: moves along the focused row until the poster titled NAME has the focus (up to
+# 3 to the left, then up to 4 past the start to the right). Live search results change order
+# ("Dune: Part Two" can come before "Dune"), so a fixed number of presses is not enough.
+find_poster() {
+  local want="$1" now i
+  now=$(focused_poster)
+  [ "$now" = "$want" ] && { echo "$now"; return 0; }
+  for i in 1 2 3; do
+    key DPAD_LEFT >/dev/null; sleep 1.5
+    now=$(focused_poster)
+    [ "$now" = "$want" ] && { echo "$now"; return 0; }
+  done
+  key DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT >/dev/null; sleep 1.5
+  for i in 1 2 3 4; do
+    key DPAD_RIGHT >/dev/null; sleep 1.5
+    now=$(focused_poster)
+    [ "$now" = "$want" ] && { echo "$now"; return 0; }
+  done
+  echo "$now"
+}
+
 # focused_width: the width in pixels of the element that has the D-pad focus
 focused_width() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
@@ -752,7 +773,7 @@ shot search-results-focus
 # among 35 000 titles; both must turn up first in the sources panel, marked [IPTV]
 key DPAD_LEFT DPAD_LEFT DPAD_LEFT
 sleep 2
-vod_title=$(focused_poster)
+vod_title=$(find_poster "Dune")
 echo "search focus for the film: $vod_title"
 if [ "$vod_title" != "Dune" ]; then
   fail "could not reach Dune in the search results for the IPTV film, focus on: $vod_title"
@@ -786,7 +807,7 @@ else
   done
   key DPAD_DOWN
   sleep 2
-  vod_series=$(focused_poster)
+  vod_series=$(find_poster "Dune: Prophecy")
   echo "search focus for the series: $vod_series"
   if [ "$vod_series" != "Dune: Prophecy" ]; then
     fail "could not reach Dune: Prophecy in the search results, focus on: $vod_series"
@@ -1365,6 +1386,30 @@ case "$label" in *AirPods*) ;; *) fail "the Bluetooth corner does not have the f
 key BACK
 sleep 2
 if screen_has "All devices"; then fail "Back did not put the Bluetooth corner away"; fi
+# The app switcher with a few made-up apps: cards glide left and right, and Down goes on to the
+# Bluetooth corner
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es switcher "com.netflix.ninja,com.google.android.youtube.tv,com.spotify.tv.android,com.neontokyo.tv" >/dev/null 2>&1
+sleep 3
+shot app-switcher-preview
+screen_has 'text="Close app"' || fail "the app switcher preview did not open"
+key DPAD_LEFT DPAD_LEFT
+sleep 1
+shot app-switcher-left
+# Up throws the card in front, YouTube's, off the top; Ninja (Netflix, not on the emulator) slides
+# out of the stack into its place. Cards far off to the right are out of the screen's tree
+key DPAD_UP
+sleep 2
+shot app-switcher-closed
+closed_xml="$OUT/$(printf "%02d" "$step")-app-switcher-closed.xml"
+if grep -q 'text="YouTube"' "$closed_xml" 2>/dev/null; then fail "Up in the app switcher did not close the card in front"; fi
+grep -q 'text="Ninja"' "$closed_xml" 2>/dev/null || fail "closing one card in the app switcher took the others too"
+key DPAD_DOWN
+sleep 2
+shot app-switcher-bluetooth
+grep -q "All devices" "$OUT/$(printf "%02d" "$step")-app-switcher-bluetooth.xml" 2>/dev/null ||
+  fail "Down in the app switcher did not open the Bluetooth corner"
+key BACK
+sleep 2
 adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
@@ -1440,6 +1485,31 @@ adb shell input keyevent KEYCODE_HOME
 sleep 2
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Home on Neon Home did not go back to its first tile ($label has the focus)"
+# Home pressed twice opens the app switcher, as on Apple TV: Neon Tokyo, just left with Home, is
+# its card in front, and OK jumps back into it as it was (closing is tried in the preview above,
+# since the rest of the test goes on in the app)
+adb shell am start -n "$PKG/com.lumera.app.MainActivity" >/dev/null 2>&1
+sleep 8
+adb shell input keyevent KEYCODE_HOME KEYCODE_HOME
+sleep 3
+shot app-switcher
+switcher_xml="$OUT/$(printf "%02d" "$step")-app-switcher.xml"
+grep -q 'text="Close app"' "$switcher_xml" 2>/dev/null || fail "Home pressed twice did not open the app switcher"
+grep -q 'text="Neon Tokyo"' "$switcher_xml" 2>/dev/null || fail "the app switcher has no card for Neon Tokyo, which was just left"
+key DPAD_CENTER
+sleep 4
+shot app-switcher-open
+adb shell dumpsys activity activities 2>/dev/null | grep -E "mResumedActivity|topResumedActivity" | grep -q "$PKG/$ACTIVITY" ||
+  fail "OK in the app switcher did not jump back into Neon Tokyo"
+adb shell input keyevent KEYCODE_HOME
+sleep 3
+home_resumed || fail "Home did not go back to Neon Home after the app switcher"
+adb shell input keyevent KEYCODE_HOME KEYCODE_HOME
+sleep 3
+key BACK
+sleep 2
+if screen_has 'text="Close app"'; then fail "Back did not put the app switcher away"; fi
+home_resumed || fail "Back in the app switcher left Neon Home"
 # The TV switched off and on again: Neon Home comes on to the neon intro
 adb shell settings put global animator_duration_scale 1
 adb logcat -c 2>/dev/null || true

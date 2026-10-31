@@ -71,7 +71,7 @@ internal object BtRules {
     /** A card that went by itself, without a press, comes back sooner. */
     const val QUIET_MS = 10 * 60_000L
 
-    /** Two presses of Home this close together open the Bluetooth corner. */
+    /** Two presses of Home this close together open the app switcher (whose Down is the Bluetooth corner). */
     const val DOUBLE_HOME_MS = 700L
 
     /** How long the Bluetooth corner stays while nothing is pressed. */

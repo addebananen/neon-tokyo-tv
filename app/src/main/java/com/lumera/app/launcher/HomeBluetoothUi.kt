@@ -1,5 +1,6 @@
 package com.lumera.app.launcher
 
+import android.widget.Toast
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -75,10 +76,10 @@ import com.lumera.app.ui.components.NeonText
 internal fun btTitle(name: String): String = "${name.take(24).trimEnd()} turned on"
 
 /** What Connect told the person, when it did not just connect. */
-internal fun btConnectNote(result: BtConnect, name: String): String? = when (result) {
-    BtConnect.Direct -> "Connecting $name…"
+internal fun btConnectNote(result: BtConnect, name: String, disconnect: Boolean = false): String? = when (result) {
+    BtConnect.Direct -> if (disconnect) "Disconnecting $name…" else "Connecting $name…"
     BtConnect.Helper -> null
-    BtConnect.Settings -> "Pick $name and press Connect"
+    BtConnect.Settings -> if (disconnect) "Pick $name and press Disconnect" else "Pick $name and press Connect"
     BtConnect.Failed -> "Couldn't reach $name"
 }
 
@@ -302,7 +303,7 @@ internal fun HomeBluetoothDialog(
                         DeviceRow(
                             device = device,
                             status = when {
-                                device.connected -> "Connected"
+                                device.connected -> "Connected · press to disconnect"
                                 device.address in nearby -> "On, nearby"
                                 mine -> "Off or away"
                                 else -> null
@@ -316,8 +317,13 @@ internal fun HomeBluetoothDialog(
                             mine = mine,
                             onClick = {
                                 if (!mine) bt.take(device.address, profile.id, true)
-                                if (device.connected) HomeApps.start(context, BluetoothHelper.settingsIntent(context))
-                                else onConnect(device)
+                                // A device that is connected lets go, and the sound comes back to the TV
+                                if (device.connected) {
+                                    btConnectNote(bt.connect(device.address, disconnect = true), device.name, disconnect = true)
+                                        ?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                                } else {
+                                    onConnect(device)
+                                }
                             },
                             onMine = { bt.take(device.address, profile.id, !mine) },
                             modifier = if (index == 0) Modifier.focusRequester(first) else Modifier
@@ -418,8 +424,8 @@ private fun DeviceRow(
 }
 
 /**
- * The Bluetooth corner, opened by pressing Home twice: this profile's devices, each with its
- * mark and Connect, for the times a device was on but its card never came. The first device
+ * The Bluetooth corner, opened with Down in the app switcher (Home twice): this profile's devices,
+ * each with its mark and Connect (Disconnect once connected), for the times a device was on but its card never came. The first device
  * takes the focus; Back or a while without a press put it away.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -568,13 +574,14 @@ private fun CornerRow(device: BtDevice, status: String?, lit: Boolean, onClick: 
                     BasicText(status, style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 10.5.sp, color = color), maxLines = 1)
                 }
             }
-            if (!device.connected) {
+            if (!device.connected || focused) {
+                // A connected device in focus offers to let go: OK disconnects it
                 Box(
                     Modifier
                         .background(if (focused) color.copy(alpha = 0.45f) else color.copy(alpha = 0.16f), RoundedCornerShape(50))
                         .padding(horizontal = 11.dp, vertical = 5.dp)
                 ) {
-                    BasicText("Connect", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = look.text))
+                    BasicText(if (device.connected) "Disconnect" else "Connect", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = look.text))
                 }
             } else {
                 Box(Modifier.size(7.dp).background(color, CircleShape))

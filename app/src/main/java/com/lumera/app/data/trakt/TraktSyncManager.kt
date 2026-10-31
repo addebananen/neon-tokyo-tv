@@ -236,13 +236,14 @@ class TraktSyncManager @Inject constructor(
      * finished titles go into the watched history with their own dates, half-seen ones become
      * paused playback so other apps on the same Trakt account offer to resume them.
      * Runs before the pulls, which would otherwise read a local item Trakt has never seen as
-     * one cleared on Trakt. Items Trakt can't place (no IMDb id) stay local.
+     * one cleared on Trakt. Items Trakt can't place (kitsu: and other ids) stay local.
      */
     suspend fun pushLocalHistory() {
         if (traktAuthManager.getAccessToken() == null) return
         withContext(Dispatchers.IO) {
             try {
-                val pending = dao.getUnscrobbledItems().filter { it.id.startsWith("tt") }
+                val pending = dao.getUnscrobbledItems()
+                    .filter { TraktContentIds.traktIds(TraktContentIds.contentId(it.id)) != null }
                 if (pending.isEmpty()) return@withContext
                 val (finished, started) = pending.partition { it.watched }
                 if (finished.isNotEmpty()) pushWatchedHistory(finished)
@@ -268,19 +269,20 @@ class TraktSyncManager @Inject constructor(
         for (item in items) {
             val watchedAt = isoTimestamp(item.lastWatched)
             if (item.type == "series") {
-                val (showId, season, episode) = parseEpisodeId(item.id) ?: continue
+                val (showId, season, episode) = TraktContentIds.episode(item.id) ?: continue
                 episodesByShow.getOrPut(showId) { mutableMapOf() }
                     .getOrPut(season) { mutableListOf() }
                     .add(TraktSyncEpisode(episode, watchedAt))
             } else {
-                movies.add(TraktSyncItem(ids = TraktIds(imdb = item.id), watchedAt = watchedAt))
+                val ids = TraktContentIds.traktIds(item.id) ?: continue
+                movies.add(TraktSyncItem(ids = ids, watchedAt = watchedAt))
             }
             sent.add(item)
         }
         if (sent.isEmpty()) return
-        val shows = episodesByShow.map { (showId, seasons) ->
+        val shows = episodesByShow.mapNotNull { (showId, seasons) ->
             TraktSyncItem(
-                ids = TraktIds(imdb = showId),
+                ids = TraktContentIds.traktIds(showId) ?: return@mapNotNull null,
                 seasons = seasons.map { (number, episodes) -> TraktSyncSeason(number, episodes) }
             )
         }
@@ -294,44 +296,39 @@ class TraktSyncManager @Inject constructor(
     private suspend fun pushPaused(item: WatchHistoryEntity) {
         val progress = (item.position.toFloat() / item.duration * 100f).coerceIn(0f, 100f)
         val request = if (item.type == "series") {
-            val (showId, season, episode) = parseEpisodeId(item.id) ?: return
+            val (showId, season, episode) = TraktContentIds.episode(item.id) ?: return
             TraktScrobbleRequest(
-                show = TraktScrobbleShow(ids = TraktIds(imdb = showId)),
+                show = TraktScrobbleShow(ids = TraktContentIds.traktIds(showId) ?: return),
                 episode = TraktScrobbleEpisode(season = season, number = episode),
                 progress = progress
             )
         } else {
-            TraktScrobbleRequest(movie = TraktScrobbleMovie(ids = TraktIds(imdb = item.id)), progress = progress)
+            val ids = TraktContentIds.traktIds(item.id) ?: return
+            TraktScrobbleRequest(movie = TraktScrobbleMovie(ids = ids), progress = progress)
         }
         val response = traktSyncApi.scrobblePause(request)
         Log.d(TAG, "Pushed paused ${item.title} at ${"%.0f".format(progress)}%: ${response.code()}")
         if (response.isSuccessful) dao.upsertHistory(item.copy(scrobbled = true))
     }
 
-    /** "tt123:2:5" or "tt123:2:5:0" (with stream index) is show tt123, season 2, episode 5. */
-    private fun parseEpisodeId(id: String): Triple<String, Int, Int>? {
-        val parts = normalizePlaybackId(id).split(":")
-        if (parts.size < 3) return null
-        val season = parts[parts.size - 2].toIntOrNull() ?: return null
-        val episode = parts.last().toIntOrNull() ?: return null
-        return Triple(parts.dropLast(2).joinToString(":"), season, episode)
-    }
-
     private fun isoTimestamp(epochMs: Long): String? =
         if (epochMs > 0L) java.time.Instant.ofEpochMilli(epochMs).toString() else null
 
     /**
-     * Mark a movie as watched on Trakt.
+     * Mark a movie as watched on Trakt. True when Trakt took it.
      */
-    suspend fun pushMovieWatched(imdbId: String) {
-        if (traktAuthManager.getAccessToken() == null) return
-        withContext(Dispatchers.IO) {
+    suspend fun pushMovieWatched(imdbId: String): Boolean {
+        if (traktAuthManager.getAccessToken() == null) return false
+        val ids = TraktContentIds.traktIds(imdbId) ?: return false
+        return withContext(Dispatchers.IO) {
             try {
-                val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = TraktIds(imdb = imdbId))))
+                val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = ids)))
                 val response = traktSyncApi.addToHistory(body)
                 Log.d(TAG, "pushMovieWatched $imdbId: ${response.code()}")
+                response.isSuccessful
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to push movie watched to Trakt", e)
+                false
             }
         }
     }
@@ -341,9 +338,10 @@ class TraktSyncManager @Inject constructor(
      */
     suspend fun pushMovieUnwatched(imdbId: String) {
         if (traktAuthManager.getAccessToken() == null) return
+        val ids = TraktContentIds.traktIds(imdbId) ?: return
         withContext(Dispatchers.IO) {
             try {
-                val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = TraktIds(imdb = imdbId))))
+                val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = ids)))
                 val response = traktSyncApi.removeFromHistory(body)
                 Log.d(TAG, "pushMovieUnwatched $imdbId: ${response.code()}")
             } catch (e: Exception) {
@@ -353,24 +351,27 @@ class TraktSyncManager @Inject constructor(
     }
 
     /**
-     * Mark an episode as watched on Trakt.
+     * Mark an episode as watched on Trakt. True when Trakt took it.
      */
-    suspend fun pushEpisodeWatched(showImdbId: String, season: Int, episode: Int) {
-        if (traktAuthManager.getAccessToken() == null) return
-        withContext(Dispatchers.IO) {
+    suspend fun pushEpisodeWatched(showImdbId: String, season: Int, episode: Int): Boolean {
+        if (traktAuthManager.getAccessToken() == null) return false
+        val ids = TraktContentIds.traktIds(showImdbId) ?: return false
+        return withContext(Dispatchers.IO) {
             try {
                 val body = TraktSyncRequest(
                     shows = listOf(
                         TraktSyncItem(
-                            ids = TraktIds(imdb = showImdbId),
+                            ids = ids,
                             seasons = listOf(TraktSyncSeason(season, listOf(TraktSyncEpisode(episode))))
                         )
                     )
                 )
                 val response = traktSyncApi.addToHistory(body)
                 Log.d(TAG, "pushEpisodeWatched S${season}E${episode}: ${response.code()}")
+                response.isSuccessful
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to push episode watched to Trakt", e)
+                false
             }
         }
     }
@@ -380,12 +381,13 @@ class TraktSyncManager @Inject constructor(
      */
     suspend fun pushEpisodeUnwatched(showImdbId: String, season: Int, episode: Int) {
         if (traktAuthManager.getAccessToken() == null) return
+        val ids = TraktContentIds.traktIds(showImdbId) ?: return
         withContext(Dispatchers.IO) {
             try {
                 val body = TraktSyncRequest(
                     shows = listOf(
                         TraktSyncItem(
-                            ids = TraktIds(imdb = showImdbId),
+                            ids = ids,
                             seasons = listOf(TraktSyncSeason(season, listOf(TraktSyncEpisode(episode))))
                         )
                     )
@@ -423,19 +425,21 @@ class TraktSyncManager @Inject constructor(
                 }
                 val traktPlayback = playbackResponse.body() ?: emptyList()
 
-                // 2. Build lookup: IMDb ID → TraktPlaybackItem
+                // 2. Build lookup: every local playback id an item can go by (IMDb, tmdb:, tvdb:) → item
                 val traktPlaybackIds = mutableMapOf<String, TraktPlaybackItem>()
+                val traktPlaybackEntries = mutableListOf<Pair<List<String>, TraktPlaybackItem>>()
                 for (item in traktPlayback) {
-                    val id = when (item.type) {
-                        "movie" -> item.movie?.ids?.imdb
+                    val ids = when (item.type) {
+                        "movie" -> TraktContentIds.keys(item.movie?.ids)
                         "episode" -> {
-                            val showImdb = item.show?.ids?.imdb ?: continue
                             val ep = item.episode ?: continue
-                            "$showImdb:${ep.season}:${ep.number}"
+                            TraktContentIds.keys(item.show?.ids).map { "$it:${ep.season}:${ep.number}" }
                         }
-                        else -> null
+                        else -> emptyList()
                     }
-                    if (id != null) traktPlaybackIds[id] = item
+                    if (ids.isEmpty()) continue
+                    ids.forEach { traktPlaybackIds[it] = item }
+                    traktPlaybackEntries.add(ids to item)
                 }
 
                 // 3. Fetch Trakt watched history with episode-level detail (Fix 2)
@@ -467,13 +471,8 @@ class TraktSyncManager @Inject constructor(
 
                     // Not on Trakt playback. Check if the specific item was watched (Fix 2)
                     val onTraktWatched = if (local.type == "series") {
-                        val parts = normalizedId.split(":")
-                        if (parts.size >= 3) {
-                            val showImdb = parts.dropLast(2).joinToString(":")
-                            val season = parts[parts.size - 2].toIntOrNull()
-                            val episode = parts[parts.size - 1].toIntOrNull()
-                            season != null && episode != null && watchedData.isEpisodeWatched(showImdb, season, episode)
-                        } else false
+                        val (showId, season, episode) = TraktContentIds.episode(normalizedId) ?: continue
+                        watchedData.isEpisodeWatched(showId, season, episode)
                     } else {
                         watchedData.isMovieWatched(local.id)
                     }
@@ -493,19 +492,16 @@ class TraktSyncManager @Inject constructor(
 
                 // 5. Pull new items from Trakt playback that aren't local
                 var added = 0
-                for ((id, item) in traktPlaybackIds) {
+                for ((ids, item) in traktPlaybackEntries) {
                     // Fix 5: skip items being deleted
-                    if (id in pendingDeletes) continue
+                    if (ids.any { it in pendingDeletes }) continue
 
                     val type = if (item.type == "movie") "movie" else "series"
 
-                    // Don't overwrite existing local progress (check both exact and with stream index)
-                    val existing = dao.getHistoryItem(id)
-                    if (existing != null) continue
-                    if (type == "series") {
-                        val hasLocal = dao.getLatestSeriesEpisodeHistory("$id:%") != null
-                        if (hasLocal) continue
-                    }
+                    // Don't overwrite existing local progress under any of its ids (exact or with stream index)
+                    if (ids.any { dao.getHistoryItem(it) != null }) continue
+                    if (type == "series" && ids.any { dao.getLatestSeriesEpisodeHistory("$it:%") != null }) continue
+                    val id = ids.first()
 
                     val title = when (item.type) {
                         "movie" -> item.movie?.title ?: "Unknown"
@@ -562,13 +558,14 @@ class TraktSyncManager @Inject constructor(
                 val traktWatchedMovieIds = mutableSetOf<String>()
                 if (moviesResponse.isSuccessful) {
                     moviesResponse.body()?.forEach { watchedMovie ->
-                        val imdbId = watchedMovie.movie.ids.imdb ?: return@forEach
-                        traktWatchedMovieIds.add(imdbId)
-                        val existing = dao.getHistoryItem(imdbId)
+                        val ids = TraktContentIds.keys(watchedMovie.movie.ids)
+                        if (ids.isEmpty()) return@forEach
+                        traktWatchedMovieIds.addAll(ids)
+                        val existing = ids.firstNotNullOfOrNull { dao.getHistoryItem(it) }
                         if (existing == null) {
                             dao.upsertHistory(
                                 WatchHistoryEntity(
-                                    id = imdbId,
+                                    id = ids.first(),
                                     title = watchedMovie.movie.title ?: "Unknown",
                                     poster = null,
                                     position = 0L,
@@ -596,15 +593,20 @@ class TraktSyncManager @Inject constructor(
                 val traktWatchedEpisodeIds = mutableSetOf<String>()
                 var updated = 0
                 for (show in watchedShows) {
-                    val imdbId = show.show.ids.imdb ?: continue
+                    val ids = TraktContentIds.keys(show.show.ids)
+                    if (ids.isEmpty()) continue
                     val traktSlug = show.show.ids.slug ?: continue
                     val showTitle = show.show.title ?: "Unknown"
+                    // The id this show already goes by here (an addon may name it tmdb:), else IMDb
+                    val imdbId = ids.firstOrNull {
+                        dao.getSeriesNextUp(it) != null || dao.getLatestSeriesEpisodeHistory("$it:%") != null
+                    } ?: ids.first()
 
                     // Create watched history entries for episodes marked watched on Trakt
                     show.seasons?.forEach { season ->
                         season.episodes?.forEach { ep ->
                             val playbackId = "$imdbId:${season.number}:${ep.number}"
-                            traktWatchedEpisodeIds.add(playbackId)
+                            ids.forEach { traktWatchedEpisodeIds.add("$it:${season.number}:${ep.number}") }
                             val existing = dao.getHistoryItem(playbackId)
                             if (existing == null) {
                                 dao.upsertHistory(
@@ -775,19 +777,7 @@ class TraktSyncManager @Inject constructor(
      * "tt123:1:3"   → "tt123:1:3"  (already normalized)
      * "tt123"       → "tt123"      (movie, no change)
      */
-    private fun normalizePlaybackId(id: String): String {
-        val parts = id.split(":")
-        // Episode with stream index: 4+ parts where last is numeric (stream idx)
-        // and second-to-last and third-to-last are also numeric (episode, season)
-        if (parts.size >= 4 &&
-            parts.last().toIntOrNull() != null &&
-            parts[parts.size - 2].toIntOrNull() != null &&
-            parts[parts.size - 3].toIntOrNull() != null
-        ) {
-            return parts.dropLast(1).joinToString(":")
-        }
-        return id
-    }
+    private fun normalizePlaybackId(id: String): String = TraktContentIds.normalize(id)
 
     /**
      * Watched data from Trakt with episode-level granularity. (Fix 2)
@@ -812,18 +802,18 @@ class TraktSyncManager @Inject constructor(
         try {
             val moviesResponse = traktSyncApi.getWatchedMovies()
             if (!moviesResponse.isSuccessful) return null
-            moviesResponse.body()?.forEach { it.movie.ids.imdb?.let { id -> movieIds.add(id) } }
+            moviesResponse.body()?.forEach { movieIds.addAll(TraktContentIds.keys(it.movie.ids)) }
 
             val showsResponse = traktSyncApi.getWatchedShows()
             if (!showsResponse.isSuccessful) return null
             showsResponse.body()?.forEach { show ->
-                val showImdb = show.show.ids.imdb ?: return@forEach
-                val episodes = episodeMap.getOrPut(showImdb) { mutableSetOf() }
+                val episodes = mutableSetOf<Pair<Int, Int>>()
                 show.seasons?.forEach { season ->
                     season.episodes?.forEach { ep ->
                         episodes.add(Pair(season.number, ep.number))
                     }
                 }
+                TraktContentIds.keys(show.show.ids).forEach { episodeMap.getOrPut(it) { mutableSetOf() }.addAll(episodes) }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch watched history", e)
@@ -852,17 +842,16 @@ class TraktSyncManager @Inject constructor(
                 val items = response.body() ?: return@withContext
 
                 for (item in items) {
-                    val traktId = when (item.type) {
-                        "movie" -> item.movie?.ids?.imdb
+                    val traktIds = when (item.type) {
+                        "movie" -> TraktContentIds.keys(item.movie?.ids)
                         "episode" -> {
-                            val showImdb = item.show?.ids?.imdb ?: continue
                             val ep = item.episode ?: continue
-                            "$showImdb:${ep.season}:${ep.number}"
+                            TraktContentIds.keys(item.show?.ids).map { "$it:${ep.season}:${ep.number}" }
                         }
-                        else -> null
-                    } ?: continue
+                        else -> emptyList()
+                    }
 
-                    if (traktId == normalizedId) {
+                    if (normalizedId in traktIds) {
                         val playbackId = item.id ?: continue
                         val deleteResponse = traktSyncApi.deletePlaybackItem(playbackId)
                         Log.d(TAG, "Deleted playback $playbackId from Trakt: ${deleteResponse.code()}")
