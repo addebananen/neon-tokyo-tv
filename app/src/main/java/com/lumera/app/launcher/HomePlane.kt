@@ -47,11 +47,12 @@ import java.io.File
  */
 
 /** What the video chip shows: a film on a loop, or a still that plays once and stays. */
-internal data class PlaneMedia(val uri: Uri, val loop: Boolean)
+internal data class PlaneMedia(val uri: Uri, val loop: Boolean, val painted: Boolean = true)
 
 /** What the video chip shows for [style], or for a profile's own [picture]; null when it shows nothing. */
 internal fun planeMedia(context: Context, style: HomeStyle, picture: String?): PlaneMedia? = when {
-    picture != null && isVideo(picture) -> PlaneMedia(Uri.fromFile(File(picture)), loop = true)
+    // A profile's own film has nothing painted to stand in for it
+    picture != null && isVideo(picture) -> PlaneMedia(Uri.fromFile(File(picture)), loop = true, painted = false)
     picture != null -> PictureStill.of(picture)?.let { PlaneMedia(Uri.fromFile(it), loop = false) }
     style.video != null -> PlaneMedia(resource(context, style.video), loop = true)
     else -> style.still?.let { PlaneMedia(resource(context, it), loop = false) }
@@ -116,14 +117,23 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
+    // Whether the chip was let go of for an app, so this start is a return to the home screen
+    val stopped = remember { booleanArrayOf(false) }
     LaunchedEffect(media, started) {
         if (!started || media == null || media.uri in plane.failed) {
+            if (!started) stopped[0] = true
             player.stop()
             player.clearMediaItems()
             plane.shown = null
             return@LaunchedEffect
         }
         if (plane.shown != null && plane.shown != media.uri) delay(PLANE_SWITCH_MS)
+        // Back from an app the painting stands in for a moment, while the screen settles: setting
+        // up the video decoder alongside the window coming in is what made the return stutter
+        if (stopped[0]) {
+            stopped[0] = false
+            if (media.painted) delay(PLANE_RETURN_MS)
+        }
         player.repeatMode = if (media.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         player.setMediaItem(MediaItem.fromUri(media.uri))
         player.prepare()
@@ -134,6 +144,9 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
 
 // Long enough for the Crossfade between two styles to finish
 private const val PLANE_SWITCH_MS = 700L
+
+// After the window's return animation (about a third of a second on Google TV)
+private const val PLANE_RETURN_MS = 400L
 
 /**
  * How much of what is drawn for [media] still shows over the video chip: all of it until the chip

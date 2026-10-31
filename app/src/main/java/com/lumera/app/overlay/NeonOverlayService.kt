@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.tv.TvInputManager
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
@@ -28,6 +30,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Picture diagnostics and the gaming HUD, over whatever the TV shows.
@@ -46,13 +52,99 @@ class NeonOverlayService : AccessibilityService() {
     private val chords = ChordDetector(ChordDetector.DEFAULT)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var probe: SignalProbe
+    @Volatile
     private var control: ControlCenter? = null
     /** The hand that presses on the TV's settings pages for the Control Center, lent while this runs. */
     private val hand = SettingsHand(this) { handOff() }
 
+    @Volatile
     private var foreground: String? = null
+    @Volatile
     private var keyLagMs: Int? = null
+    @Volatile
     private var gestures = true
+
+    /*
+     * The remote's buttons on a thread of their own. A service that filters keys holds up every
+     * press on the TV until it answers, and Android hands it each press on the app's main thread,
+     * the same one Neon Home and the Neon Tokyo app draw on. While those were busy, as just after
+     * coming back from an app, every press anywhere on the TV waited for them, up to half a
+     * second each. So the presses come here instead and are answered at once; only the few that
+     * are the Control Center's or diagnostics' go over to the main thread, ahead of anything
+     * queued there.
+     */
+    private var keyThread: HandlerThread? = null
+    @Volatile
+    private var keysOwnThread = false
+    private var bindFound = false
+
+    private fun keyLooper(): Looper =
+        keyThread?.looper ?: HandlerThread("NeonKeys", Process.THREAD_PRIORITY_URGENT_DISPLAY).also {
+            it.start()
+            keyThread = it
+        }.looper
+
+    /** True only for the call AccessibilityService.onBind makes for the looper its callbacks run on. */
+    private fun forOnBind(): Boolean {
+        if (bindFound) return false
+        val bind = Throwable().stackTrace.any {
+            it.methodName == "onBind" && it.className == AccessibilityService::class.java.name
+        }
+        if (bind) {
+            bindFound = true
+            keysOwnThread = true
+        }
+        return bind
+    }
+
+    // Android 14 asks for an executor, Android 11 to 13 for a looper; anything else asking still gets the main one
+    @androidx.annotation.RequiresApi(28)
+    override fun getMainExecutor(): Executor {
+        if (!forOnBind()) return super.getMainExecutor()
+        val keys = Handler(keyLooper())
+        return Executor { keys.post(it) }
+    }
+
+    override fun getMainLooper(): Looper = if (forOnBind()) keyLooper() else super.getMainLooper()
+
+    /** Where the chord timer runs: wherever the presses come. */
+    private val keyHandler: Handler by lazy { if (keysOwnThread) Handler(keyLooper()) else handler }
+
+    /** Runs [block] on the main thread now and waits for it, for no longer than [timeoutMs]. */
+    private fun <T> onMainNow(timeoutMs: Long, fallback: T, block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return block()
+        val state = AtomicInteger(0) // 0 waiting, 1 taken by the main thread, 2 given up
+        val done = CountDownLatch(1)
+        val result = arrayOfNulls<Any?>(1)
+        result[0] = fallback
+        handler.postAtFrontOfQueue {
+            if (!state.compareAndSet(0, 1)) return@postAtFrontOfQueue
+            try {
+                result[0] = block()
+            } finally {
+                done.countDown()
+            }
+        }
+        if (!done.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+            // Too busy: the press goes on to the TV as if nothing here wanted it
+            if (state.compareAndSet(0, 2)) return fallback
+            done.await()
+        }
+        @Suppress("UNCHECKED_CAST")
+        return result[0] as T
+    }
+
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else handler.post(block)
+    }
+
+    /** Diagnostics are up, or Back went down on them: Back is theirs. Read on the key thread. */
+    @Volatile
+    private var backIsOurs = false
+
+    private fun publishBack() {
+        backIsOurs = diagnostics != null || backHeld
+    }
 
     private val report = mutableStateOf<SignalReport?>(null)
     private val hudLeft = mutableStateOf(1f)
@@ -96,10 +188,12 @@ class NeonOverlayService : AccessibilityService() {
     }
 
     private val checkChord = Runnable {
-        chords.due(SystemClock.uptimeMillis())?.let { fire(it.action) }
+        chords.due(SystemClock.uptimeMillis())?.let { onMain { fire(it.action) } }
     }
 
-    override fun onServiceConnected() {
+    override fun onServiceConnected() = onMain { connected() }
+
+    private fun connected() {
         probe = SignalProbe(this)
         gestures = OverlayPrefs.gestures(this)
         instance = this
@@ -112,13 +206,31 @@ class NeonOverlayService : AccessibilityService() {
         // Only the shell and the system hold DUMP, so no app can open the overlays this way
         runCatching { unregisterReceiver(fromAdb) }
         ContextCompat.registerReceiver(this, fromAdb, IntentFilter(ACTION_ADB), "android.permission.DUMP", handler, ContextCompat.RECEIVER_EXPORTED)
-        Log.i(TAG, "Connected, chords ${if (gestures) "on" else "off"}")
+        Log.i(TAG, "Connected, chords ${if (gestures) "on" else "off"}, keys on ${if (keysOwnThread) "their own thread" else "the main thread"}")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             keyLagMs = (SystemClock.uptimeMillis() - event.eventTime).toInt().takeIf { it in 0..2_000 }
         }
+        val code = event.keyCode
+        // Only a press the Control Center or diagnostics may want waits for the main thread
+        val theirs = code == KeyEvent.KEYCODE_HOME || code == KeyEvent.KEYCODE_SETTINGS ||
+            control?.engaged == true || (code == KeyEvent.KEYCODE_BACK && backIsOurs)
+        if (theirs) onMainNow<Boolean?>(MAIN_WAIT_MS, null) { panelKey(event) }?.let { return it }
+        if (!gestures) return false
+        val consume = chords.onKey(code, event.action, event.repeatCount, event.eventTime)
+        val armed = chords.armed
+        keyHandler.removeCallbacks(checkChord)
+        if (armed != null) {
+            val wait = (chords.armedAt + armed.holdMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)
+            keyHandler.postDelayed(checkChord, wait)
+        }
+        return consume
+    }
+
+    /** On the main thread: the Control Center's and diagnostics' share of the remote, null when neither wants [event]. */
+    private fun panelKey(event: KeyEvent): Boolean? {
         // The Control Center first: while it shows, the remote is its own
         control?.onKey(event)?.let { return it }
         // Back puts diagnostics away and goes no further
@@ -128,30 +240,31 @@ class NeonOverlayService : AccessibilityService() {
                 backHeld = false
                 hideDiagnostics()
             }
+            publishBack()
             return true
         }
-        if (!gestures) return false
-        val consume = chords.onKey(event.keyCode, event.action, event.repeatCount, event.eventTime)
-        val armed = chords.armed
-        handler.removeCallbacks(checkChord)
-        if (armed != null) {
-            val wait = (chords.armedAt + armed.holdMs - SystemClock.uptimeMillis()).coerceAtLeast(0L)
-            handler.postDelayed(checkChord, wait)
-        }
-        return consume
+        return null
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Read now: the event is recycled once this returns
+        val type = event?.eventType
+        val pkg = event?.packageName?.toString()
+        val className = event?.className?.toString()
+        onMain { windowChanged(type, pkg, className) }
+    }
+
+    private fun windowChanged(type: Int?, pkg: String?, className: String?) {
         if (SettingsHand.pending != null) {
             handOn()
             hand.step()
         }
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val pkg = event.packageName?.toString() ?: return
+        if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        pkg ?: return
         // The TV's volume bar and other system panels sit over the app, which stays in front
         if (pkg == "com.android.systemui" || pkg == "android") return
         // The overlays' own windows and toasts don't change what is in front
-        if (pkg == packageName && (diagnostics != null || hud != null || event.className?.contains("Toast") == true)) return
+        if (pkg == packageName && (diagnostics != null || hud != null || className?.contains("Toast") == true)) return
         foreground = pkg
         val console = ConsoleSession.last
         if (hudWhenConsole > 0 && console?.tvApp == pkg) {
@@ -199,6 +312,7 @@ class NeonOverlayService : AccessibilityService() {
         if (BluetoothHelper.lent === hand) BluetoothHelper.lent = null
         hand.stop()
         scope.cancel()
+        keyThread?.quitSafely()
         super.onDestroy()
     }
 
@@ -219,6 +333,7 @@ class NeonOverlayService : AccessibilityService() {
         diagnostics = window
         startLive()
         if (!window.show()) diagnostics = null
+        publishBack()
         // A copy for later, once the readings have settled
         scope.launch {
             delay(3_500L)
@@ -236,6 +351,7 @@ class NeonOverlayService : AccessibilityService() {
         val window = diagnostics ?: return
         window.hide {
             if (diagnostics === window) diagnostics = null
+            publishBack()
             stopLiveIfIdle()
         }
     }
@@ -338,6 +454,9 @@ class NeonOverlayService : AccessibilityService() {
         private const val ACTION_ADB = "com.neontokyo.tv.OVERLAY"
         private const val CONSOLE_WAIT_MS = 8_000L
         private const val DIAGNOSTICS_MAX_MS = 5 * 60_000L
+
+        /** How long a press waits for a busy main thread; Android itself waits half a second. */
+        private const val MAIN_WAIT_MS = 300L
 
         @Volatile
         private var instance: NeonOverlayService? = null
