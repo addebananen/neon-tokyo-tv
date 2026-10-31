@@ -1365,6 +1365,21 @@ case "$label" in *AirPods*) ;; *) fail "the Bluetooth corner does not have the f
 key BACK
 sleep 2
 if screen_has "All devices"; then fail "Back did not put the Bluetooth corner away"; fi
+# The app switcher with a few made-up apps: cards glide left and right, and Down goes on to the
+# Bluetooth corner
+adb shell am start -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es switcher "com.netflix.ninja,com.google.android.youtube.tv,com.spotify.tv.android,com.neontokyo.tv" >/dev/null 2>&1
+sleep 3
+shot app-switcher-preview
+screen_has 'text="Close app"' || fail "the app switcher preview did not open"
+key DPAD_LEFT DPAD_LEFT
+sleep 1
+shot app-switcher-left
+key DPAD_DOWN
+sleep 2
+shot app-switcher-bluetooth
+screen_has "All devices" || fail "Down in the app switcher did not open the Bluetooth corner"
+key BACK
+sleep 2
 adb shell settings put global animator_duration_scale 0
 key BACK
 sleep 2
@@ -1440,6 +1455,27 @@ adb shell input keyevent KEYCODE_HOME
 sleep 2
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "Home on Neon Home did not go back to its first tile ($label has the focus)"
+# Home pressed twice opens the app switcher, as on Apple TV: Neon Tokyo, just left with Home, is
+# its card in front. Up throws that card off the top and closes the app; Back puts it away
+adb shell am start -n "$PKG/com.lumera.app.MainActivity" >/dev/null 2>&1
+sleep 8
+adb shell input keyevent KEYCODE_HOME KEYCODE_HOME
+sleep 3
+shot app-switcher
+switcher_xml="$OUT/$(printf "%02d" "$step")-app-switcher.xml"
+grep -q 'text="Close app"' "$switcher_xml" 2>/dev/null || fail "Home pressed twice did not open the app switcher"
+grep -q 'text="Neon Tokyo"' "$switcher_xml" 2>/dev/null || fail "the app switcher has no card for Neon Tokyo, which was just left"
+key DPAD_UP
+sleep 3
+shot app-switcher-closed
+if adb shell dumpsys activity activities 2>/dev/null | grep -q "com.lumera.app.MainActivity"; then
+  fail "Up in the app switcher did not close Neon Tokyo"
+fi
+home_resumed || fail "closing an app in the app switcher left Neon Home"
+key BACK
+sleep 2
+if screen_has 'text="Close app"\|text="No apps open"'; then fail "Back did not put the app switcher away"; fi
+home_resumed || fail "Back in the app switcher left Neon Home"
 # The TV switched off and on again: Neon Home comes on to the neon intro
 adb shell settings put global animator_duration_scale 1
 adb logcat -c 2>/dev/null || true

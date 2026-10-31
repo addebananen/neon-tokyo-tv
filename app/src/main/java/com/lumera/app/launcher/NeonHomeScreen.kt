@@ -251,7 +251,7 @@ private data class Lifted(val row: HomeOrder.Row, val key: String)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewGlass: HomeGlass? = null, previewLayout: Set<String>? = null, previewFocus: GlassFocus? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null) {
+fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = null, previewStyle: HomeStyle? = null, previewIcons: IconPack? = null, previewTint: IconTint? = null, previewTiles: List<String>? = null, previewGlass: HomeGlass? = null, previewLayout: Set<String>? = null, previewFocus: GlassFocus? = null, previewWake: String? = null, previewBluetooth: String? = null, previewBluetoothList: String? = null, previewSwitcher: String? = null) {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val homeProfiles = remember { HomeProfiles.get(appContext) }
@@ -430,9 +430,10 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     var btCard by remember { mutableStateOf<BtDevice?>(null) }
     val btOn by bt.on.collectAsState()
     val btPermitted by bt.permitted.collectAsState()
-    // Home pressed twice opens the Bluetooth corner: this profile's devices with Connect
+    // The Bluetooth corner: this profile's devices with Connect, from Down in the app switcher
     var btCorner by remember { mutableStateOf(false) }
-    val lastHome = remember { longArrayOf(0L) }
+    // Home pressed twice opens the app switcher, as on Apple TV
+    var switcher by remember { mutableStateOf(false) }
     val previewCorner = remember(previewBluetoothList) {
         previewBluetoothList?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.mapIndexed { i, name ->
             BtDevice("$PREVIEW_DEVICE$i", name, BtRules.previewKind(name), connected = false)
@@ -463,6 +464,11 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         if (device.address.startsWith(PREVIEW_DEVICE)) return
         val result = bt.connect(device.address)
         btConnectNote(result, device.name)?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+    fun disconnectBluetooth(device: BtDevice) {
+        if (device.address.startsWith(PREVIEW_DEVICE)) return
+        val result = bt.connect(device.address, disconnect = true)
+        btConnectNote(result, device.name, disconnect = true)?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
     }
     LaunchedEffect(previewWake) {
         previewWake?.let { id -> HomeCatalog.consoles.firstOrNull { it.id == id }?.let { woke = it } }
@@ -534,7 +540,7 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         repeat(10) {
             withFrameNanos { }
             // A console's or a device's card that just came has the focus, and keeps it
-            if (woke != null || btCard != null || btCorner) return@LaunchedEffect
+            if (woke != null || btCard != null || btCorner || switcher) return@LaunchedEffect
             val target = when (tab) {
                 HomeTab.Home -> firstFavourite
                 HomeTab.Apps -> firstApp
@@ -563,11 +569,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
     // Home pressed while the home screen shows: back to the start, as on other TV home screens
     LaunchedEffect(homePresses) {
         if (homePresses == 0) return@LaunchedEffect
-        val now = SystemClock.uptimeMillis()
-        val twice = now - lastHome[0] < BtRules.DOUBLE_HOME_MS
-        // A third press starts over rather than closing what the second opened
-        lastHome[0] = if (twice) 0L else now
-        btCorner = twice
+        btCorner = false
+        switcher = false
         reopen = null
         drop()
         linking = null
@@ -581,7 +584,13 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
         pinning = null
         changing = null
         tab = HomeTab.Home
-        if (!twice) focusFirst++
+        focusFirst++
+    }
+    // The second of two Home presses: the app switcher comes over the home screen just reset
+    LaunchedEffect(switcherOpens) {
+        if (switcherOpens == 0) return@LaunchedEffect
+        withFrameNanos { }
+        switcher = true
     }
     BackHandler {
         if (tab == HomeTab.Home && onLeave != null) {
@@ -991,7 +1000,8 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                         btCorner = false
                         if (device.address.startsWith(PREVIEW_DEVICE)) return@BluetoothCorner
                         if (btOwners[device.address].isNullOrEmpty()) bt.take(device.address, profile.id, true)
-                        if (device.connected) HomeApps.start(context, BluetoothHelper.settingsIntent(context))
+                        // A device that is connected lets go, and the sound comes back to the TV
+                        if (device.connected) disconnectBluetooth(device)
                         else connectBluetooth(device)
                         focusFirst++
                     },
@@ -1083,6 +1093,17 @@ fun NeonHome(homePresses: Int, onLeave: (() -> Unit)? = null, previewStyle: Home
                     onDismiss = { changing = null }
                 )
             }
+        }
+        if (switcher) {
+            AppSwitcher(
+                onDone = {
+                    switcher = false
+                    focusFirst++
+                },
+                onBluetooth = { btCorner = true },
+                onMove = { sounds.move() },
+                preview = previewSwitcher?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }
+            )
         }
     }
 }

@@ -459,9 +459,9 @@ class ControlCenter(private val service: AccessibilityService, private val actio
             }
             row.key.startsWith("bt:") -> {
                 val device = model.devices.firstOrNull { "bt:${it.address}" == row.key } ?: return
-                if (device.connected) return back()
+                // A device that is connected lets go, and the sound comes back to the TV's speakers
                 closeNow()
-                sendSound(device, disconnect = false)
+                sendSound(device, disconnect = device.connected)
             }
             row.key == "bt-settings" -> { closeNow(); start(BluetoothHelper.settingsIntent(service)) }
             row.key.startsWith("wifi:") -> {

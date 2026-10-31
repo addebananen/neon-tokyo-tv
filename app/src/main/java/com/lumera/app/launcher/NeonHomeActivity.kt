@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
@@ -23,6 +24,11 @@ import androidx.compose.runtime.setValue
  */
 class NeonHomeActivity : ComponentActivity() {
     private val homePresses = mutableIntStateOf(0)
+
+    /** Home pressed twice in a row opens the app switcher; counted here, as the presses come. */
+    private val switcherOpens = mutableIntStateOf(0)
+    private var previewSwitcher by mutableStateOf<String?>(null)
+    private var lastHomeAt = 0L
 
     // Opened from Settings to have a look, Back leaves it again; as the home screen it stays
     private var preview by mutableStateOf(false)
@@ -136,6 +142,12 @@ class NeonHomeActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         preview = !intent.hasCategory(Intent.CATEGORY_HOME)
+        // Started by the first of two Home presses: the second one opens the app switcher
+        if (!preview) lastHomeAt = SystemClock.uptimeMillis()
+        if (intent.hasExtra(EXTRA_SWITCHER)) {
+            previewSwitcher = intent.getStringExtra(EXTRA_SWITCHER)
+            switcherOpens.intValue++
+        }
         // on a real Home launch (e.g. just after the TV booted), bring the Siri Remote bridge back
         // if self-start is on and Shizuku is up; a no-op otherwise
         if (!preview) com.lumera.app.siri.SiriBootReceiver.tryStart(this, "home")
@@ -153,6 +165,7 @@ class NeonHomeActivity : ComponentActivity() {
         setContent {
             NeonHome(
                 homePresses = homePresses.intValue,
+                switcherOpens = switcherOpens.intValue,
                 onLeave = if (preview) ({ finish() }) else null,
                 previewStyle = previewStyle,
                 previewIcons = previewIcons,
@@ -163,7 +176,8 @@ class NeonHomeActivity : ComponentActivity() {
                 previewFocus = previewFocus,
                 previewWake = previewWake,
                 previewBluetooth = previewBluetooth,
-                previewBluetoothList = previewBluetoothList
+                previewBluetoothList = previewBluetoothList,
+                previewSwitcher = previewSwitcher
             )
         }
     }
@@ -181,7 +195,15 @@ class NeonHomeActivity : ComponentActivity() {
             previewFocus = null
             previewLayout = null
             HomeWidgets.preview(null)
+            // Timed as each press comes, not when the screen gets to it: back from an app the
+            // TV is busy, and two presses could otherwise reach the screen as one
+            val now = SystemClock.uptimeMillis()
+            val twice = now - lastHomeAt < BtRules.DOUBLE_HOME_MS
+            // A third press starts over rather than closing what the second opened
+            lastHomeAt = if (twice) 0L else now
             homePresses.intValue++
+            previewSwitcher = null
+            if (twice) switcherOpens.intValue++
         } else {
             // Asked to show a style while already open, as from Settings again: show it
             intent.getStringExtra(EXTRA_STYLE)?.let { previewStyle = HomeStyle.of(it) }
@@ -195,6 +217,10 @@ class NeonHomeActivity : ComponentActivity() {
             widgetsOf(intent)?.let { HomeWidgets.preview(it) }
             previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
             previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
+            if (intent.hasExtra(EXTRA_SWITCHER)) {
+            previewSwitcher = intent.getStringExtra(EXTRA_SWITCHER)
+            switcherOpens.intValue++
+        }
         }
     }
 
@@ -248,5 +274,8 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** Names of made-up Bluetooth devices, separated by commas, for the Bluetooth corner. */
         const val EXTRA_BLUETOOTH_LIST = "bluetoothlist"
+
+        /** Opens the app switcher at once, as Home pressed twice does. */
+        const val EXTRA_SWITCHER = "switcher"
     }
 }
