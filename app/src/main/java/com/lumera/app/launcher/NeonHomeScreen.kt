@@ -297,17 +297,30 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
 
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
+        // Back from an app, the screen comes first: Bluetooth and the list of apps, which ask the
+        // TV a lot and only matter a moment later, wait until the home screen has settled
+        val later = android.os.Handler(android.os.Looper.getMainLooper())
+        var firstStart = true
+        val settled = Runnable {
+            bt.start()
+            appsVersion++
+        }
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
                     inputs.start()
-                    bt.start()
-                    appsVersion++
+                    if (firstStart) {
+                        firstStart = false
+                        settled.run()
+                    } else {
+                        later.postDelayed(settled, RETURN_SETTLE_MS)
+                    }
                 }
                 Lifecycle.Event.ON_RESUME -> {
                     resumes++
                 }
                 Lifecycle.Event.ON_STOP -> {
+                    later.removeCallbacks(settled)
                     inputs.stop()
                     bt.stop()
                 }
@@ -316,6 +329,7 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
         }
         lifecycle.addObserver(observer)
         onDispose {
+            later.removeCallbacks(settled)
             lifecycle.removeObserver(observer)
             inputs.stop()
             bt.stop()
@@ -699,7 +713,7 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
                 verticalAlignment = Alignment.Top
             ) {
                 Column {
-                    HomeClock(resumes, light = { clockLight.value }, ignite = { ignite.value })
+                    HomeClock({ resumes }, light = { clockLight.value }, ignite = { ignite.value })
                     // The profile's own widgets, if it picked any: none of the styles has them
                     val widgetsVersion by HomeWidgets.version.collectAsState()
                     val widgets = remember(profile.id, widgetsVersion) { HomeWidgets.shown(appContext, profile.id) }
@@ -3085,10 +3099,11 @@ private fun skySpot(random: Random): Offset {
  * [light] is the sign's power, which flickers on when the home screen first shows.
  */
 @Composable
-private fun HomeClock(resumes: Int, light: () -> Float, ignite: () -> Float) {
+private fun HomeClock(resumes: () -> Int, light: () -> Float, ignite: () -> Float) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(resumes) { now = System.currentTimeMillis() }
+    // Read here, so coming back to the home screen sets the clock without redrawing all of it
+    LaunchedEffect(resumes()) { now = System.currentTimeMillis() }
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -3181,6 +3196,12 @@ private fun HomeBackdrop(style: HomeStyle, picture: String?, wallpaper: NeonWall
 }
 
 private const val LEAN_SCALE = 1.035f
+
+/**
+ * How long the home screen has to itself on coming back from an app, before the slow things
+ * start again: the window's own animation and the first frames then get the whole TV.
+ */
+internal const val RETURN_SETTLE_MS = 600L
 
 /**
  * What is drawn for a style or a profile's own [picture] over the video chip: the stand-in until

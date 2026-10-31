@@ -177,7 +177,15 @@ class ControlCenter(private val service: AccessibilityService, private val actio
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sounds: HomeSounds? = null
     private var window: OverlayWindow? = null
+        set(value) {
+            field = value
+            publish()
+        }
     private var warning: OverlayWindow? = null
+        set(value) {
+            field = value
+            publish()
+        }
     private var bluetooth: HomeBluetooth? = null
     private var live: Job? = null
     private var stopWatching: (() -> Unit)? = null
@@ -186,12 +194,28 @@ class ControlCenter(private val service: AccessibilityService, private val actio
     private var replayUntil = 0L
     /** A key that cut the sleep warning short: its release is ours too. */
     private var swallowUp = -1
+        set(value) {
+            field = value
+            publish()
+        }
     /** Made-up devices for a preview, from ADB. */
     private var previewDevices: List<BtDevice>? = null
 
     val model = CcModel()
 
     val isOpen: Boolean get() = window?.isShowing == true
+
+    /**
+     * Something of the Control Center's is up, so any button may be its: read off the main thread
+     * by the service, which sends only those presses (and Home and Settings) over to it.
+     */
+    @Volatile
+    var engaged = false
+        private set
+
+    private fun publish() {
+        engaged = window != null || warning != null || swallowUp >= 0
+    }
 
     private val sleepEndsAt = longArrayOf(0L)
 

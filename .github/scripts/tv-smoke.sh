@@ -1516,6 +1516,10 @@ adb shell settings put secure accessibility_enabled 1
 sleep 4
 adb shell dumpsys accessibility >> "$OUT/overlay.txt" 2>&1
 grep -q "NeonOverlayService" "$OUT/overlay.txt" || fail "the overlay service did not start once Accessibility turned it on"
+# The remote's presses go to a thread of their own, so a busy home screen never holds them up
+adb logcat -d -s NeonOverlay:I | grep "Connected" | tail -1 >> "$OUT/overlay.txt"
+adb logcat -d -s NeonOverlay:I | grep "Connected" | tail -1 | grep -q "their own thread" ||
+  fail "the overlay service took the remote's presses on the main thread"
 adb shell settings put global animator_duration_scale 1
 adb shell screenrecord --time-limit 6 --size 1280x720 --bit-rate 6000000 /sdcard/overlay.mp4 >> "$OUT/overlay.txt" 2>&1 &
 recorder=$!

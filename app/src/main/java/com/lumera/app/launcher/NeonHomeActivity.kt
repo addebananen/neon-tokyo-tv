@@ -151,6 +151,8 @@ class NeonHomeActivity : ComponentActivity() {
         // on a real Home launch (e.g. just after the TV booted), bring the Siri Remote bridge back
         // if self-start is on and Shizuku is up; a no-op otherwise
         if (!preview) com.lumera.app.siri.SiriBootReceiver.tryStart(this, "home")
+        // Just updated: the TV compiles the new version now rather than overnight, where it can
+        if (!preview) com.lumera.app.siri.SpeedCompile.maybeRun(this)
         if (preview) previewStyle = intent.getStringExtra(EXTRA_STYLE)?.let(HomeStyle::of)
         if (preview) previewIcons = intent.getStringExtra(EXTRA_ICONS)?.let(IconPack::of)
         if (preview) previewTint = intent.getStringExtra(EXTRA_TINT)?.let(IconTint::of)
