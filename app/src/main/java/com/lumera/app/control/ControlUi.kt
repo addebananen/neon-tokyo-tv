@@ -11,8 +11,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -31,7 +30,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -78,15 +76,14 @@ private val Body = FontFamily(Font(R.font.outfit_medium, FontWeight.Medium))
 private val Ink = GlassInk
 private val Soft = Color.White.copy(alpha = 0.62f)
 private val Calm = Color(0xFF9B8CFF)
-/** The panel's sheet of liquid glass, which everything sits on. */
-private val SheetShape = RoundedCornerShape(36.dp)
-private const val SHEET_PAD = 18
-/** Under the sheet's glass, so text behind it doesn't read through and clutter the buttons. */
-private val SheetSmoke = Color(0xB80A0B12)
+/** Inside each pane: just enough shade for white text over a bright film, the glass stays clear. */
+private val Clear = Color(0x2E05060A)
 
-private const val PANEL_W = 396
-private const val GAP = 12
-private const val UNIT_H = 60
+// Sized as Apple TV's: a small cluster in the corner, the film all round it
+private const val PANEL_W = 212
+private const val LIST_W = 264
+private const val GAP = 8
+private const val UNIT_H = 44
 private val UNIT_W = (PANEL_W - 3 * GAP) / 4f
 
 /** 0 to 1 as the panel comes down, back to 0 as it goes. */
@@ -94,28 +91,30 @@ private val UNIT_W = (PANEL_W - 3 * GAP) / 4f
 private fun entrance(shown: Boolean): Float {
     val value by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = if (shown) tween(320, easing = LinearOutSlowInEasing) else tween(200, easing = FastOutSlowInEasing),
+        // In on a spring that settles without overshoot, out quicker
+        animationSpec = if (shown) spring(dampingRatio = 1f, stiffness = 380f) else tween(160, easing = FastOutSlowInEasing),
         label = "CcEntrance"
     )
     return value
 }
 
-/** Each part comes a beat after the one before it. */
-private fun stagger(enter: Float, index: Int): Float = ((enter * 1.4f) - index * 0.07f).coerceIn(0f, 1f)
+/** A soft shadow under white text, gone as the button turns white. */
+private fun shade(lit: Float) = Shadow(Color.Black.copy(alpha = 0.5f * (1f - lit)), Offset(0f, 1f), 6f)
 
 /**
- * A button on the sheet: clear liquid glass lit at its rim at rest, a white plate in focus, the
- * way Apple TV's buttons turn.
+ * A button: clear liquid glass lit at its rim at rest, a white plate in focus, the way Apple TV's
+ * buttons turn.
  */
 private fun Modifier.ccPane(shape: Shape, lit: () -> Float): Modifier =
-    glassPane(HomeGlass.Liquid, shape, lit).drawBehind {
+    drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), Clear) }
+        .glassPane(HomeGlass.Liquid, shape, lit).drawBehind {
         val l = lit()
         if (l > 0f) drawOutline(shape.createOutline(size, layoutDirection, this), Color.White.copy(alpha = 0.94f), alpha = l)
     }
 
 /**
- * The Control Center over whatever the TV shows: the picture behind dims a little towards the
- * corner the panel hangs in, and the panel comes down from it.
+ * The Control Center over whatever the TV shows: the picture behind dims a touch towards the
+ * corner the panel hangs in, and the panel grows out of that corner.
  */
 @Composable
 internal fun ControlPanel(model: CcModel, shown: Boolean) {
@@ -126,11 +125,11 @@ internal fun ControlPanel(model: CcModel, shown: Boolean) {
             Modifier.fillMaxSize().graphicsLayer { alpha = enter }.drawBehind {
                 drawRect(
                     Brush.radialGradient(
-                        0f to Color.Black.copy(alpha = 0.62f),
-                        0.55f to Color.Black.copy(alpha = 0.34f),
+                        0f to Color.Black.copy(alpha = 0.42f),
+                        0.5f to Color.Black.copy(alpha = 0.16f),
                         1f to Color.Transparent,
                         center = Offset(size.width, 0f),
-                        radius = size.width * 0.72f
+                        radius = size.width * 0.5f
                     )
                 )
             }
@@ -138,33 +137,28 @@ internal fun ControlPanel(model: CcModel, shown: Boolean) {
         Column(
             Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 22.dp, end = 30.dp)
+                .padding(top = 24.dp, end = 32.dp)
                 .graphicsLayer {
-                    alpha = enter
-                    translationY = -(1f - enter) * 18.dp.toPx()
-                    val s = 0.94f + 0.06f * enter
+                    alpha = enter.coerceIn(0f, 1f)
+                    val s = 0.9f + 0.1f * enter
                     scaleX = s
                     scaleY = s
                     transformOrigin = TransformOrigin(1f, 0f)
                 }
-                // One sheet of glass under it all, so what is behind doesn't show between the buttons
-                .background(SheetSmoke, SheetShape)
-                .glassPane(HomeGlass.Liquid, SheetShape, { 0f }, panel = true)
-                .padding(SHEET_PAD.dp)
-                .width(PANEL_W.dp)
         ) {
             AnimatedContent(
                 targetState = model.page,
                 transitionSpec = {
                     val deeper = targetState != CcPage.Main
-                    (fadeIn(tween(200, delayMillis = 40)) + slideInHorizontally(tween(260, easing = LinearOutSlowInEasing)) { if (deeper) it / 6 else -it / 6 }) togetherWith
-                        (fadeOut(tween(140)) + slideOutHorizontally(tween(200)) { if (deeper) -it / 6 else it / 6 }) using
+                    // A quiet cross-fade, the new page settling in from a touch smaller or larger
+                    (fadeIn(tween(180, delayMillis = 60)) + scaleIn(tween(240, delayMillis = 40, easing = LinearOutSlowInEasing), initialScale = if (deeper) 0.96f else 1.03f)) togetherWith
+                        fadeOut(tween(110)) using
                         // Unclipped: a button in focus grows past the panel's edge
-                        SizeTransform(clip = false)
+                        SizeTransform(clip = false) { _, _ -> spring(dampingRatio = 1f, stiffness = 520f) }
                 },
                 label = "CcPage"
             ) { page ->
-                if (page == CcPage.Main) MainPage(model, enter) else ListPage(model, page)
+                if (page == CcPage.Main) MainPage(model) else ListPage(model, page)
             }
         }
         if (model.poweringOff) PowerOff()
@@ -172,10 +166,10 @@ internal fun ControlPanel(model: CcModel, shown: Boolean) {
 }
 
 @Composable
-private fun MainPage(model: CcModel, enter: Float) {
-    Column(Modifier.fillMaxWidth()) {
-        Header(model, Modifier.graphicsLayer { alpha = stagger(enter, 0) })
-        Spacer(Modifier.height(14.dp))
+private fun MainPage(model: CcModel) {
+    Column(Modifier.width(PANEL_W.dp)) {
+        Header(model, Modifier)
+        Spacer(Modifier.height(10.dp))
         val rows = 4
         Box(Modifier.fillMaxWidth().height((rows * UNIT_H + (rows - 1) * GAP).dp)) {
             CcLayout.CELLS.filter { it.y >= 0f }.forEach { cell ->
@@ -186,12 +180,7 @@ private fun MainPage(model: CcModel, enter: Float) {
                 Box(
                     Modifier
                         .offset(x.dp, y.dp)
-                        .size(w.dp, h.dp)
-                        .graphicsLayer {
-                            val t = stagger(enter, 1 + cell.y.toInt())
-                            alpha = t
-                            translationY = (1f - t) * -10.dp.toPx()
-                        },
+                        .size(w.dp, h.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Button(model, cell.item)
@@ -199,22 +188,22 @@ private fun MainPage(model: CcModel, enter: Float) {
             }
         }
         // Room for the name under a round button in focus
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(18.dp))
     }
 }
 
 /** The time on the left; the sound in use, the network and the profile on the right. */
 @Composable
 private fun Header(model: CcModel, modifier: Modifier) {
-    Row(modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
         BasicText(
             model.clock,
-            style = TextStyle(fontFamily = Numbers, fontSize = 26.sp, color = Color.White, shadow = Shadow(Color.Black.copy(alpha = 0.5f), Offset(0f, 2f), 8f))
+            style = TextStyle(fontFamily = Numbers, fontSize = 16.sp, color = Color.White, shadow = shade(0f))
         )
         Spacer(Modifier.weight(1f))
         model.connected?.let { d ->
-            NeonGlyph(if (d.kind == com.lumera.app.launcher.BtKind.Earbuds) Glyph.Earbuds else Glyph.Headphones, Color.White, Modifier.size(22.dp), plain = true)
-            Spacer(Modifier.width(12.dp))
+            NeonGlyph(if (d.kind == com.lumera.app.launcher.BtKind.Earbuds) Glyph.Earbuds else Glyph.Headphones, Color.White, Modifier.size(15.dp), plain = true)
+            Spacer(Modifier.width(9.dp))
         }
         NeonGlyph(
             when (model.net.kind) {
@@ -222,9 +211,9 @@ private fun Header(model: CcModel, modifier: Modifier) {
                 NetInfo.Kind.Ethernet -> Glyph.Ethernet
                 NetInfo.Kind.Offline -> Glyph.Offline
             },
-            Color.White.copy(alpha = if (model.net.internet) 1f else 0.5f), Modifier.size(22.dp), plain = true
+            Color.White.copy(alpha = if (model.net.internet) 1f else 0.5f), Modifier.size(15.dp), plain = true
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(10.dp))
         ProfileChip(model)
     }
 }
@@ -232,26 +221,17 @@ private fun Header(model: CcModel, modifier: Modifier) {
 @Composable
 private fun ProfileChip(model: CcModel) {
     val focused = model.page == CcPage.Main && model.focus == CcItem.Profile
-    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(160), label = "CcProfileLit")
-    val scale by animateFloatAsState(if (focused) 1.08f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), label = "CcProfileScale")
+    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(120), label = "CcProfileLit")
+    val scale by animateFloatAsState(if (focused) 1.14f else 1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow), label = "CcProfileScale")
     val profile = model.profile ?: return
-    val shape = RoundedCornerShape(50)
-    Row(
+    // Just the face in a ring of glass, as Apple TV shows the user
+    Box(
         Modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(1f, 0.5f) }
-            .ccPane(shape) { lit }
-            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .ccPane(CircleShape) { lit }
+            .padding(2.dp)
     ) {
-        BasicText(
-            profile.name,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 120.dp),
-            style = TextStyle(fontFamily = Body, fontSize = 14.sp, color = lerp(Color.White, Ink, lit))
-        )
-        Spacer(Modifier.width(10.dp))
-        ProfileFace(profile, Modifier.size(32.dp), letterSize = 15.sp)
+        ProfileFace(profile, Modifier.size(24.dp), letterSize = 11.sp)
     }
 }
 
@@ -259,19 +239,20 @@ private fun ProfileChip(model: CcModel) {
 @Composable
 private fun Button(model: CcModel, item: CcItem) {
     val focused = model.page == CcPage.Main && model.focus == item
-    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "CcLit")
+    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(120), label = "CcLit")
     val pressedAt = model.pressed?.takeIf { it.first == item }?.second
-    val base = if (item == CcItem.Power) 1.06f else if (round(item)) 1.14f else 1.07f
-    val scale by animateFloatAsState(if (focused) base else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow), label = "CcScale")
+    val base = if (item == CcItem.Power) 1.07f else if (round(item)) 1.13f else 1.07f
+    // Grows to the focus and settles there, no wobble
+    val scale by animateFloatAsState(if (focused) base else 1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow), label = "CcScale")
     // A short dip as OK goes down on it
     val dip = remember { Animatable(1f) }
     LaunchedEffect(pressedAt) {
         if (pressedAt == null) return@LaunchedEffect
-        dip.snapTo(0.94f)
-        dip.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
+        dip.snapTo(0.95f)
+        dip.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium))
     }
     val shape: Shape = when {
-        item == CcItem.Power -> RoundedCornerShape(30.dp)
+        item == CcItem.Power -> RoundedCornerShape(24.dp)
         round(item) -> CircleShape
         else -> RoundedCornerShape(50)
     }
@@ -287,48 +268,48 @@ private fun Button(model: CcModel, item: CcItem) {
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                NeonGlyph(Glyph.Power, { lerp(Color.White, Ink, lit) }, Modifier.size(54.dp), plain = true)
-                Spacer(Modifier.height(10.dp))
-                BasicText("Power Off", style = TextStyle(fontFamily = Body, fontSize = 14.sp, color = lerp(Soft, Ink.copy(alpha = 0.75f), lit)))
+                NeonGlyph(Glyph.Power, { lerp(Color.White, Ink, lit) }, Modifier.size(34.dp), plain = true)
+                Spacer(Modifier.height(6.dp))
+                BasicText("Power Off", style = TextStyle(fontFamily = Body, fontSize = 10.sp, color = lerp(Color.White, Ink.copy(alpha = 0.8f), lit), shadow = shade(lit)))
             }
         }
         round(item) -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Box(mod.size(UNIT_H.dp).ccPane(shape) { lit }, contentAlignment = Alignment.Center) {
-                NeonGlyph(glyphOf(item), { lerp(Color.White, Ink, lit) }, Modifier.size(26.dp), plain = true)
+                NeonGlyph(glyphOf(item), { lerp(Color.White, Ink, lit) }, Modifier.size(19.dp), plain = true)
             }
             // The name of a round button shows under it while it has the focus
             BasicText(
                 labelOf(item),
                 maxLines = 1,
-                modifier = Modifier.align(Alignment.BottomCenter).offset(y = 26.dp).graphicsLayer { alpha = lit },
-                style = TextStyle(fontFamily = Body, fontSize = 12.sp, color = Color.White, shadow = Shadow(Color.Black, Offset(0f, 1f), 6f))
+                modifier = Modifier.align(Alignment.BottomCenter).offset(y = 19.dp).graphicsLayer { alpha = lit },
+                style = TextStyle(fontFamily = Body, fontSize = 9.sp, color = Color.White, shadow = Shadow(Color.Black, Offset(0f, 1f), 6f))
             )
         }
         else -> Row(
-            mod.fillMaxSize().ccPane(shape) { lit }.padding(start = 10.dp, end = 16.dp),
+            mod.fillMaxSize().ccPane(shape) { lit }.padding(start = 6.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val on = activeOf(model, item)
             val tint = accentOf(item)
             // The mark sits in a disc that fills with its colour while the thing is on
             Box(
-                Modifier.size(40.dp).drawBehind {
+                Modifier.size(30.dp).drawBehind {
                     drawCircle(if (on) tint.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.12f + 0.06f * lit))
                 },
                 contentAlignment = Alignment.Center
             ) {
-                NeonGlyph(glyphOf(item), { if (on) Ink else lerp(Color.White, Ink, lit) }, Modifier.size(22.dp), plain = true)
+                NeonGlyph(glyphOf(item), { if (on) Ink else lerp(Color.White, Ink, lit) }, Modifier.size(16.dp), plain = true)
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(6.dp))
             Column(Modifier.weight(1f)) {
                 BasicText(
                     labelOf(item), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(fontFamily = Body, fontSize = 15.sp, color = lerp(Color.White, Ink, lit))
+                    style = TextStyle(fontFamily = Body, fontSize = 10.5.sp, color = lerp(Color.White, Ink, lit), shadow = shade(lit))
                 )
                 detailOf(model, item)?.let {
                     BasicText(
                         it, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(fontFamily = Body, fontSize = 12.sp, color = lerp(Soft, Ink.copy(alpha = 0.65f), lit))
+                        style = TextStyle(fontFamily = Body, fontSize = 9.sp, color = lerp(Soft, Ink.copy(alpha = 0.65f), lit), shadow = shade(lit))
                     )
                 }
             }
@@ -399,10 +380,10 @@ private fun ListPage(model: CcModel, page: CcPage) {
         val target = (model.row - 2).coerceAtLeast(0)
         list.animateScrollToItem(target)
     }
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText("‹", style = TextStyle(fontFamily = Body, fontSize = 26.sp, color = Soft))
-            Spacer(Modifier.width(10.dp))
+    Column(Modifier.width(LIST_W.dp)) {
+        Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+            BasicText("‹", style = TextStyle(fontFamily = Body, fontSize = 18.sp, color = Color.White, shadow = shade(0f)))
+            Spacer(Modifier.width(8.dp))
             BasicText(
                 when (page) {
                     CcPage.Audio -> "Sound"
@@ -411,16 +392,16 @@ private fun ListPage(model: CcModel, page: CcPage) {
                     CcPage.Sleep -> "Sleep Timer"
                     CcPage.Main -> ""
                 },
-                style = TextStyle(fontFamily = Body, fontSize = 20.sp, color = Color.White, shadow = Shadow(Color.Black.copy(alpha = 0.5f), Offset(0f, 2f), 8f))
+                style = TextStyle(fontFamily = Body, fontSize = 14.sp, color = Color.White, shadow = shade(0f))
             )
             Spacer(Modifier.weight(1f))
-            BasicText(model.clock, style = TextStyle(fontFamily = Numbers, fontSize = 20.sp, color = Soft))
+            BasicText(model.clock, style = TextStyle(fontFamily = Numbers, fontSize = 16.sp, color = Color.White, shadow = shade(0f)))
         }
         Spacer(Modifier.height(8.dp))
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 390.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             userScrollEnabled = false
         ) {
             itemsIndexed(rows, key = { _, r -> r.key }) { i, row ->
@@ -434,10 +415,10 @@ private fun ListPage(model: CcModel, page: CcPage) {
 private fun HeaderRow(row: CcRow) {
     BasicText(
         row.title,
-        modifier = Modifier.padding(start = 18.dp, top = 8.dp, bottom = 2.dp),
+        modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 1.dp),
         style = TextStyle(
-            fontFamily = Body, fontSize = if (row.kind == CcRow.Kind.Note) 13.sp else 12.sp,
-            letterSpacing = if (row.kind == CcRow.Kind.Note) 0.sp else 1.6.sp,
+            fontFamily = Body, fontSize = if (row.kind == CcRow.Kind.Note) 10.sp else 9.sp,
+            letterSpacing = if (row.kind == CcRow.Kind.Note) 0.sp else 1.4.sp,
             color = Color.White.copy(alpha = 0.7f), shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 1f), 6f)
         )
     )
@@ -445,22 +426,22 @@ private fun HeaderRow(row: CcRow) {
 
 @Composable
 private fun ListRow(model: CcModel, row: CcRow, focused: Boolean) {
-    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(150), label = "CcRowLit")
-    val scale by animateFloatAsState(if (focused) 1.045f else 1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow), label = "CcRowScale")
+    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(120), label = "CcRowLit")
+    val scale by animateFloatAsState(if (focused) 1.05f else 1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow), label = "CcRowScale")
     val shape = RoundedCornerShape(50)
     val ink = lerp(Color.White, Ink, lit)
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp)
-            .height(if (row.detail != null || row.battery != null) 62.dp else 54.dp)
+            .padding(horizontal = 4.dp)
+            .height(if (row.detail != null || row.battery != null) 44.dp else 38.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .ccPane(shape) { lit }
-            .padding(start = 12.dp, end = 16.dp),
+            .padding(start = 8.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (row.profile != null) {
-            ProfileFace(row.profile, Modifier.size(38.dp), letterSize = 17.sp)
+            ProfileFace(row.profile, Modifier.size(28.dp), letterSize = 13.sp)
         } else {
             val glyph = when (row.kind) {
                 CcRow.Kind.Tv -> Glyph.Tv
@@ -472,28 +453,28 @@ private fun ListRow(model: CcModel, row: CcRow, focused: Boolean) {
                 CcRow.Kind.Settings -> Glyph.Gear
                 else -> Glyph.Ring
             }
-            Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
-                if (row.kind == CcRow.Kind.Wifi && row.bars != null) Bars(row.bars, ink) else NeonGlyph(glyph, { ink }, Modifier.size(26.dp), plain = true)
+            Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                if (row.kind == CcRow.Kind.Wifi && row.bars != null) Bars(row.bars, ink) else NeonGlyph(glyph, { ink }, Modifier.size(18.dp), plain = true)
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            BasicText(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = Body, fontSize = 15.sp, color = ink))
+            BasicText(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = Body, fontSize = 11.5.sp, color = ink, shadow = shade(lit)))
             val small = lerp(Soft, Ink.copy(alpha = 0.65f), lit)
             if (row.battery != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText("${row.battery} %", style = TextStyle(fontFamily = Body, fontSize = 12.sp, color = small))
-                    Spacer(Modifier.width(6.dp))
+                    BasicText("${row.battery} %", style = TextStyle(fontFamily = Body, fontSize = 9.sp, color = small))
+                    Spacer(Modifier.width(4.dp))
                     Battery(row.battery, small)
-                    row.detail?.let { BasicText("  ·  $it", style = TextStyle(fontFamily = Body, fontSize = 12.sp, color = small)) }
+                    row.detail?.let { BasicText("  ·  $it", style = TextStyle(fontFamily = Body, fontSize = 9.sp, color = small)) }
                 }
             } else {
-                row.detail?.let { BasicText(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = Body, fontSize = 12.sp, color = small)) }
+                row.detail?.let { BasicText(it, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontFamily = Body, fontSize = 9.sp, color = small)) }
             }
         }
         if (row.secure) {
-            NeonGlyph(Glyph.Lock, { ink.copy(alpha = 0.7f) }, Modifier.size(16.dp), plain = true)
-            Spacer(Modifier.width(10.dp))
+            NeonGlyph(Glyph.Lock, { ink.copy(alpha = 0.7f) }, Modifier.size(12.dp), plain = true)
+            Spacer(Modifier.width(8.dp))
         }
         if (row.kind != CcRow.Kind.Settings && row.kind != CcRow.Kind.Note) Tick(row.checked, ink, lit)
     }
@@ -502,7 +483,7 @@ private fun ListRow(model: CcModel, row: CcRow, focused: Boolean) {
 /** The round mark at a row's end: an empty ring, or a filled one with a tick for what is in use. */
 @Composable
 private fun Tick(checked: Boolean, ink: Color, lit: Float) {
-    Canvas(Modifier.size(24.dp)) {
+    Canvas(Modifier.size(18.dp)) {
         val r = size.minDimension / 2f
         if (checked) {
             drawCircle(lerp(Color.White, Ink, lit), r)
@@ -520,7 +501,7 @@ private fun Tick(checked: Boolean, ink: Color, lit: Float) {
 /** A battery drawn as iOS draws one, filled to [level]. */
 @Composable
 private fun Battery(level: Int, color: Color) {
-    Canvas(Modifier.size(width = 24.dp, height = 11.dp)) {
+    Canvas(Modifier.size(width = 18.dp, height = 8.dp)) {
         val body = Size(size.width - 3.dp.toPx(), size.height)
         val r = CornerRadius(3.dp.toPx())
         drawRoundRect(color.copy(alpha = 0.5f), size = body, cornerRadius = r, style = Stroke(1.2.dp.toPx()))
@@ -538,7 +519,7 @@ private fun Battery(level: Int, color: Color) {
 /** A network's strength as the three arcs of the Wi-Fi mark, the ones it reaches lit. */
 @Composable
 private fun Bars(bars: Int, color: Color) {
-    Canvas(Modifier.size(26.dp)) {
+    Canvas(Modifier.size(19.dp)) {
         val k = size.minDimension / 100f
         val w = Stroke(7f * k, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         val c = Offset(50f * k, 82f * k)
