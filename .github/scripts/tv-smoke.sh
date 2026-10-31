@@ -1374,13 +1374,14 @@ screen_has 'text="Close app"' || fail "the app switcher preview did not open"
 key DPAD_LEFT DPAD_LEFT
 sleep 1
 shot app-switcher-left
-# Up throws the card in front (YouTube's, named Tv here as it is not on the emulator) off the top
+# Up throws the card in front, YouTube's, off the top; Ninja (Netflix, not on the emulator) slides
+# out of the stack into its place. Cards far off to the right are out of the screen's tree
 key DPAD_UP
 sleep 2
 shot app-switcher-closed
 closed_xml="$OUT/$(printf "%02d" "$step")-app-switcher-closed.xml"
-if grep -q 'text="Tv"' "$closed_xml" 2>/dev/null; then fail "Up in the app switcher did not close the card in front"; fi
-grep -q 'text="Neon Tokyo"' "$closed_xml" 2>/dev/null || fail "closing one card in the app switcher took the others too"
+if grep -q 'text="YouTube"' "$closed_xml" 2>/dev/null; then fail "Up in the app switcher did not close the card in front"; fi
+grep -q 'text="Ninja"' "$closed_xml" 2>/dev/null || fail "closing one card in the app switcher took the others too"
 key DPAD_DOWN
 sleep 2
 shot app-switcher-bluetooth
