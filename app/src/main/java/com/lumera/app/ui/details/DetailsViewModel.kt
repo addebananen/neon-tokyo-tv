@@ -524,20 +524,20 @@ class DetailsViewModel @Inject constructor(
                 dao.deleteHistoryItem(itemId)
                 traktSyncManager.pushMovieUnwatched(itemId)
             } else {
-                dao.upsertHistory(
-                    WatchHistoryEntity(
-                        id = itemId,
-                        title = meta.name,
-                        poster = meta.poster,
-                        position = 0L,
-                        duration = 0L,
-                        lastWatched = System.currentTimeMillis(),
-                        type = "movie",
-                        watched = true,
-                        scrobbled = true
-                    )
+                // Marked as known to Trakt only once Trakt has it: the next pull drops a "known" item
+                // Trakt lacks, and an unknown one is sent up when Trakt is linked
+                val entry = WatchHistoryEntity(
+                    id = itemId,
+                    title = meta.name,
+                    poster = meta.poster,
+                    position = 0L,
+                    duration = 0L,
+                    lastWatched = System.currentTimeMillis(),
+                    type = "movie",
+                    watched = true
                 )
-                traktSyncManager.pushMovieWatched(itemId)
+                dao.upsertHistory(entry)
+                if (traktSyncManager.pushMovieWatched(itemId)) dao.upsertHistory(entry.copy(scrobbled = true))
             }
             _state.value = _state.value.copy(
                 isMovieWatched = !isCurrentlyWatched,
@@ -566,21 +566,21 @@ class DetailsViewModel @Inject constructor(
             } else {
                 // Mark as watched: create a watched history entry
                 val playbackId = "$streamId:${episode.season}:${episode.episode}"
-                dao.upsertHistory(
-                    WatchHistoryEntity(
-                        id = playbackId,
-                        title = episode.title.takeIf { it.isNotBlank() && it != "Episode" }
-                            ?: "S${episode.season}:E${episode.episode} - ${meta.name}",
-                        poster = meta.poster,
-                        position = 0L,
-                        duration = 0L,
-                        lastWatched = System.currentTimeMillis(),
-                        type = "series",
-                        watched = true,
-                        scrobbled = true
-                    )
+                val entry = WatchHistoryEntity(
+                    id = playbackId,
+                    title = episode.title.takeIf { it.isNotBlank() && it != "Episode" }
+                        ?: "S${episode.season}:E${episode.episode} - ${meta.name}",
+                    poster = meta.poster,
+                    position = 0L,
+                    duration = 0L,
+                    lastWatched = System.currentTimeMillis(),
+                    type = "series",
+                    watched = true
                 )
-                traktSyncManager.pushEpisodeWatched(streamId, episode.season, episode.episode)
+                dao.upsertHistory(entry)
+                if (traktSyncManager.pushEpisodeWatched(streamId, episode.season, episode.episode)) {
+                    dao.upsertHistory(entry.copy(scrobbled = true))
+                }
             }
 
             // Refresh the progress map and next-up entry

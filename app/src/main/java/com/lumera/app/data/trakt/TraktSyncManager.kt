@@ -321,17 +321,19 @@ class TraktSyncManager @Inject constructor(
         if (epochMs > 0L) java.time.Instant.ofEpochMilli(epochMs).toString() else null
 
     /**
-     * Mark a movie as watched on Trakt.
+     * Mark a movie as watched on Trakt. True when Trakt took it.
      */
-    suspend fun pushMovieWatched(imdbId: String) {
-        if (traktAuthManager.getAccessToken() == null) return
-        withContext(Dispatchers.IO) {
+    suspend fun pushMovieWatched(imdbId: String): Boolean {
+        if (traktAuthManager.getAccessToken() == null) return false
+        return withContext(Dispatchers.IO) {
             try {
                 val body = TraktSyncRequest(movies = listOf(TraktSyncItem(ids = TraktIds(imdb = imdbId))))
                 val response = traktSyncApi.addToHistory(body)
                 Log.d(TAG, "pushMovieWatched $imdbId: ${response.code()}")
+                response.isSuccessful
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to push movie watched to Trakt", e)
+                false
             }
         }
     }
@@ -353,11 +355,11 @@ class TraktSyncManager @Inject constructor(
     }
 
     /**
-     * Mark an episode as watched on Trakt.
+     * Mark an episode as watched on Trakt. True when Trakt took it.
      */
-    suspend fun pushEpisodeWatched(showImdbId: String, season: Int, episode: Int) {
-        if (traktAuthManager.getAccessToken() == null) return
-        withContext(Dispatchers.IO) {
+    suspend fun pushEpisodeWatched(showImdbId: String, season: Int, episode: Int): Boolean {
+        if (traktAuthManager.getAccessToken() == null) return false
+        return withContext(Dispatchers.IO) {
             try {
                 val body = TraktSyncRequest(
                     shows = listOf(
@@ -369,8 +371,10 @@ class TraktSyncManager @Inject constructor(
                 )
                 val response = traktSyncApi.addToHistory(body)
                 Log.d(TAG, "pushEpisodeWatched S${season}E${episode}: ${response.code()}")
+                response.isSuccessful
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to push episode watched to Trakt", e)
+                false
             }
         }
     }
