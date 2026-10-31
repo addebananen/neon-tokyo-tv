@@ -71,8 +71,12 @@ internal class Plane {
 
 /**
  * The video chip's picture, under everything drawn after it. A new [media] waits until what is
- * drawn for it has faded in over the old one, so the change never shows as a cut. It stops while
- * an app is open, which hands the TV's video decoder back to that app.
+ * drawn for it has faded in over the old one, so the change never shows as a cut.
+ *
+ * While an app is open the film only pauses, so coming back it carries on from the same frame
+ * at once instead of loading again from the start; after [PLANE_KEEP_MS] away it lets go of the
+ * TV's video decoder for good, and the TV can take it back sooner for the app in front if it
+ * needs it. A film that stops moving while it should play is started again.
  */
 @Composable
 internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
@@ -80,6 +84,14 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
     val view = remember { PlaneView(context) }
     val player = remember { quietPlayer(context) }
     var started by remember { mutableStateOf(false) }
+    // Goes up to load the film again after the TV took the decoder or the film got stuck
+    var reload by remember { mutableStateOf(0) }
+    val errors = remember { intArrayOf(0) }
+    // The reload last done, and the claim on the video chip this film made last
+    val reloaded = remember { intArrayOf(0) }
+    val mine = remember { intArrayOf(-1) }
+    val claims = PlaneClaim.claims
+    val startedNow = remember { booleanArrayOf(false) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
@@ -93,8 +105,19 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
 
             override fun onPlayerError(error: PlaybackException) {
                 android.util.Log.w("PlaneSurface", "can't play the backdrop", error)
-                player.currentMediaItem?.localConfiguration?.uri?.let { plane.failed = plane.failed + it }
                 plane.shown = null
+                // Away, the TV may take the decoder back for the app in front: load again on return
+                if (!startedNow[0]) {
+                    player.stop()
+                    return
+                }
+                // A film that has played before gets a few more tries; one that never plays is drawn instead
+                errors[0]++
+                if (errors[0] <= PLANE_TRIES) {
+                    reload++
+                } else {
+                    player.currentMediaItem?.localConfiguration?.uri?.let { plane.failed = plane.failed + it }
+                }
             }
         }
         player.addListener(listener)
@@ -108,32 +131,135 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> started = true
-                Lifecycle.Event.ON_STOP -> started = false
+                Lifecycle.Event.ON_START -> {
+                    // This film takes the chip: another one of ours, held while away or paused
+                    // under a screensaver, lets go of it
+                    if (mine[0] != PlaneClaim.claims) {
+                        PlaneClaim.claims++
+                        mine[0] = PlaneClaim.claims
+                    }
+                    started = true
+                    startedNow[0] = true
+                }
+                // An app is opening over the home screen: the film holds its frame and gives the
+                // decoder and the memory it reads through back to that app at once, not only
+                // once it covers the screen
+                Lifecycle.Event.ON_PAUSE -> player.pause()
+                Lifecycle.Event.ON_RESUME -> {
+                    // Back in front without having stopped, as from under a screensaver
+                    if (mine[0] != PlaneClaim.claims) {
+                        PlaneClaim.claims++
+                        mine[0] = PlaneClaim.claims
+                    } else if (player.mediaItemCount > 0) {
+                        player.play()
+                    }
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    started = false
+                    startedNow[0] = false
+                }
                 else -> Unit
             }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(media, started) {
-        if (!started || media == null || media.uri in plane.failed) {
+    LaunchedEffect(media, started, reload, claims) {
+        if (media == null || media.uri in plane.failed) {
             player.stop()
             player.clearMediaItems()
             plane.shown = null
             return@LaunchedEffect
         }
-        if (plane.shown != null && plane.shown != media.uri) delay(PLANE_SWITCH_MS)
-        player.repeatMode = if (media.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        player.setMediaItem(MediaItem.fromUri(media.uri))
-        player.prepare()
-        player.play()
+        val owner = claims == mine[0]
+        if (!started || !owner) {
+            // An app is in front: hold the frame, and let go of the decoder only after a while, or
+            // at once when another film of ours (the screensaver) has taken the chip
+            player.pause()
+            plane.shown = null
+            if (owner) delay(PLANE_KEEP_MS)
+            player.stop()
+            player.clearMediaItems()
+            return@LaunchedEffect
+        }
+        // Plays only while in front; started but not yet resumed, it shows its frame and waits
+        val front = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        fun fresh() {
+            player.repeatMode = if (media.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            player.setMediaItem(MediaItem.fromUri(media.uri))
+            player.prepare()
+            player.playWhenReady = front
+        }
+        val loaded = player.currentMediaItem?.localConfiguration?.uri == media.uri &&
+            player.playbackState != Player.STATE_IDLE
+        if (loaded && reload == reloaded[0]) {
+            // Back from an app within the while: on from the same frame
+            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+            player.playWhenReady = front
+            // It shows again within a moment on the new surface; if not, it loads afresh
+            var waited = 0L
+            while (plane.shown != media.uri && waited < PLANE_BACK_MS) {
+                delay(50)
+                waited += 50
+            }
+            if (plane.shown != media.uri) {
+                android.util.Log.i("PlaneSurface", "no frame on return, loading again")
+                player.stop()
+                fresh()
+            }
+        } else {
+            reloaded[0] = reload
+            if (plane.shown != null && plane.shown != media.uri) delay(PLANE_SWITCH_MS)
+            fresh()
+        }
+        if (!media.loop) return@LaunchedEffect
+        // A film must never freeze: when it has stood still while it should play, it starts over
+        var last = -1L
+        var still = 0
+        while (true) {
+            delay(PLANE_CHECK_MS)
+            if (!player.playWhenReady) {
+                still = 0
+                continue
+            }
+            val at = player.currentPosition
+            still = if (player.playbackState != Player.STATE_READY || at == last) still + 1 else 0
+            if (player.playbackState == Player.STATE_READY && at != last) errors[0] = 0
+            last = at
+            if (still >= PLANE_STUCK_CHECKS) {
+                android.util.Log.w("PlaneSurface", "the film stood still, starting it again")
+                still = 0
+                last = -1L
+                player.stop()
+                player.setMediaItem(MediaItem.fromUri(media.uri))
+                player.prepare()
+                player.play()
+            }
+        }
     }
     AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
 }
 
+/** Which film last took the video chip: one starting tells the others, held while away, to let go. */
+private object PlaneClaim {
+    var claims by mutableStateOf(0)
+}
+
 // Long enough for the Crossfade between two styles to finish
 private const val PLANE_SWITCH_MS = 700L
+
+// How long an app may be in front before the film lets go of the decoder for good
+private const val PLANE_KEEP_MS = 30_000L
+
+// How long a film held while away may take to show again before it is loaded afresh
+private const val PLANE_BACK_MS = 1_500L
+
+// How often a playing film is checked, and how many checks in a row it may stand still
+private const val PLANE_CHECK_MS = 2_000L
+private const val PLANE_STUCK_CHECKS = 3
+
+// Tries again after an error, before the painting stands in for good
+private const val PLANE_TRIES = 3
 
 /**
  * How much of what is drawn for [media] still shows over the video chip: all of it until the chip
@@ -143,7 +269,10 @@ private const val PLANE_SWITCH_MS = 700L
 internal fun rememberCover(plane: Plane, media: PlaneMedia?): State<Float> {
     val cover = remember { Animatable(1f) }
     val onPlane = media != null && plane.shown == media.uri
-    LaunchedEffect(onPlane) { if (onPlane) cover.animateTo(0f, tween(600)) else cover.snapTo(1f) }
+    // A still is the same picture as its painting, so it can melt in slowly; a film has moved on
+    // from the painting, so it takes over quickly
+    val fade = if (media?.loop == true) 280 else 600
+    LaunchedEffect(onPlane) { if (onPlane) cover.animateTo(0f, tween(fade)) else cover.snapTo(1f) }
     return cover.asState()
 }
 
