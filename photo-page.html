@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0721">
+<link rel="icon" href="data:,">
+<title>Neon Tokyo · Profile photo</title>
+<style>
+@font-face { font-family: "Kanit"; font-style: italic; font-weight: 600; src: url("/fnd67x/kanit-semibold-italic.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Kanit"; font-style: normal; font-weight: 500; src: url("/fnd67x/kanit-medium.ttf") format("truetype"); font-display: swap; }
+:root {
+  --night: #0d0721; --violet: #2a0f4f; --panel: rgba(22, 10, 46, 0.82);
+  --text: #f6eaff; --lilac: #b9a6d6; --magenta: #ff3d9a; --cyan: #3ef0ff; --sun: #ffc46b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { background: var(--night); }
+body {
+  min-height: 100vh; min-height: 100dvh;
+  font-family: "Kanit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 500;
+  color: var(--text); display: flex; align-items: center; justify-content: center;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  overflow-x: hidden;
+}
+.sky {
+  position: fixed; inset: 0; z-index: -1;
+  background: linear-gradient(180deg, rgba(13, 7, 33, 0.55), rgba(13, 7, 33, 0.25) 40%, rgba(13, 7, 33, 0.8)),
+    url("/fnd67x/skyline.webp") 68% center / cover no-repeat, var(--night);
+}
+.card {
+  width: 100%; max-width: 380px; padding: 26px 22px 24px; border-radius: 26px; text-align: center;
+  background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1.5px rgba(255, 61, 154, 0.55), 0 0 42px rgba(255, 61, 154, 0.18), 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.eyebrow { font-size: 12px; letter-spacing: 6px; color: var(--cyan); text-shadow: 0 0 10px rgba(62, 240, 255, 0.6); }
+h1, h2 {
+  font-style: italic; font-weight: 600; line-height: 1.1; margin-top: 8px;
+  text-shadow: 0 0 18px rgba(255, 61, 154, 0.65);
+}
+h1 { font-size: 30px; }
+h2 { font-size: 26px; }
+.name { color: var(--sun); text-shadow: 0 0 18px rgba(255, 196, 107, 0.6); }
+p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
+.view { margin-top: 22px; }
+[hidden] { display: none !important; }
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+  min-height: 54px; margin-top: 12px; padding: 0 20px; border-radius: 27px; cursor: pointer;
+  font: inherit; font-size: 17px; color: var(--text); background: transparent; user-select: none;
+  border: 1.5px solid rgba(62, 240, 255, 0.55); transition: transform 0.12s ease, opacity 0.2s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn.primary {
+  border: none; color: #1a0620; font-weight: 600;
+  background: linear-gradient(100deg, var(--magenta), #ff7ac0 55%, var(--sun));
+  box-shadow: 0 0 24px rgba(255, 61, 154, 0.45);
+}
+.btn.link { border: none; min-height: 44px; color: var(--lilac); font-size: 15px; }
+.btn[disabled] { opacity: 0.55; pointer-events: none; }
+.btn input { display: none; }
+.btn svg { width: 22px; height: 22px; flex: none; }
+
+.msg { min-height: 20px; margin-top: 12px; font-size: 14px; color: var(--sun); }
+.msg.error { color: #ff8aa8; }
+
+.ring {
+  position: relative; width: min(74vw, 290px); aspect-ratio: 1; margin: 4px auto 0; border-radius: 50%;
+  padding: 4px; background: conic-gradient(from 210deg, var(--magenta), var(--cyan), var(--sun), var(--magenta));
+  box-shadow: 0 0 34px rgba(255, 61, 154, 0.45), 0 0 70px rgba(62, 240, 255, 0.15);
+}
+.stage {
+  position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+  background: var(--night); touch-action: none; cursor: grab;
+}
+.stage img {
+  position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0;
+  user-select: none; -webkit-user-drag: none; pointer-events: none; will-change: transform;
+}
+.hint { font-size: 13px; margin-top: 14px; }
+.zoom { display: flex; align-items: center; gap: 12px; margin-top: 14px; color: var(--lilac); }
+.zoom span { font-size: 20px; line-height: 1; width: 18px; }
+input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: rgba(185, 166, 214, 0.35); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+input[type=range]::-moz-range-thumb { width: 24px; height: 24px; border: none; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+
+.badge {
+  width: 112px; height: 112px; margin: 6px auto 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(62, 240, 255, 0.6); box-shadow: 0 0 30px rgba(62, 240, 255, 0.3), inset 0 0 22px rgba(62, 240, 255, 0.15);
+}
+.badge svg { width: 58px; height: 58px; }
+.tv-screen { animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.badge.done { border-color: rgba(255, 196, 107, 0.8); box-shadow: 0 0 34px rgba(255, 196, 107, 0.45); animation: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.check { stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw 0.6s 0.2s ease-out forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(26, 6, 32, 0.3); border-top-color: #1a0620; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* A whole screen picture for the home screen: a 16:9 frame instead of the circle */
+body.wide .card { max-width: 460px; }
+body.wide .ring { width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; }
+body.wide .stage { border-radius: 14px; }
+body.wide .round-only { display: none; }
+body.round .wide-only { display: none; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } .check { stroke-dashoffset: 0; } }
+</style>
+</head>
+<body class="round">
+<div class="sky"></div>
+<main class="card">
+  <div class="eyebrow">NEON TOKYO</div>
+  <h1 id="title"><span class="round-only">Photo</span><span class="wide-only">Background</span> for <span class="name">Adrian</span></h1>
+
+  <section id="pick" class="view">
+    <p class="round-only">Take a selfie or pick a photo. Next you fit it in the circle.</p>
+    <p class="wide-only">Pick a photo for the TV's home screen. Next you choose the part that shows.</p>
+    <label class="btn primary round-only">
+      <input type="file" accept="image/*" capture="user" id="selfie">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Take a selfie
+    </label>
+    <label class="btn" id="libraryBtn">
+      <input type="file" accept="image/*" id="library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 9"/></svg>
+      Choose a photo
+    </label>
+    <p class="msg" id="pickMsg"></p>
+  </section>
+
+  <section id="crop" class="view" hidden>
+    <div class="ring"><div class="stage" id="stage"><img id="photo" alt=""></div></div>
+    <p class="hint">Drag to move, pinch or slide to zoom</p>
+    <div class="zoom"><span>−</span><input type="range" id="zoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom"><span>+</span></div>
+    <button class="btn primary" id="send">Send to TV</button>
+    <button class="btn link" id="again">Choose another</button>
+    <p class="msg" id="cropMsg"></p>
+  </section>
+
+  <section id="sent" class="view" hidden>
+    <div class="badge">
+      <svg viewBox="0 0 64 64" fill="none" stroke="#3ef0ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="12" width="52" height="34" rx="5"/><rect class="tv-screen" x="12" y="18" width="40" height="22" rx="2" fill="rgba(255,61,154,0.55)" stroke="none"/><path d="M24 54h16M32 46v8"/>
+      </svg>
+    </div>
+    <h2>Look at your TV</h2>
+    <p id="sentText">Your photo is on its way to the screen.</p>
+  </section>
+
+  <section id="done" class="view" hidden>
+    <div class="badge done">
+      <svg viewBox="0 0 64 64" fill="none" stroke="#ffc46b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path class="check" d="M18 33l9 9 19-20"/></svg>
+    </div>
+    <h2>All set</h2>
+    <p class="round-only">That's you on Neon Tokyo now. You can close this page.</p>
+    <p class="wide-only">It's on the home screen now. You can close this page.</p>
+  </section>
+
+  <section id="closed" class="view" hidden>
+    <h2>The photo window closed</h2>
+    <p>Open it again on the TV to send a photo.</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var BASE = "/fnd67x";
+  var WIDE = document.body.className === "wide";
+  // The picture the TV gets: a square photo, or a full HD screen
+  var OUT_W = WIDE ? 1920 : 640, OUT_H = WIDE ? 1080 : 640;
+  if (WIDE) {
+    document.getElementById("libraryBtn").className = "btn primary";
+    document.title = "Neon Tokyo · Home screen background";
+  }
+  var views = ["pick", "crop", "sent", "done", "closed"];
+  var current = "pick";
+  function show(name) {
+    current = name;
+    views.forEach(function (v) { document.getElementById(v).hidden = v !== name; });
+    document.getElementById("title").hidden = name === "done" || name === "closed" || name === "sent";
+  }
+  function message(id, text, isError) {
+    var el = document.getElementById(id);
+    el.textContent = text || "";
+    el.className = "msg" + (isError ? " error" : "");
+  }
+
+  // ---- Picking ----
+  var img = document.getElementById("photo");
+  var stage = document.getElementById("stage");
+  var zoom = document.getElementById("zoom");
+  var objectUrl = null;
+  ["selfie", "library"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (file) load(file);
+    });
+  });
+
+  function load(file) {
+    message("pickMsg", "");
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    img.onload = function () { show("crop"); layout(true); };
+    img.onerror = function () {
+      show("pick");
+      message("pickMsg", "This photo can't be opened here. Try another one, or a screenshot of it.", true);
+    };
+    img.src = objectUrl;
+  }
+
+  // ---- Fitting it in the frame ----
+  // The picture always covers the frame: x and y are its top left corner in the stage,
+  // scale is how big it is drawn, z the zoom on top of the scale that just covers the frame.
+  var sw = 0, sh = 0, cover = 1, z = 1, x = 0, y = 0;
+  function layout(reset) {
+    sw = stage.clientWidth; sh = stage.clientHeight;
+    var w = img.naturalWidth, h = img.naturalHeight;
+    var newCover = Math.max(sw / w, sh / h);
+    if (reset) {
+      cover = newCover; z = 1; zoom.value = "1";
+      x = (sw - w * cover) / 2; y = (sh - h * cover) / 2;
+    } else {
+      // The stage changed size (rotation): keep the same part of the picture in view
+      var ratio = newCover / cover;
+      cover = newCover; x *= ratio; y *= ratio;
+    }
+    img.style.width = w * cover + "px";
+    img.style.height = h * cover + "px";
+    apply();
+  }
+  function clamp() {
+    var w = img.naturalWidth * cover * z, h = img.naturalHeight * cover * z;
+    x = Math.min(0, Math.max(sw - w, x));
+    y = Math.min(0, Math.max(sh - h, y));
+  }
+  function apply() {
+    clamp();
+    img.style.transform = "translate(" + x + "px," + y + "px) scale(" + z + ")";
+  }
+  // Zoom keeping the stage point (px, py) still
+  function zoomTo(nz, px, py) {
+    nz = Math.min(4, Math.max(1, nz));
+    x = px - (px - x) * (nz / z);
+    y = py - (py - y) * (nz / z);
+    z = nz;
+    zoom.value = String(z);
+    apply();
+  }
+  zoom.addEventListener("input", function () { zoomTo(parseFloat(zoom.value), sw / 2, sh / 2); });
+  window.addEventListener("resize", function () { if (current === "crop") layout(false); });
+
+  var pointers = {};
+  var pinch = null, drag = null;
+  function local(e) { var r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  function ids() { return Object.keys(pointers); }
+  stage.addEventListener("pointerdown", function (e) {
+    stage.setPointerCapture(e.pointerId);
+    pointers[e.pointerId] = local(e);
+    begin();
+  });
+  stage.addEventListener("pointermove", function (e) {
+    if (!pointers[e.pointerId]) return;
+    pointers[e.pointerId] = local(e);
+    var list = ids();
+    if (list.length >= 2 && pinch) {
+      var a = pointers[list[0]], b = pointers[list[1]];
+      var d = Math.hypot(a.x - b.x, a.y - b.y);
+      var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      x += cx - pinch.cx; y += cy - pinch.cy;
+      zoomTo(pinch.z * d / pinch.d, cx, cy);
+      pinch.cx = cx; pinch.cy = cy;
+    } else if (drag) {
+      var p = pointers[list[0]];
+      x = drag.x + p.x - drag.px; y = drag.y + p.y - drag.py;
+      apply();
+    }
+  });
+  function end(e) { delete pointers[e.pointerId]; begin(); }
+  stage.addEventListener("pointerup", end);
+  stage.addEventListener("pointercancel", end);
+  function begin() {
+    var list = ids();
+    pinch = drag = null;
+    if (list.length >= 2) {
+      var a = pointers[list[0]], b = pointers[list[1]];
+      pinch = { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), z: z, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    } else if (list.length === 1) {
+      var p = pointers[list[0]];
+      drag = { x: x, y: y, px: p.x, py: p.y };
+    }
+  }
+  stage.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var p = local(e);
+    zoomTo(z * Math.exp(-e.deltaY / 300), p.x, p.y);
+  }, { passive: false });
+
+  document.getElementById("again").addEventListener("click", function () { show("pick"); });
+
+  function canvasOf(w, h) {
+    var c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+    var cx = c.getContext("2d");
+    cx.imageSmoothingEnabled = true;
+    cx.imageSmoothingQuality = "high";
+    return c;
+  }
+  function render(source, sx, sy, sW, sH, outW, outH) {
+    // The chosen part on its own first, at its own size
+    var from = canvasOf(Math.min(sW, outW * 2), Math.min(sH, outH * 2));
+    from.getContext("2d").drawImage(source, sx, sy, sW, sH, 0, 0, from.width, from.height);
+    var grow = outW / from.width;
+    while (outW / from.width > 2.01) {
+      var next = canvasOf(from.width * 2, from.height * 2);
+      next.getContext("2d").drawImage(from, 0, 0, next.width, next.height);
+      from = next;
+    }
+    var out = canvasOf(outW, outH);
+    out.getContext("2d").drawImage(from, 0, 0, outW, outH);
+    if (grow > 1.2) sharpen(out, Math.min(0.6, 0.2 + (grow - 1) * 0.15));
+    return out;
+  }
+  // A light unsharp pass, so an enlarged photo doesn't look soft on a big screen
+  function sharpen(canvas, amount) {
+    var cx = canvas.getContext("2d");
+    var w = canvas.width, h = canvas.height;
+    try {
+      var image = cx.getImageData(0, 0, w, h), d = image.data, src = new Uint8ClampedArray(d);
+      var row = w * 4;
+      for (var yy = 1; yy < h - 1; yy++) {
+        for (var xx = 1; xx < w - 1; xx++) {
+          var i = yy * row + xx * 4;
+          for (var c = 0; c < 3; c++) {
+            var k = i + c;
+            var blur = (src[k - 4] + src[k + 4] + src[k - row] + src[k + row]) * 0.25;
+            d[k] = src[k] + (src[k] - blur) * amount;
+          }
+        }
+      }
+      cx.putImageData(image, 0, 0);
+    } catch (e) {}
+  }
+
+  // ---- Sending ----
+  var sendBtn = document.getElementById("send");
+  sendBtn.addEventListener("click", function () {
+    message("cropMsg", "");
+    var scale = cover * z;
+    // A background is always made 4K, the TV's own size: a smaller photo is enlarged here in
+    // steps of at most double, each smoothed, then sharpened a little, which keeps its edges far
+    // cleaner than the TV stretching it in one go
+    var outW = OUT_W, outH = OUT_H;
+    if (WIDE) { outW = 3840; outH = 2160; }
+    var data = render(img, -x / scale, -y / scale, sw / scale, sh / scale, outW, outH).toDataURL("image/jpeg", 0.92).split(",")[1];
+    var form = new FormData();
+    form.append("image", data);
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner"></span>Sending…';
+    fetch(BASE + "/photo", { method: "POST", body: form }).then(function (res) {
+      if (!res.ok) return res.text().then(function (t) { var e = new Error(t); e.fromTv = true; throw e; });
+      document.getElementById("sentText").textContent = "Your photo is on its way to the screen.";
+      show("sent");
+      lastState = "received";
+      poll();
+    }).catch(function (err) {
+      // The TV's own words when it answered; a network error only says the TV is out of reach
+      message("cropMsg", err && err.fromTv && err.message && err.message.length < 120 ? err.message
+        : err && err.fromTv ? "The TV couldn't take that photo. Try again."
+        : "Couldn't reach the TV. Check that your phone is on the same Wi-Fi.", true);
+    }).then(function () {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "Send to TV";
+    });
+  });
+
+  // ---- Following the TV ----
+  var lastState = "waiting", misses = 0, timer = null;
+  function poll() {
+    clearTimeout(timer);
+    fetch(BASE + "/status", { cache: "no-store" }).then(function (res) {
+      if (!res.ok) throw new Error();
+      return res.json();
+    }).then(function (s) {
+      misses = 0;
+      react(s.state);
+    }).catch(function () {
+      misses++;
+      // The TV stops listening a few seconds after the photo is chosen; until then, a gap is a closed window
+      if (misses >= 3 && current !== "done") { show("closed"); return; }
+    }).then(function () {
+      if (current === "sent" || (current === "done" && lastState !== "done")) timer = setTimeout(poll, 1200);
+    });
+  }
+  function react(state) {
+    if (state === lastState) return;
+    lastState = state;
+    if (state === "preview") {
+      document.getElementById("sentText").textContent = WIDE ? "It's on the TV. Press OK on the remote to use it." : "There you are. Press OK on the remote to use it.";
+    } else if (state === "done") {
+      show("done");
+    } else if (state === "retry") {
+      show("pick");
+      message("pickMsg", "The TV asked for another one. Pick a new photo.");
+    } else if (state === "error") {
+      show("pick");
+      message("pickMsg", "The TV couldn't read that photo. Try another one.", true);
+    }
+  }
+})();
+</script>
+</body>
+</html>

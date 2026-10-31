@@ -1,0 +1,29 @@
+Broadcasting: Intent { act=com.neontokyo.tv.OVERLAY flg=0x400000 (has extras) }
+Broadcast completed: result=0, data="Neon Tokyo picture diagnostics, Sat Oct 31 22:23:42 GMT 2026
+Source: Neon Tokyo
+
+[Signal in]
+Video: Nothing playing (Reported, Start a film or a console)
+
+[Panel]
+Mode: 1920 × 1080 (Reported)
+Refresh: 60 Hz (Reported)
+
+[HDR]
+Panel shows: SDR only (Reported)
+
+[Gaming]
+Low-latency mode: No (Reported, The TV offers no game mode to apps)
+ALLM now: — (Unknown, The TV doesn't tell apps)
+VRR now: — (Unknown, Android gives apps no way to ask)
+
+[Sound]
+Output: TV speakers (Reported)
+Takes: PCM only (Reported)
+Sound delay: Measuring… (Unknown)
+
+[Latency]
+Remote to TV: — (Unknown, Shows after the next press)
+Picture pipeline: 17 ms (Reported, The TV's own figure)
+Console to screen: — (Unknown, Needs a camera to measure)
+"

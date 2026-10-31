@@ -1,0 +1,7 @@
+big provider: list shown after 8 s
+--------- beginning of main
+--------- beginning of system
+focus moved from '★  Favourites' to 'SE | Group 0'
+        TOTAL   632525   616644     2168        0   632525   588744   195719   383333
+           Java Heap:   127800                         144848
+           TOTAL PSS:   632525            TOTAL RSS:   742020      TOTAL SWAP (KB):        0

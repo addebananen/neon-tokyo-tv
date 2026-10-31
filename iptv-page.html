@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Tokyo · Live TV</title>
+<style>
+  :root { --night:#0d0721; --panel:#160a2e; --text:#f6eaff; --lilac:#b9a6d6; --magenta:#ff3d9a; --cyan:#3ef0ff; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { min-height:100vh; background:radial-gradient(120% 80% at 50% 0%, #2a0f4f 0%, var(--night) 60%); color:var(--text);
+         font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display:flex; justify-content:center; padding:28px 16px; }
+  .card { width:100%; max-width:420px; background:rgba(22,10,46,.85); border:1px solid rgba(255,61,154,.35); border-radius:20px;
+          padding:28px 22px; box-shadow:0 0 40px rgba(255,61,154,.15); }
+  h1 { font-style:italic; font-size:26px; letter-spacing:1px; text-shadow:0 0 18px rgba(255,61,154,.8); }
+  .sub { color:var(--lilac); font-size:14px; margin:6px 0 22px; line-height:1.45; }
+  .tabs { display:flex; gap:8px; margin-bottom:18px; }
+  .tab { flex:1; padding:11px; border-radius:12px; border:1px solid rgba(185,166,214,.3); background:transparent; color:var(--lilac);
+         font-size:15px; font-weight:600; }
+  .tab.on { border-color:var(--magenta); color:var(--text); background:rgba(255,61,154,.16); box-shadow:0 0 14px rgba(255,61,154,.3); }
+  label { display:block; font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--cyan); margin:14px 0 6px; }
+  input { width:100%; padding:14px; border-radius:12px; border:1px solid rgba(185,166,214,.3); background:rgba(0,0,0,.35);
+          color:var(--text); font-size:16px; outline:none; }
+  input:focus { border-color:var(--cyan); }
+  .hint { color:var(--lilac); font-size:12px; margin-top:6px; }
+  button.go { width:100%; margin-top:24px; padding:15px; border:0; border-radius:26px; font-size:16px; font-weight:700; color:#1a0420;
+              background:linear-gradient(90deg, var(--magenta), #ff7ac0); box-shadow:0 0 22px rgba(255,61,154,.45); }
+  button.go:disabled { opacity:.6; }
+  .msg { margin-top:16px; font-size:14px; min-height:20px; text-align:center; }
+  .msg.bad { color:#ff8fb8; } .msg.good { color:var(--cyan); }
+  [hidden] { display:none !important; }
+</style></head>
+<body><div class="card">
+  <h1>Live TV</h1>
+  <p class="sub">Add your IPTV service to Neon Tokyo. It is kept encrypted on the TV and only ever sent to your provider.</p>
+  <div class="tabs">
+    <button class="tab on" id="tx" type="button">Xtream login</button>
+    <button class="tab" id="tm" type="button">M3U link</button>
+  </div>
+  <form id="f" autocomplete="off">
+    <div id="xt">
+      <label for="server">Server</label><input id="server" name="server" inputmode="url" autocapitalize="off" placeholder="http://example.com:8080">
+      <label for="user">Username</label><input id="user" name="user" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label for="pass">Password</label><input id="pass" name="pass" type="password">
+    </div>
+    <div id="m3" hidden>
+      <label for="url">Playlist link</label><input id="url" name="url" inputmode="url" autocapitalize="off" placeholder="https://…/playlist.m3u">
+      <label for="epg">Guide link (optional)</label><input id="epg" name="epg" inputmode="url" autocapitalize="off" placeholder="https://…/epg.xml.gz">
+      <p class="hint">Leave the guide empty if the playlist names one itself.</p>
+    </div>
+    <button class="go" id="go" type="submit">Connect</button>
+    <p class="msg" id="msg"></p>
+  </form>
+</div>
+<script>
+  var kind = 'xtream';
+  function pick(k) {
+    kind = k;
+    document.getElementById('xt').hidden = k !== 'xtream';
+    document.getElementById('m3').hidden = k !== 'm3u';
+    document.getElementById('tx').classList.toggle('on', k === 'xtream');
+    document.getElementById('tm').classList.toggle('on', k === 'm3u');
+    document.getElementById('msg').textContent = '';
+  }
+  document.getElementById('tx').onclick = function () { pick('xtream'); };
+  document.getElementById('tm').onclick = function () { pick('m3u'); };
+  document.getElementById('f').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var go = document.getElementById('go'), msg = document.getElementById('msg');
+    var body = new URLSearchParams();
+    body.set('kind', kind);
+    (kind === 'xtream' ? ['server', 'user', 'pass'] : ['url', 'epg']).forEach(function (n) { body.set(n, document.getElementById(n).value); });
+    go.disabled = true; go.textContent = 'Checking with your provider…'; msg.textContent = ''; msg.className = 'msg';
+    try {
+      var res = await fetch(location.pathname, { method: 'POST', body: body });
+      var out = await res.json();
+      if (out.ok) { msg.className = 'msg good'; msg.textContent = 'Connected. The channels are loading on the TV.'; go.textContent = 'Done'; return; }
+      msg.className = 'msg bad'; msg.textContent = out.error || 'That did not work';
+    } catch (err) {
+      msg.className = 'msg bad'; msg.textContent = 'Lost the TV. Is the phone on the same Wi-Fi?';
+    }
+    go.disabled = false; go.textContent = 'Connect';
+  });
+</script>
+<div id="dc-banner" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;flex-direction:column;">
+    <div style="text-align:center;">
+        <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+        <div style="color:#fff;font-size:18px;font-weight:600;">Disconnected</div>
+        <div style="color:rgba(255,255,255,0.5);font-size:14px;margin-top:8px;">Waiting for connection...</div>
+    </div>
+</div>
+<script>
+(function(){
+    var banner=document.getElementById('dc-banner');
+    var alive=true;
+    function check(){
+        fetch('/ping').then(function(r){
+            if(!r.ok)throw 0;
+            if(!alive){alive=true;banner.style.display='none';}
+        }).catch(function(){
+            if(alive){alive=false;banner.style.display='flex';}
+        });
+    }
+    setInterval(check,3000);
+})();
+</script>
+</body></html>

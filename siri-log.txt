@@ -1,0 +1,2 @@
+Neon Tokyo Siri Remote bridge 1 running (pid 31222)
+problem: No Siri Remote paired yet
