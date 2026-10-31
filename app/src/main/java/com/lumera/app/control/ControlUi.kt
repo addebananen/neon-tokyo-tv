@@ -301,12 +301,14 @@ private fun Button(model: CcModel, item: CcItem) {
                 NeonGlyph(glyphOf(item), { if (on) Ink else lerp(Color.White, Ink, lit) }, Modifier.size(16.dp), plain = true)
             }
             Spacer(Modifier.width(6.dp))
+            // As on Apple TV, a button that is off says only its name, over two lines if it needs them
+            val detail = detailOf(model, item)?.takeIf { it != "Off" }
             Column(Modifier.weight(1f)) {
                 BasicText(
-                    labelOf(item), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(fontFamily = Body, fontSize = 10.5.sp, color = lerp(Color.White, Ink, lit), shadow = shade(lit))
+                    labelOf(item), maxLines = if (detail == null) 2 else 1, overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(fontFamily = Body, fontSize = 10.5.sp, lineHeight = 12.sp, color = lerp(Color.White, Ink, lit), shadow = shade(lit))
                 )
-                detailOf(model, item)?.let {
+                detail?.let {
                     BasicText(
                         it, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = TextStyle(fontFamily = Body, fontSize = 9.sp, color = lerp(Soft, Ink.copy(alpha = 0.65f), lit), shadow = shade(lit))
