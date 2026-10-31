@@ -158,6 +158,27 @@ if focused and focused[-1]:
 '
 }
 
+# find_poster NAME: moves along the focused row until the poster titled NAME has the focus (up to
+# 3 to the left, then up to 4 past the start to the right). Live search results change order
+# ("Dune: Part Two" can come before "Dune"), so a fixed number of presses is not enough.
+find_poster() {
+  local want="$1" now i
+  now=$(focused_poster)
+  [ "$now" = "$want" ] && { echo "$now"; return 0; }
+  for i in 1 2 3; do
+    key DPAD_LEFT >/dev/null; sleep 1.5
+    now=$(focused_poster)
+    [ "$now" = "$want" ] && { echo "$now"; return 0; }
+  done
+  key DPAD_RIGHT DPAD_RIGHT DPAD_RIGHT >/dev/null; sleep 1.5
+  for i in 1 2 3 4; do
+    key DPAD_RIGHT >/dev/null; sleep 1.5
+    now=$(focused_poster)
+    [ "$now" = "$want" ] && { echo "$now"; return 0; }
+  done
+  echo "$now"
+}
+
 # focused_width: the width in pixels of the element that has the D-pad focus
 focused_width() {
   timeout 20 adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || return 1
@@ -752,7 +773,7 @@ shot search-results-focus
 # among 35 000 titles; both must turn up first in the sources panel, marked [IPTV]
 key DPAD_LEFT DPAD_LEFT DPAD_LEFT
 sleep 2
-vod_title=$(focused_poster)
+vod_title=$(find_poster "Dune")
 echo "search focus for the film: $vod_title"
 if [ "$vod_title" != "Dune" ]; then
   fail "could not reach Dune in the search results for the IPTV film, focus on: $vod_title"
@@ -786,7 +807,7 @@ else
   done
   key DPAD_DOWN
   sleep 2
-  vod_series=$(focused_poster)
+  vod_series=$(find_poster "Dune: Prophecy")
   echo "search focus for the series: $vod_series"
   if [ "$vod_series" != "Dune: Prophecy" ]; then
     fail "could not reach Dune: Prophecy in the search results, focus on: $vod_series"

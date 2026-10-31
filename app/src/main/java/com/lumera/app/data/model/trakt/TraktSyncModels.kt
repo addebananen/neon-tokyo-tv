@@ -31,7 +31,8 @@ data class TraktIds(
     val trakt: Int? = null,
     val slug: String? = null,
     val imdb: String? = null,
-    val tmdb: Int? = null
+    val tmdb: Int? = null,
+    val tvdb: Int? = null
 )
 
 /**
