@@ -105,6 +105,9 @@ object HomeApps {
         return try {
             val options = runCatching { growFrom?.invoke() }.getOrNull()
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options)
+            // An app opened from its launcher entry is one the app switcher can go back to
+            val pkg = intent.component?.packageName
+            if (intent.action == Intent.ACTION_MAIN && pkg != null && pkg != context.packageName) RecentApps.seen(context, pkg)
             true
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, "Nothing on this TV can open that", Toast.LENGTH_SHORT).show()

@@ -274,6 +274,8 @@ class NeonOverlayService : AccessibilityService() {
             }
             hudWhenConsole = 0L
         }
+        // The app switcher learns what was opened, and keeps a picture of it now and then
+        switcherShots.foreground(pkg)
     }
 
     override fun onInterrupt() = Unit
@@ -448,6 +450,8 @@ class NeonOverlayService : AccessibilityService() {
     }
 
     private fun consoleColor(): Long? = ConsoleSession.last?.takeIf { foreground == it.tvApp }?.color
+
+    private val switcherShots by lazy { SwitcherShots(this) }
 
     companion object {
         private const val TAG = "NeonOverlay"

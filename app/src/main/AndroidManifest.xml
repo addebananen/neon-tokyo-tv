@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Start the Siri Remote bridge again after the TV restarts (through Shizuku) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- The app switcher closes an app in the background when it is swiped up -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!-- Shizuku: the owner-installed helper that can run the bridge as the shell user -->
     <uses-permission android:name="moe.shizu.manager.permission.API_V23" />
     <!-- Neon Home's Bluetooth corner: which paired headphones and speakers are on, and connecting
