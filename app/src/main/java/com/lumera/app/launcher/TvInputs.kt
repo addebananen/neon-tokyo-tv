@@ -65,7 +65,16 @@ class TvInputs(private val context: Context) {
         listening = false
     }
 
+    /**
+     * Reads the inputs again. Asking the TV for them and their names takes a while, so it happens
+     * off the main thread: done there, it held up the home screen just as it came back from an app.
+     */
     fun reload() {
+        if (manager == null) return
+        reader.execute { read() }
+    }
+
+    private fun read() {
         val manager = manager ?: return
         val infos = runCatching { manager.tvInputList }
             .onFailure { Log.w(TAG, "Could not read the TV inputs", it) }
@@ -89,6 +98,11 @@ class TvInputs(private val context: Context) {
 
     companion object {
         private const val TAG = "TvInputs"
+
+        /** One reader for every home screen, so reads never overlap and land in order. */
+        private val reader = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
+            Thread(task, "TvInputs").apply { isDaemon = true }
+        }
 
         /** "HDMI 2", "HDMI2 (eARC)" and "hdmi 2" are port 2. */
         fun portNumber(label: String): Int? =

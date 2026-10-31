@@ -60,6 +60,16 @@ object ShizukuBridge {
         }.getOrElse { it.message ?: it.toString() }
     }
 
+    /**
+     * Runs one [command] as the shell user through Shizuku and returns its output, or null when
+     * Shizuku is not there or has not granted access. Blocks: call it off the main thread.
+     */
+    fun run(command: String): String? {
+        if (!granted()) return null
+        val runner = bind() ?: return null
+        return runCatching { runner.run(command) }.getOrNull()
+    }
+
     @Volatile private var bound: ISiriRunner? = null
     private val lock = Object()
 

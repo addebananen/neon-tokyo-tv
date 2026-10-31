@@ -52,6 +52,7 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -94,6 +95,8 @@ private fun rememberAmbientTime(): State<Float> {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Back from an app, the rain and lights wait for the screen to settle first
+            delay(RETURN_SETTLE_MS / 2)
             var last = withFrameNanos { it }
             while (true) {
                 val now = awaitBeat()
