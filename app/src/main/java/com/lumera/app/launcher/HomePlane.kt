@@ -110,6 +110,11 @@ internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> started = true
+                // An app is opening over the home screen: the film holds its frame and gives the
+                // decoder and the memory it reads through back to that app at once, not only
+                // once it covers the screen
+                Lifecycle.Event.ON_PAUSE -> player.pause()
+                Lifecycle.Event.ON_RESUME -> if (player.mediaItemCount > 0) player.play()
                 Lifecycle.Event.ON_STOP -> started = false
                 else -> Unit
             }

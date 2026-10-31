@@ -108,6 +108,10 @@ HSPLcom/lumera/app/ui/navigation/**;->**(**)**
 HSPLcom/lumera/app/launcher/**;->**(**)**
 HSPLcom/lumera/app/dream/**;->**(**)**
 HSPLcom/lumera/app/projectivy/**;->**(**)**
+# The overlay service answers every press of the remote, and the Control Center opens over any app
+HSPLcom/lumera/app/overlay/**;->**(**)**
+HSPLcom/lumera/app/control/**;->**(**)**
+HSPLcom/lumera/app/livetv/**;->**(**)**
 
 # ============================================================================
 # LUMERA UI - Secondary screens
