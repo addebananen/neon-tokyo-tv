@@ -95,7 +95,7 @@ internal object SwitcherRules {
             x = -STACK * out,
             scale = 1f - 0.05f * a.coerceAtMost(DEEP),
             alpha = (DEEP - a).coerceIn(0f, 1f),
-            shade = (0.45f * a).coerceAtMost(0.7f),
+            shade = (0.3f * a).coerceAtMost(0.5f),
             z = -a
         )
     }
