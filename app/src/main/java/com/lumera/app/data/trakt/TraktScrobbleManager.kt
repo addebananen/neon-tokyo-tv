@@ -2,7 +2,6 @@ package com.lumera.app.data.trakt
 
 import android.util.Log
 import com.lumera.app.data.local.AddonDao
-import com.lumera.app.data.model.trakt.TraktIds
 import com.lumera.app.data.model.trakt.TraktScrobbleEpisode
 import com.lumera.app.data.model.trakt.TraktScrobbleMovie
 import com.lumera.app.data.model.trakt.TraktScrobbleRequest
@@ -147,35 +146,27 @@ class TraktScrobbleManager @Inject constructor(
      */
     private fun buildRequest(playbackId: String, mediaType: String, progress: Float): TraktScrobbleRequest? {
         if (mediaType == "series") {
-            // Episode format: "tt1234567:1:3" or "tt1234567:1:3:0" (with optional stream index)
-            val parts = playbackId.split(":")
-            if (parts.size < 3) {
+            // Episode format: "tt1234567:1:3", "tmdb:1399:1:3" or either with ":0" (stream index)
+            val (showId, season, episode) = TraktContentIds.episode(playbackId) ?: run {
                 Log.w(TAG, "Invalid episode playback ID: $playbackId")
                 return null
             }
-
-            // Last part might be stream index (numeric) — detect based on count
-            val hasStreamIndex = parts.size >= 4 && parts.last().toIntOrNull() != null
-            val dropCount = if (hasStreamIndex) 3 else 2
-            val imdbId = parts.dropLast(dropCount).joinToString(":")
-            val season = parts[parts.size - if (hasStreamIndex) 3 else 2].toIntOrNull()
-            val episode = parts[parts.size - if (hasStreamIndex) 2 else 1].toIntOrNull()
-            if (season == null || episode == null) {
-                Log.w(TAG, "Failed to parse season/episode from playback ID: $playbackId")
+            val ids = TraktContentIds.traktIds(showId) ?: run {
+                Log.d(TAG, "No Trakt id for $playbackId")
                 return null
             }
-
             return TraktScrobbleRequest(
-                show = TraktScrobbleShow(ids = TraktIds(imdb = imdbId)),
+                show = TraktScrobbleShow(ids = ids),
                 episode = TraktScrobbleEpisode(season = season, number = episode),
                 progress = progress
             )
         } else {
-            // Movie format: "tt1234567"
-            return TraktScrobbleRequest(
-                movie = TraktScrobbleMovie(ids = TraktIds(imdb = playbackId)),
-                progress = progress
-            )
+            // Movie format: "tt1234567" or "tmdb:603"
+            val ids = TraktContentIds.traktIds(playbackId) ?: run {
+                Log.d(TAG, "No Trakt id for $playbackId")
+                return null
+            }
+            return TraktScrobbleRequest(movie = TraktScrobbleMovie(ids = ids), progress = progress)
         }
     }
 }
