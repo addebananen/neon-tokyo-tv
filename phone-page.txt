@@ -1,0 +1,4 @@
+page at http://tv.lan:18082/2w3quy: secure context false, wake lock false
+keep-awake video playing: true
+page opened again with 101187584 of 253671583 bytes on the TV: the phone shows "46 %  ·  113 MB of 242 MB"
+page ends on "done", TV state {"state":"done","received":253671583,"id":"phone-video.mp4%3A253671583%3A1793490579217","room":5294612480}, 100 s

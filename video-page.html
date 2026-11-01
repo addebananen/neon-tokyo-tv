@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0721">
+<link rel="icon" href="data:,">
+<title>Neon Tokyo · Screensaver video</title>
+<style>
+@font-face { font-family: "Kanit"; font-style: italic; font-weight: 600; src: url("/8uez28/kanit-semibold-italic.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Kanit"; font-style: normal; font-weight: 500; src: url("/8uez28/kanit-medium.ttf") format("truetype"); font-display: swap; }
+:root {
+  --night: #0d0721; --violet: #2a0f4f; --panel: rgba(22, 10, 46, 0.82);
+  --text: #f6eaff; --lilac: #b9a6d6; --magenta: #ff3d9a; --cyan: #3ef0ff; --sun: #ffc46b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { background: var(--night); }
+body {
+  min-height: 100vh; min-height: 100dvh;
+  font-family: "Kanit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 500;
+  color: var(--text); display: flex; align-items: center; justify-content: center;
+  padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  overflow-x: hidden;
+}
+.sky {
+  position: fixed; inset: 0; z-index: -1;
+  background: linear-gradient(180deg, rgba(13, 7, 33, 0.55), rgba(13, 7, 33, 0.25) 40%, rgba(13, 7, 33, 0.8)),
+    url("/8uez28/skyline.webp") 68% center / cover no-repeat, var(--night);
+}
+.card {
+  width: 100%; max-width: 380px; padding: 26px 22px 24px; border-radius: 26px; text-align: center;
+  background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1.5px rgba(255, 61, 154, 0.55), 0 0 42px rgba(255, 61, 154, 0.18), 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+.eyebrow { font-size: 12px; letter-spacing: 6px; color: var(--cyan); text-shadow: 0 0 10px rgba(62, 240, 255, 0.6); }
+h1, h2 {
+  font-style: italic; font-weight: 600; line-height: 1.1; margin-top: 8px;
+  text-shadow: 0 0 18px rgba(255, 61, 154, 0.65);
+}
+h1 { font-size: 30px; }
+h2 { font-size: 26px; }
+.name { color: var(--sun); text-shadow: 0 0 18px rgba(255, 196, 107, 0.6); }
+p { color: var(--lilac); font-size: 15px; line-height: 1.45; margin-top: 10px; }
+.view { margin-top: 22px; }
+[hidden] { display: none !important; }
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+  min-height: 54px; margin-top: 12px; padding: 0 20px; border-radius: 27px; cursor: pointer;
+  font: inherit; font-size: 17px; color: var(--text); background: transparent; user-select: none;
+  border: 1.5px solid rgba(62, 240, 255, 0.55); transition: transform 0.12s ease, opacity 0.2s ease;
+}
+.btn:active { transform: scale(0.97); }
+.btn.primary {
+  border: none; color: #1a0620; font-weight: 600;
+  background: linear-gradient(100deg, var(--magenta), #ff7ac0 55%, var(--sun));
+  box-shadow: 0 0 24px rgba(255, 61, 154, 0.45);
+}
+.btn.link { border: none; min-height: 44px; color: var(--lilac); font-size: 15px; }
+.btn[disabled] { opacity: 0.55; pointer-events: none; }
+.btn input { display: none; }
+.btn svg { width: 22px; height: 22px; flex: none; }
+
+.msg { min-height: 20px; margin-top: 12px; font-size: 14px; color: var(--sun); }
+.msg.error { color: #ff8aa8; }
+.tip { margin-top: 14px; font-size: 13px; line-height: 1.45; color: var(--lilac); opacity: 0.85; }
+
+.screen {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; margin-top: 4px; border-radius: 14px; overflow: hidden; background: #000;
+  box-shadow: 0 0 0 1.5px rgba(62, 240, 255, 0.55), 0 0 30px rgba(62, 240, 255, 0.2);
+}
+.screen video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.facts { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 13px; color: var(--lilac); }
+.facts span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.bar { height: 8px; margin-top: 18px; border-radius: 4px; background: rgba(185, 166, 214, 0.25); overflow: hidden; }
+.bar div {
+  height: 100%; width: 0; border-radius: 4px; transition: width 0.25s linear;
+  background: linear-gradient(90deg, var(--magenta), var(--cyan)); box-shadow: 0 0 12px rgba(62, 240, 255, 0.6);
+}
+.pct { margin-top: 10px; font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
+.badge {
+  width: 112px; height: 112px; margin: 6px auto 4px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(62, 240, 255, 0.6); box-shadow: 0 0 30px rgba(62, 240, 255, 0.3), inset 0 0 22px rgba(62, 240, 255, 0.15);
+}
+.badge svg { width: 58px; height: 58px; }
+.tv-screen { animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.badge.done { border-color: rgba(255, 196, 107, 0.8); box-shadow: 0 0 34px rgba(255, 196, 107, 0.45); animation: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.check { stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw 0.6s 0.2s ease-out forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.spinner { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(26, 6, 32, 0.3); border-top-color: #1a0620; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } .check { stroke-dashoffset: 0; } }
+</style>
+</head>
+<body>
+<div class="sky"></div>
+<main class="card">
+  <div class="eyebrow">NEON TOKYO</div>
+  <h1 id="title">Your screensaver</h1>
+
+  <section id="pick" class="view">
+    <p>Pick a video and it plays on the TV, on a loop and without sound, whenever the TV rests.</p>
+    <label class="btn primary">
+      <input type="file" accept="video/*" id="library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>
+      Choose a video
+    </label>
+    <p class="msg" id="pickMsg"></p>
+    <p class="tip" id="iosTip" hidden>On an iPhone, a video picked from Photos is first squeezed down by the phone. For the full picture, open it in Photos, tap Share › Save to Files, then pick Choose File here and find it there.</p>
+  </section>
+
+  <section id="check" class="view" hidden>
+    <div class="screen" id="screen"><video id="clip" muted loop playsinline autoplay></video></div>
+    <div class="facts"><span id="name"></span><span id="size"></span></div>
+    <button class="btn primary" id="send">Send to TV</button>
+    <button class="btn link" id="again">Choose another</button>
+    <p class="msg" id="checkMsg"></p>
+  </section>
+
+  <section id="sending" class="view" hidden>
+    <h2>Sending to the TV</h2>
+    <div id="screenHere"></div>
+    <div class="bar"><div id="bar"></div></div>
+    <p class="pct" id="pct">0 %</p>
+    <p id="sendingText">Keep this page open until it's there. The screen stays on by itself.</p>
+  </section>
+
+  <section id="done" class="view" hidden>
+    <div class="badge done">
+      <svg viewBox="0 0 64 64" fill="none" stroke="#ffc46b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path class="check" d="M18 33l9 9 19-20"/></svg>
+    </div>
+    <h2>It's on the TV</h2>
+    <p>Your video is the screensaver now. You can close this page.</p>
+  </section>
+
+  <section id="closed" class="view" hidden>
+    <h2>The video window closed</h2>
+    <p>Open it again on the TV, under Settings › Personalization › Screensaver.</p>
+  </section>
+</main>
+<!-- Keeps the phone's screen on while it sends: a page from the TV's own address isn't allowed the
+     wake lock (that needs https), but a phone stays awake while a video plays on the page -->
+<video id="awake" muted loop playsinline preload="auto" aria-hidden="true"
+  style="position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none"></video>
+
+<script>
+(function () {
+  "use strict";
+  // The same page sends a home screen background: only the words change
+  if (document.body.className === "background") {
+    document.title = "Neon Tokyo · Home screen video";
+    document.getElementById("title").textContent = "Your home screen";
+    document.querySelector("#pick p").textContent = "Pick a video and it plays behind your tiles on the TV, on a loop and without sound.";
+    document.querySelector("#done p").textContent = "Your video is behind the home screen now. You can close this page.";
+    document.querySelector("#closed p").textContent = "Open it again on the TV: hold OK on your profile on Neon Home, then Own video.";
+  }
+  // iPhones and iPads (which say they are Macs, but with a touch screen)
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    document.getElementById("iosTip").hidden = false;
+  }
+  var BASE = "/8uez28";
+  var MAX = 2 * 1024 * 1024 * 1024;
+  var views = ["pick", "check", "sending", "done", "closed"];
+  var current = "pick";
+  function show(name) {
+    current = name;
+    views.forEach(function (v) { document.getElementById(v).hidden = v !== name; });
+    document.getElementById("title").hidden = name !== "pick" && name !== "check";
+  }
+  function message(id, text, isError) {
+    var el = document.getElementById(id);
+    el.textContent = text || "";
+    el.className = "msg" + (isError ? " error" : "");
+  }
+  function megabytes(bytes) {
+    return bytes >= 1024 * 1024 * 1024 ? (bytes / 1073741824).toFixed(1) + " GB" : Math.max(1, Math.round(bytes / 1048576)) + " MB";
+  }
+
+  // ---- Picking ----
+  var clip = document.getElementById("clip");
+  var chosen = null, objectUrl = null;
+  document.getElementById("library").addEventListener("change", function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    message("pickMsg", "");
+    if (file.size > MAX) { message("pickMsg", "That video is over 2 GB. Pick a shorter one.", true); return; }
+    chosen = file;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    clip.src = objectUrl;
+    document.getElementById("name").textContent = file.name || "Video";
+    document.getElementById("size").textContent = megabytes(file.size);
+    message("checkMsg", "");
+    show("check");
+    var playing = clip.play();
+    if (playing && playing.catch) playing.catch(function () {});
+  });
+  // A phone that can't preview it may still have a TV that plays it, so this only notes it
+  clip.addEventListener("error", function () {
+    if (current === "check") message("checkMsg", "Your phone can't show a preview of this one, but you can still send it.");
+  });
+  document.getElementById("again").addEventListener("click", function () { clip.pause(); show("pick"); });
+
+  // ---- Sending ----
+  // In pieces, each to its place in the file on the TV: when the screen goes dark or the Wi-Fi
+  // drops, the piece is sent again from where the TV has got to instead of the whole video
+  // The size of a piece follows the Wi-Fi: about ten seconds' worth, so a slow link still
+  // gets whole pieces through and a fast one isn't held up by asking after each
+  var MB = 1024 * 1024, piece = 512 * 1024, MIN_PIECE = 64 * 1024, MAX_PIECE = 16 * MB;
+  // A piece is only given up when nothing has moved for this long, however slow it is
+  var STALL = 45000;
+  // A piece the phone says is all sent but the TV hasn't answered for: given up much sooner, as
+  // an iPhone can count a piece as sent that never left it
+  var UNANSWERED = 12000;
+  var bar = document.getElementById("bar"), pct = document.getElementById("pct");
+  var sendingText = document.getElementById("sendingText");
+  var sendId = 0, wakeLock = null, waking = null, reached = 0, inflight = null, moved = 0;
+  var screenBox = document.getElementById("screen"), awake = document.getElementById("awake");
+  // Which video this is, so a page opened again (or the same video picked again) carries on where
+  // the TV has got to rather than starting over
+  var fileId = "";
+  function idOf(file) { return encodeURIComponent((file.name || "video") + ":" + file.size + ":" + (file.lastModified || 0)).slice(0, 200); }
+  // The video being sent plays above the bar while it goes, which keeps the phone awake too
+  function placeScreen(sending) {
+    var to = sending ? document.getElementById("screenHere") : document.getElementById("check");
+    if (screenBox.parentNode !== to) to.insertBefore(screenBox, sending ? null : to.firstChild);
+  }
+  function playQuietly(video) {
+    try { var p = video.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+  }
+  function progress(done, total) {
+    var p = Math.min(100, Math.floor(done / total * 100));
+    bar.style.width = p + "%";
+    pct.textContent = p + " %  ·  " + megabytes(done) + " of " + megabytes(total);
+  }
+  function keepAwake() {
+    // A phone's screen goes dark after half a minute or so without a touch, and then it stops
+    // sending: a video playing on the page keeps it on, whatever the browser
+    if (!awake.src) awake.src = BASE + "/awake.mp4";
+    playQuietly(awake);
+    if (!clip.error) playQuietly(clip);
+    try {
+      if (navigator.wakeLock && document.visibilityState === "visible" && !wakeLock) {
+        navigator.wakeLock.request("screen").then(function (lock) {
+          wakeLock = lock;
+          lock.addEventListener("release", function () { wakeLock = null; });
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  function letSleep() {
+    try { if (wakeLock) wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+    try { awake.pause(); } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || current !== "sending") return;
+    keepAwake();
+    // Back on the page after the phone slept: carry on at once rather than after the wait. A
+    // piece that was frozen while it slept is given up now rather than after the watchdog's wait
+    if (waking) { var go = waking; waking = null; go(); }
+    else if (inflight && Date.now() - moved > 3000) inflight.abort();
+  });
+  function send(file, from, id, tries) {
+    if (id !== sendId) return;
+    // Getting further, however slowly, is never a reason to give up
+    if (from > reached) { reached = from; tries = 0; }
+    var to = Math.min(file.size, from + piece);
+    // The piece is read into memory before it goes: an iPhone sending straight from a video in
+    // its library can stall after the first bytes, while it sends bytes it holds without a hitch
+    readPiece(file.slice(from, to), function (body) {
+      if (id !== sendId) return;
+      if (body === null) { failed("Your phone couldn't read that video. Pick it again, or try another one."); return; }
+      sendPiece(file, from, to, body, id, tries);
+    });
+  }
+  function readPiece(blob, done) {
+    if (blob.arrayBuffer) { blob.arrayBuffer().then(done, function () { done(null); }); return; }
+    var reader = new FileReader();
+    reader.onload = function () { done(reader.result); };
+    reader.onerror = function () { done(null); };
+    reader.readAsArrayBuffer(blob);
+  }
+  function sendPiece(file, from, to, body, id, tries) {
+    var xhr = new XMLHttpRequest();
+    var started = Date.now(), watch = null, allSent = false;
+    moved = started;
+    inflight = xhr;
+    function stop() { clearInterval(watch); if (inflight === xhr) inflight = null; }
+    xhr.open("POST", BASE + "/piece");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Offset", String(from));
+    xhr.setRequestHeader("X-Total", String(file.size));
+    xhr.setRequestHeader("X-Id", fileId);
+    xhr.upload.onprogress = function (e) {
+      moved = Date.now();
+      if (e.lengthComputable && e.loaded >= e.total) allSent = true;
+      if (id === sendId) progress(from + e.loaded, file.size);
+    };
+    xhr.onload = function () {
+      stop();
+      if (id !== sendId) return;
+      var answer = null;
+      try { answer = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status === 200 && answer) {
+        sendingText.textContent = "Keep this page open until it's there. The screen stays on by itself.";
+        var got = answer.received - from;
+        if (got > 0 && answer.received === to) {
+          var seconds = Math.max(0.2, (Date.now() - started) / 1000);
+          piece = Math.max(MIN_PIECE, Math.min(MAX_PIECE, Math.round(got / seconds * 10)));
+        }
+        if (answer.received >= file.size) arrived();
+        else send(file, answer.received, id, answer.received > from ? 0 : tries + 1);
+      } else {
+        failed(xhr.responseText && xhr.responseText.length < 300 ? xhr.responseText : "The TV couldn't take that video. Try again.");
+      }
+    };
+    xhr.onerror = xhr.onabort = function () {
+      stop();
+      if (id !== sendId) return;
+      // Smaller pieces from here, so the next one has a better chance of getting through
+      piece = Math.max(MIN_PIECE, Math.floor(piece / 2));
+      again(file, id, tries + 1);
+    };
+    // Nothing moving for a while: give the piece up and ask the TV where to go on from
+    watch = setInterval(function () {
+      if (id !== sendId) { stop(); xhr.abort(); return; }
+      if (document.visibilityState === "visible" && Date.now() - moved > (allSent ? UNANSWERED : STALL)) xhr.abort();
+    }, 2000);
+    xhr.send(body);
+  }
+  // A piece that broke off: ask the TV how much it has, and go on from there
+  function again(file, id, tries) {
+    if (tries > 30) { failed("Couldn't reach the TV. Check that your phone is on the same Wi-Fi, then send it again."); return; }
+    sendingText.textContent = "The connection dropped. Carrying on…";
+    var go = function () {
+      if (id !== sendId) return;
+      fetch(BASE + "/status", { cache: "no-store" }).then(function (res) {
+        if (!res.ok) throw new Error();
+        return res.json();
+      }).then(function (s) {
+        if (id !== sendId) return;
+        if (s.state === "checking" || s.state === "done") { arrived(); return; }
+        if (s.state !== "receiving" || (s.id && s.id !== fileId)) { send(file, 0, id, tries); return; }
+        send(file, s.received || 0, id, tries);
+      }).catch(function () { again(file, id, tries + 1); });
+    };
+    var wait = Math.min(8000, 500 * Math.pow(2, Math.min(tries, 4)));
+    if (document.visibilityState !== "visible") { waking = go; return; }
+    setTimeout(go, wait);
+  }
+  function arrived() {
+    progress(1, 1);
+    pct.textContent = "100 %";
+    sendingText.textContent = "The TV is checking it…";
+    lastState = "checking";
+    poll();
+  }
+  document.getElementById("send").addEventListener("click", function () {
+    if (!chosen) return;
+    bar.style.width = "0";
+    pct.textContent = "0 %";
+    sendingText.textContent = "Keep this page open until it's there. The screen stays on by itself.";
+    placeScreen(true);
+    show("sending");
+    // Started here, from the tap, as a phone only lets a page play a video it was asked to
+    keepAwake();
+    var id = ++sendId, file = chosen;
+    fileId = idOf(file);
+    reached = 0;
+    // The TV says how much room it has; the TV makes more if it can, so this only stops a video
+    // that is far too big, before it is sent for nothing
+    fetch(BASE + "/status", { cache: "no-store" }).then(function (res) { return res.json(); }).then(function (s) {
+      if (id !== sendId) return;
+      if (typeof s.room === "number" && file.size > s.room * 1.5 + 200 * 1048576) {
+        failed("The TV has " + megabytes(s.room) + " free and this video is " + megabytes(file.size) + ". Trim it on your phone, or free up space on the TV.");
+      } else if ((s.state === "checking" || s.state === "done") && s.id === fileId) {
+        // This very video is already there: follow the TV while it finishes
+        arrived();
+      } else if (s.state === "receiving" && s.id === fileId && s.received > 0 && s.received < file.size) {
+        // This video already got partway: on from there
+        progress(s.received, file.size);
+        send(file, s.received, id, 0);
+      } else {
+        send(file, 0, id, 0);
+      }
+    }).catch(function () { if (id === sendId) send(file, 0, id, 0); });
+  });
+  function failed(text) {
+    sendId++;
+    letSleep();
+    placeScreen(false);
+    show("check");
+    message("checkMsg", text, true);
+  }
+
+  // ---- Following the TV ----
+  var lastState = "waiting", misses = 0, timer = null;
+  function poll() {
+    clearTimeout(timer);
+    fetch(BASE + "/status", { cache: "no-store" }).then(function (res) {
+      if (!res.ok) throw new Error();
+      return res.json();
+    }).then(function (s) {
+      misses = 0;
+      react(s.state);
+    }).catch(function () {
+      misses++;
+      if (misses >= 3 && current !== "done") { letSleep(); show("closed"); }
+    }).then(function () {
+      if (current === "sending") timer = setTimeout(poll, 1000);
+    });
+  }
+  function react(state) {
+    if (state === lastState) return;
+    lastState = state;
+    if (state === "done") { letSleep(); clip.pause(); show("done"); }
+    else if (state === "error") failed("The TV can't play that video. Try another one, like one filmed with your phone.");
+  }
+})();
+</script>
+</body>
+</html>
