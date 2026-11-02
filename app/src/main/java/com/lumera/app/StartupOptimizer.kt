@@ -1,8 +1,6 @@
 package com.lumera.app
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.util.Log
 import coil.ImageLoader
 import coil.request.CachePolicy
@@ -24,9 +22,6 @@ class StartupOptimizer @Inject constructor(
     
     companion object {
         private const val TAG = "StartupOptimizer"
-        private const val POSTER_WIDTH = 280
-        private const val POSTER_HEIGHT = 420
-        private const val WARMUP_DECODE_COUNT = 3
     }
     
     private var isWarmedUp = false
@@ -42,36 +37,15 @@ class StartupOptimizer @Inject constructor(
         
         warmupScope.launch {
             try {
-                // 1. Warm up bitmap decode pool with dummy bitmaps
-                // This triggers JNI initialization and thread pool creation
-                warmupBitmapDecoding()
-                
-                // 2. Pre-fill a small portion of memory cache
+                // Initialize the actual image pipeline. Allocating and recycling blank bitmaps
+                // does not decode an image or populate Coil's decoder pool.
+                // Pre-fill a small portion of memory cache
                 // This ensures the cache data structures are allocated
                 primeMemoryCache()
                 
                 if (com.lumera.app.BuildConfig.DEBUG) Log.d(TAG, "Warmup complete - decoder pool primed")
             } catch (e: Exception) {
                 if (com.lumera.app.BuildConfig.DEBUG) Log.w(TAG, "Warmup failed (non-critical): ${e.message}")
-            }
-        }
-    }
-    
-    /**
-     * Creates dummy bitmap decodes to warm up the decoder thread pool.
-     * Uses actual poster dimensions so the decoder thread pool is primed
-     * for the real work it will do during first scroll.
-     */
-    private fun warmupBitmapDecoding() {
-        repeat(WARMUP_DECODE_COUNT) {
-            try {
-                // Use actual poster size (280x420) to warm the decoder for real workloads
-                val bitmap = Bitmap.createBitmap(POSTER_WIDTH, POSTER_HEIGHT, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bitmap)
-                canvas.drawColor(0xFF121212.toInt())
-                bitmap.recycle()
-            } catch (e: Exception) {
-                // Ignore - this is just a warmup
             }
         }
     }

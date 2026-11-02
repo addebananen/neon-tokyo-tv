@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeStyleTest {
@@ -27,9 +28,35 @@ class HomeStyleTest {
     }
 
     @Test
-    fun onlyNeonDrawsTheSkylineInsteadOfAPainting() {
+    fun photographicStylesHaveAFallbackPainting() {
         assertNull(HomeStyle.Neon.backdrop)
-        HomeStyle.entries.filter { it != HomeStyle.Neon }.forEach { assertNotNull(it.name, it.backdrop) }
+        HomeStyle.entries.filter { it != HomeStyle.Neon && it != HomeStyle.BlueHour }.forEach { assertNotNull(it.name, it.backdrop) }
+    }
+
+    @Test
+    fun blueHourStartsQuietWithoutAddingAConsoleRowOrDecoderMedia() {
+        val profile = HomeProfile("blue", "Blue", HomeStyle.BlueHour)
+        assertEquals(HomeGlass.Frost, profile.glassLook)
+        assertTrue(profile.square)
+        assertTrue(profile.namesAlways)
+        assertEquals(false, profile.showConsoles)
+        assertNull(profile.style.video)
+        assertNull(profile.style.still)
+        assertEquals(false, profile.style.drift)
+        assertEquals(Ambience.None, profile.style.ambience)
+    }
+
+    @Test
+    fun calmFocusHonoursReducedMotionAndNeverExceedsTheChosenScale() {
+        val still = CalmFocus.scale(HomeMotion.Pop.Still)
+        val soft = CalmFocus.scale(HomeMotion.Pop.Soft)
+        assertTrue("Still must be visibly quieter than Soft", still < soft)
+        HomeMotion.Pop.entries.forEach { choice ->
+            val scale = CalmFocus.scale(choice)
+            assertTrue("${choice.title} must still indicate focus", scale > 1f)
+            assertTrue("The style must not amplify a user's motion setting", scale <= choice.scale)
+            assertTrue("The quiet style caps even Bouncy at six percent", scale <= 1.06f)
+        }
     }
 
     @Test

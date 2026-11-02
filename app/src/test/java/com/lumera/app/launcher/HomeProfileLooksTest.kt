@@ -55,6 +55,22 @@ class HomeProfileLooksTest {
     }
 
     @Test
+    fun blueHourKeepsPersonalOverridesAcrossThemeChanges() {
+        val original = adrian.copy(focus = GlassFocus.Tilt)
+        val blue = original.wearing(HomeStyle.BlueHour)
+        assertTrue(blue.square)
+        assertTrue(blue.namesAlways)
+        assertEquals(HomeGlass.Frost, blue.glassLook)
+        assertEquals(GlassFocus.Layers, blue.focusMotion)
+        val changed = blue.copy(glass = HomeGlass.Liquid, focus = GlassFocus.Drop, names = false)
+        val back = changed.wearing(HomeStyle.DeepBlue)
+        assertEquals(GlassFocus.Tilt, back.focusMotion)
+        assertEquals(false, back.wearing(HomeStyle.BlueHour).namesAlways)
+        assertEquals(HomeGlass.Liquid, back.wearing(HomeStyle.BlueHour).glassLook)
+        assertEquals(GlassFocus.Drop, back.wearing(HomeStyle.BlueHour).focusMotion)
+    }
+
+    @Test
     fun aLandingSettlesWhereItEnds() {
         assertEquals(0f to 0f, squash(1f))
         assertEquals(0f, bob(1f), 0f)
