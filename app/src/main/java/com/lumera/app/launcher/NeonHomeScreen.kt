@@ -1762,7 +1762,7 @@ private fun NeonTile(
                 sheen.snapTo(0f)
                 // A rapid reversal cancels the landing job. Settle its remaining deformation
                 // too, or a liquid tile can stay squashed after focus has moved away.
-                land.animateTo(1f, tween(120))
+                if (land.value != 1f) land.animateTo(1f, tween(120))
             }
         }
     }

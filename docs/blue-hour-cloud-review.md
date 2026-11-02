@@ -8,7 +8,7 @@
 - Build configuration: Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21, Java target 17,
   app compile SDK 36. The sibling assrender module compiles against SDK 35.
 - Cloud SDK provisioned with platforms 35/36, build tools 34/35, NDK
-  27.0.12077973 and CMake 3.22.1. Java runtime: OpenJDK 17.
+  27.0.12077973 and CMake 3.22.1. Initial Java runtime: OpenJDK 17. The final successful build used a complete Temurin JDK 17.0.21 (the initial runtime lacked jlink).
 - No Windows machine, local backgrounds or previous screenshots were accessed.
 
 ## Design
@@ -88,3 +88,27 @@ Before merging, run the debug package `com.neontokyo.tv.test` on a TV/emulator:
   respects reduced motion and never exceeds the user's chosen scale.
 - New and existing tests require the cloud Gradle run; their execution results will
   be recorded below when that run completes. Static inspection is not a test pass.
+
+
+## Cloud execution results (2026-11-02)
+
+- `:app:assembleDebug :app:testDebugUnitTest`: **BUILD SUCCESSFUL**.
+- JUnit XML: **171 tests, 32 suites, 0 failures, 0 errors, 0 skipped**.
+  This includes HomeStyleTest and HomeProfileLooksTest and the existing launcher,
+  parser, Siri audio/voice, profile, artwork and update tests.
+- Runtime: complete Temurin JDK 17.0.21, Gradle 8.9, SDK/NDK/CMake above.
+  Java used the host's trusted `/etc/ssl/certs/java/cacerts` through the environment's
+  required proxy; certificate verification remained enabled. No machine-specific
+  proxy settings or credentials were committed.
+- The first attempt with the host's incomplete Java runtime passed Kotlin but
+  stopped at the missing `jlink` tool. Installing a complete JDK resolved that
+  environment issue. The fresh JDK also needed the existing host CA trust store.
+- Incomplete temporary native-library copies from the cloud checkout were excluded
+  from the commit and removed locally. Native merge/strip outputs were regenerated
+  before the final APK packaging check.
+- No emulator/device execution, screenshots, frame-time traces or before/after CPU,
+  peak-memory or FPS measurements were produced. The runtime acceptance list above
+  remains required before this draft is considered ready to merge. The media app's
+  matching palette is not a redesign of every media screen.
+
+- Final `:app:assembleDebug --offline` after regenerating native merge/strip outputs: **BUILD SUCCESSFUL**. APK ZIP CRC check passed; both expected TorrServer ABI libraries are present and no hidden temporary native entries remain.
