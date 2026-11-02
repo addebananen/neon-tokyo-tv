@@ -27,7 +27,8 @@ jobs:
           zip -q -d ui-test.apk 'lib/*' 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*.MF' || true
           BT="$ANDROID_HOME/build-tools/35.0.0"
           "$BT/zipalign" -f 4 ui-test.apk aligned.apk
-          "$BT/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android --key-pass pass:android --out ui-test.apk aligned.apk
+          keytool -genkeypair -keystore ui-test.jks -storepass android -keypass android -alias uitest -keyalg RSA -keysize 2048 -validity 30 -dname "CN=Neon Tokyo UI Test"
+          "$BT/apksigner" sign --ks ui-test.jks --ks-pass pass:android --key-pass pass:android --out ui-test.apk aligned.apk
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
