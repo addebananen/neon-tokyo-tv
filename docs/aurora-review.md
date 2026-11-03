@@ -31,3 +31,15 @@ style changes with custom backgrounds, and return from another app.
 Capture frame times and memory on a representative low-end TV, with animations enabled.
 Compare the same installed apps and background against the base commit. There is no
 measured FPS or memory improvement claim until that comparison has been performed.
+
+## Cloud validation
+
+169 debug unit tests passed with no failures or skips. The default Lint runner crashes
+in AndroidX's NonNullableMutableLiveDataDetector due to a Kotlin analysis API mismatch.
+A temporary `-Pandroid.experimental.lint.version=8.9.2` completes analysis without
+disabling checks. Its first report contains 170 error, 301 warning and 21 information
+entries across the existing application; this is not a clean Lint pass.
+
+Follow-up review fixes: defer screensaver drift reads to placement, load motion
+preferences through an effect rather than a Unit-returning remember, and use the
+legacy task ID on API 26–28 when closing the app's own window from the switcher.

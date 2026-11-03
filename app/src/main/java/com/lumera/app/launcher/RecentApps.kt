@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.util.LruCache
@@ -180,7 +181,12 @@ object RecentApps {
         val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
         if (pkg == app.packageName) {
             val home = (context as? Activity)?.taskId
-            runCatching { am.appTasks.filter { it.taskInfo.taskId != home }.forEach { it.finishAndRemoveTask() } }
+            runCatching { am.appTasks.filter {
+                val info = it.taskInfo
+                @Suppress("DEPRECATION")
+                val id = if (Build.VERSION.SDK_INT >= 29) info.taskId else info.id
+                id != home
+            }.forEach { it.finishAndRemoveTask() } }
                 .onFailure { Log.w(TAG, "Could not close Neon Tokyo's window", it) }
             return
         }

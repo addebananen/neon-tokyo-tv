@@ -280,7 +280,7 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
     val updateState by updates.state.collectAsState()
     var showUpdates by remember { mutableStateOf(false) }
     var showMotion by remember { mutableStateOf(false) }
-    remember { HomeMotion.load(appContext) }
+    LaunchedEffect(appContext) { HomeMotion.load(appContext) }
     // A quiet look for a newer version once the home screen is up; the pill at the top says so
     LaunchedEffect(Unit) {
         delay(4000)
