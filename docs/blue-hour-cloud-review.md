@@ -57,8 +57,10 @@ to render a frame onto a recreated SurfaceView, and changing it needs device evi
 
 ## Required runtime acceptance
 
-The cloud host has no `/dev/kvm`, Android emulator or connected TV at inspection.
-No screenshots, FPS, frame times or visual quality score are claimed.
+The initial interactive cloud host had no `/dev/kvm`, Android emulator or connected TV.
+A subsequent GitHub Actions Android TV emulator run is documented below. It covers
+navigation/liveness and screenshot review, but does not replace the remaining
+acceptance checks or establish a physical-TV performance score.
 
 Before merging, run the debug package `com.neontokyo.tv.test` on a TV/emulator:
 
@@ -86,8 +88,7 @@ Before merging, run the debug package `com.neontokyo.tv.test` on a TV/emulator:
 - Unit coverage now checks Blue Hour's default absence of a console row or decoder
   media, preservation of per-style glass/focus/name choices, and that calm scaling
   respects reduced motion and never exceeds the user's chosen scale.
-- New and existing tests require the cloud Gradle run; their execution results will
-  be recorded below when that run completes. Static inspection is not a test pass.
+- New and existing tests executed successfully in both cloud runs documented below.
 
 
 ## Cloud execution results (2026-11-02)
@@ -106,9 +107,46 @@ Before merging, run the debug package `com.neontokyo.tv.test` on a TV/emulator:
 - Incomplete temporary native-library copies from the cloud checkout were excluded
   from the commit and removed locally. Native merge/strip outputs were regenerated
   before the final APK packaging check.
-- No emulator/device execution, screenshots, frame-time traces or before/after CPU,
-  peak-memory or FPS measurements were produced. The runtime acceptance list above
-  remains required before this draft is considered ready to merge. The media app's
+- At this initial build stage, no emulator/device execution or runtime captures had
+  been produced. Subsequent emulator evidence is recorded below. The media app's
   matching palette is not a redesign of every media screen.
 
 - Final `:app:assembleDebug --offline` after regenerating native merge/strip outputs: **BUILD SUCCESSFUL**. APK ZIP CRC check passed; both expected TorrServer ABI libraries are present and no hidden temporary native entries remain.
+
+
+## GitHub Actions emulator verification (reviewed 2026-11-03)
+
+- Tested code/workflow commit: `fb3b900f31e03adbc36c650e5d2ed1ba65098d36`.
+- [Run 41510514950](https://github.com/addebananen/neon-tokyo-tv/actions/runs/41510514950): **success**,
+  including debug build, unit tests, emulator navigation and evidence upload.
+- Downloaded JUnit XML independently totals **171 tests in 32 suites, zero
+  failures, errors or skipped tests**.
+- Android TV API 30 x86, 1920x1080, SwiftShader software graphics. An explicitly
+  re-signed UI-only APK copy excludes native libraries for emulator compatibility;
+  this does **not** test native playback/streaming engines or the release package.
+- Blue Hour Frost, Blue Hour Liquid and Deep Blue each passed scripted alternating
+  D-pad navigation and return from Android Settings with the launcher resumed and
+  its process alive. The captured crash buffer is empty.
+- [Evidence artifact](https://github.com/addebananen/neon-tokyo-tv/actions/runs/41510514950/artifacts/13172894994)
+  contains nine screenshots, corresponding hierarchy/activity dumps, logcat,
+  gfxinfo and JUnit XML (retention expires 2026-11-16).
+- Reviewed captures show readable Blue Hour labels, consistent square cards and
+  toolbar spacing, no observed clipping, and neutral tile geometry after the
+  navigation/return sequence. Deep Blue's existing wide-card layout remains.
+  Still screenshots cannot prove animation smoothness or every intermediate state.
+
+### Performance evidence and remaining limits
+
+The final gfxinfo dump belongs only to the last, Deep Blue process: **717 rendered
+frames, 717 marked janky (100%), median 133 ms, p90/p95 200 ms, p99 400 ms**. This
+software-emulator run visibly fails a smooth-rendering target. It has no baseline,
+contains startup/capture overhead, and is not a Blue Hour performance measurement.
+It cannot establish a regression, improvement or physical-TV frame rate. Do not
+present a performance or 9/10 quality sign-off based on this run.
+
+The script asserts liveness/resumed activity, not semantic focus restoration.
+Profile persistence, all dialogs, long-hold cancellation edge cases, all-app/source
+navigation, video lifecycle and native playback still need dedicated runtime
+acceptance. Before merge, measure baseline and branch using identical navigation
+on the same physical TV, separating startup from steady-state rendering. The PR
+remains a draft pending that acceptance; no main update or release was made.
