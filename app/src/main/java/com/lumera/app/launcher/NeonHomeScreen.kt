@@ -3625,6 +3625,10 @@ internal fun Modifier.panelIn(): Modifier = composed {
 
 /** A dialog's panel: the look's glass, lit neon edges for Neon, or a quiet solid card in the other styles. */
 internal fun Modifier.homePanel(look: HomeLook, shape: RoundedCornerShape): Modifier = when {
+    // The quiet style needs a readable menu over app names and artwork. A tinted base keeps
+    // the existing glass edge and sheen without a live blur or text showing through the panel.
+    look.calmFocus && look.glassy -> background(look.pane, shape)
+        .glassPane(look.glassMode, shape, lit = { 0f }, panel = true)
     // On glass the menus are of the same glass as the tiles, darker for the writing on them
     look.glassy -> glassPane(look.glassMode, shape, lit = { 0f }, panel = true)
     look.glowingText -> neonPanel(shape)
