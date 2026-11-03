@@ -169,6 +169,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
@@ -266,7 +267,7 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
     val consolesOnHome = previewLayout?.let { "consoles" in it } ?: if (own) profile.showConsoles else style.consolesOnHome
     val squareIcons = previewLayout?.let { "square" in it } ?: if (own) profile.square else style.squareIcons
     val namesAlways = previewLayout?.let { "names" in it } ?: if (own) profile.namesAlways else style.namesAlways
-    val focusMotion = previewFocus ?: if (own) profile.focusMotion else GlassFocus.Glow
+    val focusMotion = previewFocus ?: if (own) profile.focusMotion else style.look.focusMotion
     val look = remember(style, glass, focusMotion) { style.look.inGlass(glass).copy(focusMotion = focusMotion) }
     val inputs = remember { TvInputs(appContext) }
     val links = remember { ConsoleLinks(appContext) }
@@ -921,6 +922,7 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
                         },
                         onOpen = { HomeApps.open(context, it.packageName) },
                         onPin = { pinning = it },
+                        square = squareIcons,
                         namesAlways = namesAlways,
                         hiddenCount = hiddenList.size,
                         onHidden = { showHidden = true }
@@ -1561,6 +1563,7 @@ private fun AllApps(
     onPin: (InstalledApp) -> Unit,
     hiddenCount: Int,
     onHidden: () -> Unit,
+    square: Boolean = false,
     namesAlways: Boolean = true
 ) {
     // The grid leaves room around the tiles for a focused tile's glow; the offset keeps the
@@ -1568,7 +1571,9 @@ private fun AllApps(
     val room = 12.dp
     val look = LocalHomeLook.current
     val pack = LocalIconPack.current
-    val tileShape = RoundedCornerShape(look.corner * 0.8f)
+    val squareCards = look.calmMotion && look.glassy && square
+    val tileSize = if (squareCards) GlassSquare else SmallTile
+    val tileShape = RoundedCornerShape(if (squareCards) 22.dp else look.corner * 0.8f)
     val grid = rememberLazyGridState()
     // A lifted app moved past the top or bottom of the screen brings its row into view
     val liftedIndex = lifted?.let { key -> apps.indexOfFirst { it.packageName == key } } ?: -1
@@ -1590,7 +1595,7 @@ private fun AllApps(
             // columns past the right edge; the grid keeps the width of six small tiles
             .wrapContentWidth(Alignment.Start)
             .offset(x = Side - room, y = -room)
-            .width(SmallTile.first * 6 + Gap * 5 + room * 2)
+            .width(tileSize.first * 6 + Gap * 5 + room * 2)
             .fillMaxHeight()
     ) {
         itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
@@ -1598,8 +1603,8 @@ private fun AllApps(
             val ownColor = known?.color ?: HomeCatalog.monogramColor(app.label)
             val color = look.tint(ownColor)
             NeonTile(
-                width = SmallTile.first,
-                height = SmallTile.second,
+                width = tileSize.first,
+                height = tileSize.second,
                 shape = tileShape,
                 color = color,
                 onClick = { onOpen(app) },
@@ -1621,8 +1626,8 @@ private fun AllApps(
             ) { focused ->
                 if (look.glassy) {
                     val lit = rememberLit(focused)
-                    GlassFace(pack, listOf(app.packageName), app.name, tileShape, ownColor, 34.dp, lit = { lit.value }) { ink ->
-                        val sign = Modifier.align(Alignment.Center).size(30.dp)
+                    GlassFace(pack, listOf(app.packageName), app.name, tileShape, ownColor, if (squareCards) 50.dp else 34.dp, lit = { lit.value }) { ink ->
+                        val sign = Modifier.align(Alignment.Center).size(if (squareCards) 44.dp else 30.dp)
                         if (known != null) NeonGlyph(known.glyph, ink, sign, plain = true) else Monogram(app.label, ink(), sign)
                     }
                     return@NeonTile
@@ -1645,8 +1650,8 @@ private fun AllApps(
             item(key = "hidden") {
                 val color = look.tint(look.dim)
                 NeonTile(
-                    width = SmallTile.first,
-                    height = SmallTile.second,
+                    width = tileSize.first,
+                    height = tileSize.second,
                     shape = tileShape,
                     color = color,
                     onClick = onHidden,
@@ -1723,6 +1728,8 @@ private fun NeonTile(
     val scale by animateFloatAsState(
         targetValue = when {
             isLifted -> if (glass) 1.12f else 1.13f
+            pressed && look.calmMotion -> 0.98f
+            focused && look.calmMotion -> 1f + (HomeMotion.pop.scale - 1f).coerceAtMost(0.06f)
             pressed -> if (liquid) 1.06f else if (glass) 0.985f else 1.03f
             focused -> when {
                 motion == GlassFocus.Layers -> HomeMotion.pop.scale
@@ -1733,6 +1740,7 @@ private fun NeonTile(
             else -> 1f
         },
         animationSpec = when {
+            look.calmMotion -> spring(dampingRatio = 1f, stiffness = 360f)
             (focused || isLifted) && !pressed && liquid -> spring(dampingRatio = maxOf(HomeMotion.pop.damping, 0.72f), stiffness = 300f)
             (focused || isLifted) && !pressed && glass -> spring(dampingRatio = maxOf(HomeMotion.pop.damping, 0.62f), stiffness = 380f)
             (focused || isLifted) && !pressed -> spring(dampingRatio = HomeMotion.pop.damping, stiffness = 650f)
@@ -1746,16 +1754,20 @@ private fun NeonTile(
     val land = remember { Animatable(1f) }
     val from = remember { floatArrayOf(0f) }
     if (glass) {
-        LaunchedEffect(focused) {
+        LaunchedEffect(focused, motion) {
             if (focused) {
                 sheen.snapTo(0f)
-                if (motion != null) {
+                if (motion != null && motion != GlassFocus.Layers && motion != GlassFocus.Glow && motion != GlassFocus.Breathe) {
                     land.snapTo(0f)
                     launch { land.animateTo(1f, tween(900, easing = LinearEasing)) }
                 }
-                sheen.animateTo(1f, tween(900, delayMillis = 50, easing = SheenEasing))
+                if (motion == null || motion.sweeps) {
+                    sheen.animateTo(1f, tween(if (look.calmMotion) 480 else 900, delayMillis = 50, easing = SheenEasing))
+                }
             } else {
                 sheen.snapTo(0f)
+                // A cancelled landing must settle, not leave an unfocused tile squashed.
+                if (land.value != 1f) land.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
             }
         }
     }
@@ -2179,7 +2191,7 @@ private fun RoundButton(
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     val lit = rememberLit(focused)
-    val scale by animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "ButtonScale")
+    val scale by animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = if (look.calmMotion) 1f else 0.62f, stiffness = 380f), label = "ButtonScale")
     val sheen = remember { Animatable(0f) }
     LaunchedEffect(focused) {
         sheen.snapTo(0f)
@@ -2331,7 +2343,7 @@ private fun BoxScope.TabGlide(to: TabSpot?, focused: () -> Boolean) {
     if (look.glassy) {
         // Comes forward with the tab in focus, as far and as springy as the tab itself
         val lit = rememberLit(on)
-        val scale by animateFloatAsState(if (on) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "TabGlideScale")
+        val scale by animateFloatAsState(if (on) 1.04f else 1f, spring(dampingRatio = if (look.calmMotion) 1f else 0.62f, stiffness = 380f), label = "TabGlideScale")
         Spacer(
             Modifier
                 .matchParentSize()
@@ -2378,7 +2390,7 @@ private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusReque
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     val lit = rememberLit(focused)
-    val scale by animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "TabScale")
+    val scale by animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = if (look.calmMotion) 1f else 0.62f, stiffness = 380f), label = "TabScale")
     val turnsWhite = look.glassMode != HomeGlass.Liquid
     val ink = {
         when {
@@ -2665,14 +2677,17 @@ private fun starPath(size: Size): Path {
 @Composable
 internal fun rememberFocusClock(focused: Boolean): State<Float> {
     val seconds = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(focused) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(focused, lifecycle) {
         if (!focused) return@LaunchedEffect
-        var last = withFrameNanos { it }
-        while (true) {
-            // On the beat the little lights keep, so the two never take turns redrawing the screen
-            val now = awaitBeat()
-            seconds.floatValue += (now - last) / 1_000_000_000f
-            last = now
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Restart the timestamp on return: background time must not jump the animation.
+            var last = withFrameNanos { it }
+            while (true) {
+                val now = awaitBeat()
+                seconds.floatValue += (now - last) / 1_000_000_000f
+                last = now
+            }
         }
     }
     return seconds
@@ -2930,7 +2945,7 @@ private fun FocusBackdrop(
     } ?: Offset.Zero
     val lean by animateOffsetAsState(leanTo, tween(1100, easing = FastOutSlowInEasing), label = "BackdropLean")
     // Only the skyline takes its colours from the tile in focus
-    val skyline = picture == null && style.video == null && style.backdrop == null
+    val skyline = picture == null && style == HomeStyle.Neon
     HomeBackdrop(style, picture, if (skyline) wallpaper() else NeonWallpaper.TOKYO, lean = { lean })
     if (style == HomeStyle.Neon && picture == null) {
         SkySparkles()
@@ -3120,7 +3135,7 @@ private fun HomeClock(resumes: () -> Int, light: () -> Float, ignite: () -> Floa
     }
     val locale = Locale.getDefault()
     val is24 = DateFormat.is24HourFormat(context)
-    val time = remember(now, is24) { SimpleDateFormat(if (is24) "HH:mm" else "h:mm", locale).format(Date(now)) }
+    val time = remember(now, is24, locale) { SimpleDateFormat(if (is24) "HH:mm" else "h:mm", locale).format(Date(now)) }
     val date = remember(now, locale) {
         SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale).format(Date(now)).uppercase(locale)
     }
@@ -3219,6 +3234,7 @@ internal fun StyleCover(plane: Plane, media: PlaneMedia?, style: HomeStyle, pict
             picture != null -> PictureBackdrop(picture, showCover, coverAlpha, drift = drawn)
             // A film carries its own motion, so the painting's little lights stay off
             style.video != null -> if (showCover && style.backdrop != null) PaintingBackdrop(style.backdrop, coverAlpha)
+            style == HomeStyle.Aurora -> AuroraBackdrop()
             style.backdrop == null -> if (wallpaper != null) SkylineBackdrop(wallpaper)
             // Drawn for good, the photo drifts slowly as it did before the video chip showed it
             drawn && style.drift -> DriftingBox(style.driftX, style.driftY) {
@@ -3571,8 +3587,9 @@ private fun PickerRow(
  * there all at once, quick enough that it is ready to use as soon as it shows.
  */
 internal fun Modifier.panelIn(): Modifier = composed {
+    val look = LocalHomeLook.current
     val come = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { come.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 480f)) }
+    LaunchedEffect(Unit) { come.animateTo(1f, spring(dampingRatio = if (look.calmMotion) 1f else 0.8f, stiffness = 480f)) }
     graphicsLayer {
         val t = come.value
         alpha = t.coerceIn(0f, 1f)

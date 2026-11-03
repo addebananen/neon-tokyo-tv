@@ -80,6 +80,12 @@ internal class Plane {
  */
 @Composable
 internal fun PlaneSurface(plane: Plane, media: PlaneMedia?) {
+    if (media == null) {
+        // Procedural backgrounds need neither a SurfaceView nor a player's worker threads.
+        // Leaving the media branch also disposes/releases the previous player on style change.
+        LaunchedEffect(plane) { plane.shown = null }
+        return
+    }
     val context = LocalContext.current
     val view = remember { PlaneView(context) }
     val player = remember { quietPlayer(context) }

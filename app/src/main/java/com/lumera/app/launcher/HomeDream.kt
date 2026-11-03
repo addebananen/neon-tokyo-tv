@@ -70,7 +70,7 @@ object HomeDream {
         val profile = HomeProfiles.get(context).active()
         profile.dreamVideo?.let { File(it) }?.takeIf { it.length() > 0 }?.let { return VideoDreamView(context, it) }
         val style = profile.style
-        if (profile.background == null && style.backdrop == null && style.video == null) return CityDriveView(context)
+        if (profile.background == null && style == HomeStyle.Neon) return CityDriveView(context)
         return StyleDreamView(context, profile)
     }
 

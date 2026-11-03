@@ -197,7 +197,7 @@ private fun ProfileCard(
             onLongClick = onLongClick,
             modifier = modifier.size(84.dp).onFocusChanged { focused = it.isFocused },
             shape = ClickableSurfaceDefaults.shape(shape = CircleShape),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (look.calmMotion) 1.06f else 1.1f),
             colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.Transparent),
             border = ClickableSurfaceDefaults.border(
                 border = Border(BorderStroke(if (active) 2.dp else 1.dp, if (active) profile.style.look.accent else look.text.copy(alpha = 0.2f)), shape = CircleShape),
@@ -230,7 +230,7 @@ private fun AddCard(look: HomeLook, onClick: () -> Unit) {
             onClick = onClick,
             modifier = Modifier.size(84.dp),
             shape = ClickableSurfaceDefaults.shape(shape = CircleShape),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (look.calmMotion) 1.06f else 1.1f),
             colors = ClickableSurfaceDefaults.colors(containerColor = look.text.copy(alpha = 0.06f), focusedContainerColor = look.accent.copy(alpha = 0.18f)),
             border = ClickableSurfaceDefaults.border(
                 border = Border(BorderStroke(1.dp, look.text.copy(alpha = 0.25f)), shape = CircleShape),

@@ -1145,9 +1145,9 @@ fi
 
 # Every home style, opened as a preview in it: a picture each of Home, and of All apps and
 # Källor for the style being reviewed
-# Six styles, few enough to review them all on every run
-styles=(clean nature dusk deepblue icelake)
-dreams=(dusk nature deepblue icelake)
+# Include the procedural Aurora style as well as the video-backed styles.
+styles=(clean nature dusk deepblue icelake aurora)
+dreams=(dusk nature deepblue icelake aurora)
 echo "home styles under test ($MODE): ${styles[*]}"
 for style in "${styles[@]}"; do
   adb logcat -c
@@ -1157,7 +1157,7 @@ for style in "${styles[@]}"; do
   # The picture or film is shown by the video chip; the drawn painting only stands in for it
   plane=$(adb logcat -d -s PlaneSurface:I | tr -d '\r' | grep -o "showing .*\|can't play.*" | tail -n 1)
   echo "$style backdrop: ${plane:-nothing on the video chip}"
-  if ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
+  if [ "$style" != aurora ] && ! echo "$plane" | grep -q "^showing"; then fail "the $style style's picture never reached the video chip (${plane:-no word from it})"; fi
   label=$(focused_label)
   [ "$label" = "YouTube" ] || fail "Neon Home in the $style style does not start on YouTube ($label has the focus)"
   # Nature comes with the consoles on Home as well as on Källor
@@ -1169,7 +1169,7 @@ for style in "${styles[@]}"; do
     adb shell settings put global animator_duration_scale 0
     adb pull "/sdcard/style-$style.mp4" "$OUT/style-$style.mp4" > /dev/null 2>&1 || true
   fi
-  if [ "$style" = clean ]; then
+  if [ "$style" = clean ] || [ "$style" = aurora ]; then
     key DPAD_UP; sleep 1; key DPAD_RIGHT; sleep 2
     shot "style-$style-apps"
     key DPAD_RIGHT; sleep 2

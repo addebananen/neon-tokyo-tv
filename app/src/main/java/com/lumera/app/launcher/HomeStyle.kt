@@ -65,7 +65,9 @@ data class HomeLook(
     /** On glass, the white signs on the tiles take the app's own colour in focus. */
     val brandInFocus: Boolean = true,
     /** On liquid glass, what a tile plays as the focus lands on it. */
-    val focusMotion: GlassFocus = GlassFocus.Glow
+    val focusMotion: GlassFocus = GlassFocus.Glow,
+    /** Restrained, critically damped TV motion across tiles, controls and panels. */
+    val calmMotion: Boolean = false
 ) {
     val tileFill: Brush = Brush.verticalGradient(listOf(tileTop, tileBottom))
     val fontStyle: FontStyle get() = if (italic) FontStyle.Italic else FontStyle.Normal
@@ -205,6 +207,25 @@ enum class HomeStyle(
         video = R.raw.home_style_deepblue,
         glass = HomeGlass.Liquid,
         namesAlways = false
+    ),
+    Aurora(
+        "aurora", "Aurora", "Quiet blue depth, floating icons and soft, precise focus",
+        null, Ambience.None,
+        HomeLook(
+            accent = Color(0xFFD2EBFF), accent2 = Color(0xFF9FC9EF),
+            text = Color(0xFFF4F8FF), dim = Color(0xFFB8C9DE),
+            pane = Color(0xE6101E33), pill = Color(0xB3101E33), pillFocused = Color(0xFF294666),
+            tileTop = Color(0xE62A4260), tileBottom = Color(0xF0101C30),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 44.sp, clockColor = Color(0xFFF4F8FF),
+            clockGlow = Color(0x59000000), clockBlur = 16f,
+            shade = Color(0x59000000), corner = 22.dp, glow = 0.dp,
+            toward = Color(0xFFC2DDFF), pull = 0.12f,
+            letterSpacing = 0.4.sp, upperTitles = false,
+            focusMotion = GlassFocus.Layers, calmMotion = true
+        ),
+        glass = HomeGlass.Liquid,
+        squareIcons = true
     ),
     IceLake(
         "icelake", "Ice Lake", "A frozen lake at sundown under streaks of cloud, filmed from Adrian's drone",

@@ -14,6 +14,7 @@ import com.lumera.app.domain.HomeRow
 import com.lumera.app.domain.HubGroupRow
 import com.lumera.app.ui.utils.ImagePrefetcher
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -106,7 +107,7 @@ class HomeViewModel @Inject constructor(
     companion object {
         private const val ROW_BATCH_SIZE = 50
     }
-    private val pendingRowItems = mutableMapOf<String, MutableList<MetaItem>>()
+    private val pendingRowItems = mutableMapOf<String, ArrayDeque<MetaItem>>()
     private val allFetchedRowIds = mutableMapOf<String, MutableSet<String>>()
 
     private data class MetadataFallback(
@@ -137,8 +138,9 @@ class HomeViewModel @Inject constructor(
         // First: reveal items from the pending buffer (no API call needed)
         val pending = pendingRowItems[configId]
         if (pending != null && pending.isNotEmpty()) {
-            val batch = pending.take(ROW_BATCH_SIZE)
-            pendingRowItems[configId] = pending.drop(ROW_BATCH_SIZE).toMutableList()
+            // Drain only the visible batch instead of copying the entire remaining catalog.
+            val batch = List(minOf(ROW_BATCH_SIZE, pending.size)) { pending.removeFirst() }
+            if (pending.isEmpty()) pendingRowItems.remove(configId)
             appendItemsToRow(configId, batch)
             return
         }
@@ -170,12 +172,13 @@ class HomeViewModel @Inject constructor(
                     // Show first batch immediately, buffer the rest
                     val batch = newUniqueItems.take(ROW_BATCH_SIZE)
                     if (newUniqueItems.size > ROW_BATCH_SIZE) {
-                        pendingRowItems.getOrPut(configId) { mutableListOf() }
+                        pendingRowItems.getOrPut(configId) { ArrayDeque() }
                             .addAll(newUniqueItems.drop(ROW_BATCH_SIZE))
                     }
                     appendItemsToRow(configId, batch)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 // Silently fail - user can try scrolling again
             } finally {
                 loadingMoreRows.remove(configId)
@@ -322,7 +325,8 @@ class HomeViewModel @Inject constructor(
                         }
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 metadataFallbackCache[key] = null
             } finally {
                 metadataRequestsInFlight.remove(key)
@@ -474,6 +478,7 @@ class HomeViewModel @Inject constructor(
 
                 applyTmdbEnrichmentToState(item.type, item.id, fallback, item)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 Log.w("HomeViewModel", "TMDB enrichment failed for ${item.id}: ${e.message}")
                 markTmdbEnriched(item.type, item.id)
             } finally {
@@ -705,6 +710,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _state.update { it.copy(isLoading = false) }
             }
         }
@@ -748,7 +754,8 @@ class HomeViewModel @Inject constructor(
                     }
                     onResult(fetchedRow.title, fetchedRow.items)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 // Ignore error
             }
         }
