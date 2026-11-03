@@ -573,13 +573,22 @@ internal fun PanelButton(text: String, look: HomeLook, primary: Boolean = false,
 private fun GlassButton(text: String, look: HomeLook, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
-    val lit by animateFloatAsState(if (focused) 1f else 0f, tween(if (focused) 180 else 260), label = "ButtonLit")
+    val lit = animateFloatAsState(if (focused) 1f else 0f, tween(if (focused) 180 else 260), label = "ButtonLit")
+    val calmScale = if (look.calmFocus) animateFloatAsState(
+        if (focused) 1.04f else 1f,
+        spring(dampingRatio = CalmFocus.Damping, stiffness = CalmFocus.Stiffness),
+        label = "PanelButtonScale"
+    ) else null
     val turnsWhite = look.glassMode != HomeGlass.Liquid
     Surface(
         onClick = onClick,
-        modifier = modifier.onFocusChanged { focused = it.isFocused },
+        modifier = modifier.onFocusChanged { focused = it.isFocused }
+            .then(if (calmScale == null) Modifier else Modifier.graphicsLayer {
+                scaleX = calmScale.value
+                scaleY = calmScale.value
+            }),
         shape = ClickableSurfaceDefaults.shape(shape = shape),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.04f, pressedScale = 0.97f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = if (look.calmFocus) 1f else 1.04f, pressedScale = 0.97f),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.Transparent,
             contentColor = look.text,
@@ -592,7 +601,7 @@ private fun GlassButton(text: String, look: HomeLook, primary: Boolean, modifier
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .glassPane(look.glassMode, shape, lit = { lit }, white = turnsWhite)
+                .glassPane(look.glassMode, shape, lit = { lit.value }, white = turnsWhite)
                 .padding(horizontal = 11.dp, vertical = 6.dp)
         ) {
             if (primary) {
@@ -602,7 +611,7 @@ private fun GlassButton(text: String, look: HomeLook, primary: Boolean, modifier
             BasicText(
                 text,
                 style = TextStyle(fontFamily = look.font, fontWeight = look.weight, fontSize = 11.sp),
-                color = { if (turnsWhite) lerp(look.text, GlassInk, lit) else look.text },
+                color = { if (turnsWhite) lerp(look.text, GlassInk, lit.value) else look.text },
                 maxLines = 1
             )
         }

@@ -66,7 +66,7 @@ data class HomeProfile(
     val showConsoles: Boolean get() = consolesOnHome ?: style.consolesOnHome
     val square: Boolean get() = squareIcons ?: style.squareIcons
     val namesAlways: Boolean get() = names ?: style.namesAlways
-    val focusMotion: GlassFocus get() = focus ?: GlassFocus.Glow
+    val focusMotion: GlassFocus get() = focus ?: style.look.focusMotion
 }
 
 /** A profile's own choices for how a style lays out its home screen, each null for what the style does. */

@@ -21,6 +21,19 @@ object DefaultThemes {
         category = "colorful"
     )
 
+    val BLUE_HOUR = ThemeEntity(
+        id = "blue_hour",
+        name = "Blue Hour",
+        primaryColor = 0xFFB5DDFF,
+        backgroundColor = 0xFF080F1C,
+        surfaceColor = 0xFF142C49,
+        textColor = 0xFFF4F8FF,
+        textMutedColor = 0xFFBCCCDD,
+        errorColor = 0xFFFF8797,
+        isBuiltIn = true,
+        category = "dark"
+    )
+
     val VOID = ThemeEntity(
         id = "void",
         name = "Void",
@@ -128,7 +141,7 @@ object DefaultThemes {
     /**
      * All built-in themes in display order.
      */
-    val ALL = listOf(NEON_TOKYO, VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
+    val ALL = listOf(NEON_TOKYO, BLUE_HOUR, VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
 
     /**
      * Get a built-in theme by ID, returns NEON_TOKYO as fallback.

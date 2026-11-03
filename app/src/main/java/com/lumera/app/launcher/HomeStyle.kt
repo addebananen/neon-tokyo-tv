@@ -23,6 +23,16 @@ private val NunitoFamily = FontFamily(
     Font(R.font.nunito_bold_italic, FontWeight.Bold, FontStyle.Italic)
 )
 
+/** Shared proportions and motion for the quiet TV style. */
+internal object CalmFocus {
+    // Keep the Motion panel effective while capping this style at a quiet six percent.
+    fun scale(pop: HomeMotion.Pop): Float = minOf(pop.scale, 1.06f)
+    const val PressedScale = 0.985f
+    const val Damping = 1f
+    const val Stiffness = 360f
+    val HomeIconSize = 104.dp
+}
+
 /**
  * How a style dresses the home screen: its colours, its type and its tiles. [text] and [dim] are
  * for everything written on the screen and on the tiles; [accent] lights what has the focus and
@@ -65,7 +75,9 @@ data class HomeLook(
     /** On glass, the white signs on the tiles take the app's own colour in focus. */
     val brandInFocus: Boolean = true,
     /** On liquid glass, what a tile plays as the focus lands on it. */
-    val focusMotion: GlassFocus = GlassFocus.Glow
+    val focusMotion: GlassFocus = GlassFocus.Glow,
+    /** Quiet, critically damped focus shared by tiles, tabs and toolbar controls. */
+    val calmFocus: Boolean = false
 ) {
     val tileFill: Brush = Brush.verticalGradient(listOf(tileTop, tileBottom))
     val fontStyle: FontStyle get() = if (italic) FontStyle.Italic else FontStyle.Normal
@@ -205,6 +217,26 @@ enum class HomeStyle(
         video = R.raw.home_style_deepblue,
         glass = HomeGlass.Liquid,
         namesAlways = false
+    ),
+    BlueHour(
+        "bluehour", "Blue Hour", "Quiet blue depth, generous square icons and a soft, precise focus",
+        null, Ambience.None,
+        HomeLook(
+            accent = Color(0xFFB5DDFF), accent2 = Color(0xFF91BFE8),
+            text = Color(0xFFF4F8FF), dim = Color(0xFFBCCCDD),
+            pane = Color(0xED101E30), pill = Color(0xC9192C43), pillFocused = Color(0xFF304C6C),
+            tileTop = Color(0xEE243C59), tileBottom = Color(0xEE111E30),
+            font = OutfitFamily, weight = FontWeight.Medium, italic = false,
+            clockSize = 44.sp, clockColor = Color(0xFFF4F8FF),
+            clockGlow = Color(0x59000000), clockBlur = 16f,
+            shade = Color(0x5906101E), corner = 18.dp, glow = 0.dp,
+            toward = Color(0xFFA8CDEE), pull = 0.12f,
+            letterSpacing = 0.4.sp, upperTitles = false,
+            focusMotion = GlassFocus.Layers, calmFocus = true
+        ),
+        glass = HomeGlass.Frost,
+        squareIcons = true,
+        namesAlways = true
     ),
     IceLake(
         "icelake", "Ice Lake", "A frozen lake at sundown under streaks of cloud, filmed from Adrian's drone",

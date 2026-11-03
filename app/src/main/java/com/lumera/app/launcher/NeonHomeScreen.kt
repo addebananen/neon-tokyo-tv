@@ -169,6 +169,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
@@ -266,7 +267,7 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
     val consolesOnHome = previewLayout?.let { "consoles" in it } ?: if (own) profile.showConsoles else style.consolesOnHome
     val squareIcons = previewLayout?.let { "square" in it } ?: if (own) profile.square else style.squareIcons
     val namesAlways = previewLayout?.let { "names" in it } ?: if (own) profile.namesAlways else style.namesAlways
-    val focusMotion = previewFocus ?: if (own) profile.focusMotion else GlassFocus.Glow
+    val focusMotion = previewFocus ?: if (own) profile.focusMotion else style.look.focusMotion
     val look = remember(style, glass, focusMotion) { style.look.inGlass(glass).copy(focusMotion = focusMotion) }
     val inputs = remember { TvInputs(appContext) }
     val links = remember { ConsoleLinks(appContext) }
@@ -1196,7 +1197,7 @@ private fun WatchRow(
     val look = LocalHomeLook.current
     val size = when {
         !look.glassy -> BigTile
-        square -> GlassSquare
+        square -> if (look.calmFocus) CalmFocus.HomeIconSize to CalmFocus.HomeIconSize else GlassSquare
         else -> GlassWide
     }
     Row(horizontalArrangement = Arrangement.spacedBy(if (look.glassy) GlassGap(square) else Gap)) {
@@ -1720,9 +1721,11 @@ private fun NeonTile(
     val liquid = look.glassMode == HomeGlass.Liquid
     // What liquid glass plays as the focus lands on it, as the profile chose
     val motion = if (liquid) look.focusMotion else null
-    val scale by animateFloatAsState(
+    val scale = animateFloatAsState(
         targetValue = when {
             isLifted -> if (glass) 1.12f else 1.13f
+            pressed && look.calmFocus -> CalmFocus.PressedScale
+            focused && look.calmFocus -> CalmFocus.scale(HomeMotion.pop)
             pressed -> if (liquid) 1.06f else if (glass) 0.985f else 1.03f
             focused -> when {
                 motion == GlassFocus.Layers -> HomeMotion.pop.scale
@@ -1733,6 +1736,7 @@ private fun NeonTile(
             else -> 1f
         },
         animationSpec = when {
+            look.calmFocus -> spring(dampingRatio = CalmFocus.Damping, stiffness = CalmFocus.Stiffness)
             (focused || isLifted) && !pressed && liquid -> spring(dampingRatio = maxOf(HomeMotion.pop.damping, 0.72f), stiffness = 300f)
             (focused || isLifted) && !pressed && glass -> spring(dampingRatio = maxOf(HomeMotion.pop.damping, 0.62f), stiffness = 380f)
             (focused || isLifted) && !pressed -> spring(dampingRatio = HomeMotion.pop.damping, stiffness = 650f)
@@ -1756,6 +1760,9 @@ private fun NeonTile(
                 sheen.animateTo(1f, tween(900, delayMillis = 50, easing = SheenEasing))
             } else {
                 sheen.snapTo(0f)
+                // A rapid reversal cancels the landing job. Settle its remaining deformation
+                // too, or a liquid tile can stay squashed after focus has moved away.
+                if (land.value != 1f) land.animateTo(1f, tween(120))
             }
         }
     }
@@ -1765,8 +1772,8 @@ private fun NeonTile(
             1f, 0.45f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Breath"
         )
     } else null
-    val tube by animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
-    val faded by animateFloatAsState(if (lift == Lift.Other) 0.45f else 1f, tween(220), label = "TileFade")
+    val tube = animateFloatAsState(if (focused || isLifted) 1f else 0f, tween(if (focused) 150 else 240), label = "TileTube")
+    val faded = animateFloatAsState(if (lift == Lift.Other) 0.45f else 1f, tween(220), label = "TileFade")
 
     // Where the tile was laid out and last said it was, kept out of state so that moving it
     // never recomposes anything. A focused tile that moves, as its row slides in, says so again.
@@ -1787,6 +1794,32 @@ private fun NeonTile(
     val holdLight = remember { Animatable(0f) }
     val holdScope = rememberCoroutineScope()
     val hold = remember { Hold() }
+    fun cancelHold() {
+        hold.job?.cancel()
+        hold.job = null
+        hold.downAt = -1L
+        keyHeld = false
+        if (holdLight.value != 0f) holdScope.launch { holdLight.snapTo(0f) }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    if (onHold != null) {
+        DisposableEffect(lifecycle, view) {
+            // Compose focus may remain on this tile underneath another activity or dialog.
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE) cancelHold()
+            }
+            val windowFocus = android.view.ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+                if (!hasFocus) cancelHold()
+            }
+            lifecycle.addObserver(observer)
+            view.viewTreeObserver.addOnWindowFocusChangeListener(windowFocus)
+            onDispose {
+                lifecycle.removeObserver(observer)
+                view.viewTreeObserver.takeIf { it.isAlive }?.removeOnWindowFocusChangeListener(windowFocus)
+                hold.job?.cancel()
+            }
+        }
+    }
     val holdKeys = if (onHold == null) Modifier else Modifier.onPreviewKeyEvent { event ->
         val native = event.nativeKeyEvent
         if (native.keyCode !in SelectKeys) return@onPreviewKeyEvent false
@@ -1858,12 +1891,12 @@ private fun NeonTile(
             .onPlaced { placed[0] = it }
             .then(if (onFocusRect != null) Modifier.onGloballyPositioned { if (focused) tellWhere(always = false) } else Modifier)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scale.value
+                scaleY = scale.value
                 when (motion) {
                     GlassFocus.Liquid -> squash(land.value).let { (wide, tall) ->
-                        scaleX = scale * (1f + wide)
-                        scaleY = scale * (1f + tall)
+                        scaleX = scale.value * (1f + wide)
+                        scaleY = scale.value * (1f + tall)
                     }
                     GlassFocus.Tilt -> if (focused) {
                         // Leans towards where the focus came from, then straightens
@@ -1874,7 +1907,7 @@ private fun NeonTile(
                     }
                     else -> Unit
                 }
-                alpha = faded
+                alpha = faded.value
                 // Glass grows round its own middle rather than that of it and its name
                 if (captionRoom > 0.dp) transformOrigin = TransformOrigin(0.5f, height / (height + captionRoom) / 2f)
             }
@@ -1886,12 +1919,12 @@ private fun NeonTile(
                     .size(width, height)
                     // Liquid glass comes forward by its size and its light alone: a shadow
                     // round clear glass reads as a dark outline
-                    .then(if (liquid) Modifier else Modifier.glassShadow(shape) { tube })
+                    .then(if (liquid) Modifier else Modifier.glassShadow(shape) { tube.value })
                     .glassPane(
-                        look.glassMode, shape, lit = { tube }, dim = look.shade == null,
-                        glow = breath?.let { b -> { tube * b.value } }
+                        look.glassMode, shape, lit = { tube.value }, dim = look.shade == null,
+                        glow = breath?.let { b -> { tube.value * b.value } }
                     )
-                    .then(if (motion != null) Modifier.glassFocusFx(motion, shape, { land.value }, { tube }, { from[0] }) else Modifier)
+                    .then(if (motion != null) Modifier.glassFocusFx(motion, shape, { land.value }, { tube.value }, { from[0] }) else Modifier)
                     .glassSheen(shape) { if (motion == null || motion.sweeps) sheen.value else 0f }
             )
         } else {
@@ -1907,6 +1940,10 @@ private fun NeonTile(
                 .then(holdKeys)
                 .onFocusChanged {
                     focused = it.isFocused
+                    if (!it.isFocused) {
+                        // A key-up can go to another tile or window after focus moves.
+                        cancelHold()
+                    }
                     if (it.isFocused) {
                         // Which way the focus came, from where the last tile in focus sat
                         placed[0]?.takeIf { c -> c.isAttached }?.boundsInRoot()?.center?.x?.let { x ->
@@ -1943,7 +1980,7 @@ private fun NeonTile(
                 // TalkBack; the name comes first, so it reads as the tile's own
                 Box {
                     if (caption != null) {
-                        Box(Modifier.padding(top = height)) { TileCaption(caption, width, always = captionAlways, lit = { tube }) }
+                        Box(Modifier.padding(top = height)) { TileCaption(caption, width, always = captionAlways, lit = { tube.value }) }
                     }
                     Box(
                         Modifier.size(width, height).graphicsLayer {
@@ -1951,7 +1988,7 @@ private fun NeonTile(
                             when (motion) {
                                 // The icon lifts off the glass
                                 GlassFocus.Layers -> {
-                                    val l = tube
+                                    val l = tube.value
                                     scaleX = 1f + 0.1f * l
                                     scaleY = 1f + 0.1f * l
                                     translationY = -4.dp.toPx() * l
@@ -1979,7 +2016,7 @@ private fun NeonTile(
             }
         } else {
             front(focused)
-            TubeCore(shape, color, lit = { tube })
+            TubeCore(shape, color, lit = { tube.value })
             if (onHold != null) HoldLight(shape, color, progress = { holdLight.value })
             if (isLifted) LiftArrows(color)
         }
@@ -2179,7 +2216,7 @@ private fun RoundButton(
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     val lit = rememberLit(focused)
-    val scale by animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "ButtonScale")
+    val scale = animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = if (look.calmFocus) CalmFocus.Damping else 0.62f, stiffness = 380f), label = "ButtonScale")
     val sheen = remember { Animatable(0f) }
     LaunchedEffect(focused) {
         sheen.snapTo(0f)
@@ -2192,8 +2229,8 @@ private fun RoundButton(
         onClick = onClick,
         modifier = modifier
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scale.value
+                scaleY = scale.value
             }
             .onFocusChanged {
                 focused = it.isFocused
@@ -2331,7 +2368,7 @@ private fun BoxScope.TabGlide(to: TabSpot?, focused: () -> Boolean) {
     if (look.glassy) {
         // Comes forward with the tab in focus, as far and as springy as the tab itself
         val lit = rememberLit(on)
-        val scale by animateFloatAsState(if (on) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "TabGlideScale")
+        val scale = animateFloatAsState(if (on) 1.04f else 1f, spring(dampingRatio = if (look.calmFocus) CalmFocus.Damping else 0.62f, stiffness = 380f), label = "TabGlideScale")
         Spacer(
             Modifier
                 .matchParentSize()
@@ -2341,14 +2378,14 @@ private fun BoxScope.TabGlide(to: TabSpot?, focused: () -> Boolean) {
                     layout(constraints.maxWidth, constraints.maxHeight) { pane.place(left.value.roundToInt(), spot.top.roundToInt()) }
                 }
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+                    scaleX = scale.value
+                    scaleY = scale.value
                 }
                 .glassPane(look.glassMode, RoundedCornerShape(50), lit = { lit.value }, white = look.glassMode != HomeGlass.Liquid)
         )
     } else {
         // Grows with the pill in focus, round the pill's middle
-        val scale by animateFloatAsState(if (on) 1.07f else 1f, tween(150), label = "TabGlideScale")
+        val scale = animateFloatAsState(if (on) 1.07f else 1f, tween(150), label = "TabGlideScale")
         Spacer(
             Modifier
                 .matchParentSize()
@@ -2358,7 +2395,7 @@ private fun BoxScope.TabGlide(to: TabSpot?, focused: () -> Boolean) {
                     if (r - l < 0.5f) return@drawBehind
                     val thick = 1.5.dp.toPx()
                     val y = spot.top + spot.height - 5.dp.toPx()
-                    scale(scale, pivot = Offset(spot.left + spot.width / 2f, spot.top + spot.height / 2f)) {
+                    scale(scale.value, pivot = Offset(spot.left + spot.width / 2f, spot.top + spot.height / 2f)) {
                         if (look.glowingText) drawLine(look.accent.copy(alpha = 0.25f), Offset(l, y), Offset(r, y), strokeWidth = thick * 5f, cap = StrokeCap.Round)
                         drawLine(look.accent, Offset(l, y), Offset(r, y), strokeWidth = thick, cap = StrokeCap.Round)
                     }
@@ -2378,7 +2415,7 @@ private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusReque
     val shape = RoundedCornerShape(50)
     var focused by remember { mutableStateOf(false) }
     val lit = rememberLit(focused)
-    val scale by animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "TabScale")
+    val scale = animateFloatAsState(if (focused) 1.04f else 1f, spring(dampingRatio = if (look.calmFocus) CalmFocus.Damping else 0.62f, stiffness = 380f), label = "TabScale")
     val turnsWhite = look.glassMode != HomeGlass.Liquid
     val ink = {
         when {
@@ -2392,8 +2429,8 @@ private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusReque
         modifier = modifier
             .focusRequester(focusRequester)
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = scale.value
+                scaleY = scale.value
             }
             .onFocusChanged {
                 focused = it.isFocused
@@ -2665,14 +2702,17 @@ private fun starPath(size: Size): Path {
 @Composable
 internal fun rememberFocusClock(focused: Boolean): State<Float> {
     val seconds = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(focused) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(focused, lifecycle) {
         if (!focused) return@LaunchedEffect
-        var last = withFrameNanos { it }
-        while (true) {
-            // On the beat the little lights keep, so the two never take turns redrawing the screen
-            val now = awaitBeat()
-            seconds.floatValue += (now - last) / 1_000_000_000f
-            last = now
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Start afresh on return: time spent in another app must not advance the scene.
+            var last = withFrameNanos { it }
+            while (true) {
+                val now = awaitBeat()
+                seconds.floatValue += (now - last) / 1_000_000_000f
+                last = now
+            }
         }
     }
     return seconds
@@ -2928,10 +2968,10 @@ private fun FocusBackdrop(
             -(c.y / screen.height - 0.5f) * 2f * leanY
         )
     } ?: Offset.Zero
-    val lean by animateOffsetAsState(leanTo, tween(1100, easing = FastOutSlowInEasing), label = "BackdropLean")
+    val lean = animateOffsetAsState(leanTo, tween(1100, easing = FastOutSlowInEasing), label = "BackdropLean")
     // Only the skyline takes its colours from the tile in focus
-    val skyline = picture == null && style.video == null && style.backdrop == null
-    HomeBackdrop(style, picture, if (skyline) wallpaper() else NeonWallpaper.TOKYO, lean = { lean })
+    val skyline = picture == null && style == HomeStyle.Neon
+    HomeBackdrop(style, picture, if (skyline) wallpaper() else NeonWallpaper.TOKYO, lean = { lean.value })
     if (style == HomeStyle.Neon && picture == null) {
         SkySparkles()
         FloorLight(at, on, ignite)
@@ -2945,32 +2985,32 @@ private fun FocusBackdrop(
 @Composable
 private fun FloorLight(spot: Spot?, on: Boolean, ignite: () -> Float) {
     val target = spot ?: return
-    val center by animateOffsetAsState(
+    val center = animateOffsetAsState(
         Offset(target.bounds.center.x, target.bounds.bottom),
         spring(dampingRatio = 0.86f, stiffness = 240f),
         label = "LightSpot"
     )
-    val width by animateFloatAsState(target.bounds.width, spring(dampingRatio = 0.86f, stiffness = 240f), label = "LightWidth")
-    val color by animateColorAsState(target.color, tween(360), label = "LightColor")
-    val strength by animateFloatAsState(if (on) 1f else 0f, tween(if (on) 240 else 420), label = "LightOn")
+    val width = animateFloatAsState(target.bounds.width, spring(dampingRatio = 0.86f, stiffness = 240f), label = "LightWidth")
+    val color = animateColorAsState(target.color, tween(360), label = "LightColor")
+    val strength = animateFloatAsState(if (on) 1f else 0f, tween(if (on) 240 else 420), label = "LightOn")
     Spacer(
         Modifier
             .fillMaxSize()
             // A layer of its own, so a gliding light redraws only itself
             .graphicsLayer()
             .drawBehind {
-                val a = strength * ignite()
+                val a = strength.value * ignite()
                 if (a <= 0f) return@drawBehind
-                val c = center
+                val c = center.value
                 val pool = Offset(c.x, c.y + 12.dp.toPx())
-                val rx = width * 0.72f
+                val rx = width.value * 0.72f
                 val ry = 20.dp.toPx()
                 // A round pool of light squashed flat, as it lies on the floor
                 scale(scaleX = 1f, scaleY = ry / rx, pivot = pool) {
                     drawCircle(
                         Brush.radialGradient(
-                            0f to color.copy(alpha = 0.34f),
-                            0.55f to color.copy(alpha = 0.12f),
+                            0f to color.value.copy(alpha = 0.34f),
+                            0.55f to color.value.copy(alpha = 0.12f),
                             1f to Color.Transparent,
                             center = pool,
                             radius = rx
@@ -2985,9 +3025,9 @@ private fun FloorLight(spot: Spot?, on: Boolean, ignite: () -> Float) {
                 val depth = 32.dp.toPx()
                 val side = 6.dp.toPx()
                 drawRect(
-                    Brush.verticalGradient(0f to color.copy(alpha = 0.16f), 1f to Color.Transparent, startY = top, endY = top + depth),
-                    topLeft = Offset(c.x - width / 2f + side, top),
-                    size = Size((width - 2 * side).coerceAtLeast(0f), depth),
+                    Brush.verticalGradient(0f to color.value.copy(alpha = 0.16f), 1f to Color.Transparent, startY = top, endY = top + depth),
+                    topLeft = Offset(c.x - width.value / 2f + side, top),
+                    size = Size((width.value - 2 * side).coerceAtLeast(0f), depth),
                     alpha = a
                 )
             }
@@ -3219,6 +3259,7 @@ internal fun StyleCover(plane: Plane, media: PlaneMedia?, style: HomeStyle, pict
             picture != null -> PictureBackdrop(picture, showCover, coverAlpha, drift = drawn)
             // A film carries its own motion, so the painting's little lights stay off
             style.video != null -> if (showCover && style.backdrop != null) PaintingBackdrop(style.backdrop, coverAlpha)
+            style == HomeStyle.BlueHour -> BlueHourBackdrop()
             style.backdrop == null -> if (wallpaper != null) SkylineBackdrop(wallpaper)
             // Drawn for good, the photo drifts slowly as it did before the video chip showed it
             drawn && style.drift -> DriftingBox(style.driftX, style.driftY) {
@@ -3584,6 +3625,10 @@ internal fun Modifier.panelIn(): Modifier = composed {
 
 /** A dialog's panel: the look's glass, lit neon edges for Neon, or a quiet solid card in the other styles. */
 internal fun Modifier.homePanel(look: HomeLook, shape: RoundedCornerShape): Modifier = when {
+    // The quiet style needs a readable menu over app names and artwork. A tinted base keeps
+    // the existing glass edge and sheen without a live blur or text showing through the panel.
+    look.calmFocus && look.glassy -> background(look.pane, shape)
+        .glassPane(look.glassMode, shape, lit = { 0f }, panel = true)
     // On glass the menus are of the same glass as the tiles, darker for the writing on them
     look.glassy -> glassPane(look.glassMode, shape, lit = { 0f }, panel = true)
     look.glowingText -> neonPanel(shape)
