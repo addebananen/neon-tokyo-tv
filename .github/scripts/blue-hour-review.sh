@@ -9,6 +9,7 @@ adb logcat -c
 trap 'adb logcat -d > tv-review/logcat.txt; adb shell dumpsys gfxinfo "$pkg" > tv-review/gfxinfo.txt' EXIT
 capture() {
   adb exec-out screencap -p > "tv-review/$1.png"
+  adb shell rm -f /sdcard/window.xml
   adb shell uiautomator dump /sdcard/window.xml >/dev/null
   adb pull /sdcard/window.xml "tv-review/$1.xml" >/dev/null
   adb shell dumpsys activity activities > "tv-review/$1-activity.txt"
@@ -62,6 +63,7 @@ def key(*codes):
     time.sleep(0.3)
 
 def tree():
+    adb("shell", "rm", "-f", "/sdcard/review-window.xml")
     adb("shell", "uiautomator", "dump", "/sdcard/review-window.xml")
     raw = adb("exec-out", "cat", "/sdcard/review-window.xml")
     (OUT / "latest.xml").write_bytes(raw)
@@ -170,11 +172,14 @@ try:
     key(OK)
     saved(style="bluehour")
     # Start at the left edge of the style row before entering the glass row.
-    key(*([LEFT] * 12), DOWN, *([LEFT] * 4))
-    seek("Liquid", RIGHT, 5)
+    seek("Neon", LEFT)
+    key(DOWN)
+    seek("Off", LEFT, 5)
+    seek("Liquid glass", RIGHT, 5)
     key(OK)
     saved(style="bluehour", glass="liquid")
-    key(UP, *([LEFT] * 12))
+    key(UP)
+    seek("Neon", LEFT)
     seek("Deep Blue", RIGHT)
     key(OK)
     p = saved(style="deepblue")
