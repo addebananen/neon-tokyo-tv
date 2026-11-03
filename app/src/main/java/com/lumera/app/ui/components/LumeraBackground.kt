@@ -18,12 +18,14 @@ fun LumeraBackground(
     content: @Composable () -> Unit
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
+    val cinema = LocalThemeId.current == DefaultThemes.AURORA_CINEMA.id
     val isNeonTokyo = LocalThemeId.current == DefaultThemes.NEON_TOKYO.id
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
+            .then(if (cinema) Modifier.cinemaBackdrop() else Modifier)
             .then(if (isNeonTokyo) Modifier.neonTokyoBackdrop() else Modifier)
     ) {
         content()
@@ -70,4 +72,13 @@ private fun Modifier.neonTokyoBackdrop(): Modifier = drawWithCache {
             drawLine(cyan.copy(alpha = 0.12f), Offset(vanishX, horizonY), Offset(x, size.height), strokeWidth = 1.5f)
         }
     }
+}
+
+/** One cached wash of light; no idle animation, blur passes or image decoding. */
+private fun Modifier.cinemaBackdrop(): Modifier = drawWithCache {
+    val light = Brush.radialGradient(
+        listOf(Color(0x303F6B9A), Color.Transparent),
+        center = Offset(size.width * 0.8f, 0f), radius = size.width * 0.8f
+    )
+    onDrawBehind { drawRect(light) }
 }

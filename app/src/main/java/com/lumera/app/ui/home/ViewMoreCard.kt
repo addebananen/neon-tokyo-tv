@@ -1,5 +1,8 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import com.lumera.app.ui.theme.cinemaFocus
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,12 +45,13 @@ fun ViewMoreCard(
     modifier: Modifier = Modifier,
     onFocused: (() -> Unit)? = null
 ) {
+    val cinema = LocalCinemaStyle.current
     var isFocused by remember { mutableStateOf(false) }
     val glowColor = MaterialTheme.colorScheme.primary
     val roundCorners = LocalRoundCorners.current
     
     // Shape based on user preference
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
+    val cardShape = if (roundCorners) RoundedCornerShape(if (cinema) 16.dp else 12.dp) else RectangleShape
     val focusedCardShape = if (roundCorners) RoundedCornerShape(16.dp) else RectangleShape
 
     Box(
@@ -56,6 +60,7 @@ fun ViewMoreCard(
             .aspectRatio(2f / 3f)
             .zIndex(if (isFocused) 10f else 0f)
             .graphicsLayer { clip = false }
+            .cinemaFocus(isFocused, cardShape)
     ) {
         Surface(
             onClick = onClick,
@@ -69,7 +74,7 @@ fun ViewMoreCard(
                 shape = cardShape,
                 focusedShape = focusedCardShape
             ),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (cinema) 1f else 1.05f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                 focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
@@ -77,7 +82,7 @@ fun ViewMoreCard(
             ),
             border = ClickableSurfaceDefaults.border(
                 focusedBorder = Border(
-                    border = BorderStroke(2.dp, glowColor),
+                    border = BorderStroke(if (cinema) 1.dp else 2.dp, glowColor),
                     shape = focusedCardShape
                 )
             )

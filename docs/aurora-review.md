@@ -43,3 +43,19 @@ entries across the existing application; this is not a clean Lint pass.
 Follow-up review fixes: defer screensaver drift reads to placement, load motion
 preferences through an effect rather than a Unit-returning remember, and use the
 legacy task ID on API 26–28 when closing the app's own window from the switcher.
+
+## Inside Neon Tokyo: Aurora Cinema
+
+The app also has an independent built-in **Aurora Cinema** theme, available in
+Settings > Theme and in the profile creation wizard. It uses upright typography,
+blue-gray surfaces, readable secondary text and a static light wash. Poster, hub,
+continue-watching and view-more cards share a restrained spring and small lift;
+sharp-corner preferences remain respected. Settings buttons use sentence case
+and dialogs use the theme's raised surface. The standard Material surface roles
+now inherit the selected theme instead of falling back to purple defaults.
+
+The theme picker exposes its selected state and wizard swatches have accessible
+names. A focused emulator review (`theme_review=true`, `prerelease=false`) selects
+Aurora Cinema through the real profile wizard, visits content/settings, checks the
+persisted selection after restart, and records D-pad motion with animations enabled.
+This is independent of the launcher's Aurora style and does not change its profile.

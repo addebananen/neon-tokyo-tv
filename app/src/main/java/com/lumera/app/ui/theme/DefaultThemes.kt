@@ -21,6 +21,20 @@ object DefaultThemes {
         category = "colorful"
     )
 
+    /** A quiet, television-first palette; selected independently for each app profile. */
+    val AURORA_CINEMA = ThemeEntity(
+        id = "aurora_cinema",
+        name = "Aurora Cinema",
+        primaryColor = 0xFFD4E9FF,
+        backgroundColor = 0xFF0B1220,
+        surfaceColor = 0xFF1B293D,
+        textColor = 0xFFF4F7FC,
+        textMutedColor = 0xFFAFBED2,
+        errorColor = 0xFFFF7B89,
+        isBuiltIn = true,
+        category = "dark"
+    )
+
     val VOID = ThemeEntity(
         id = "void",
         name = "Void",
@@ -128,7 +142,7 @@ object DefaultThemes {
     /**
      * All built-in themes in display order.
      */
-    val ALL = listOf(NEON_TOKYO, VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
+    val ALL = listOf(NEON_TOKYO, AURORA_CINEMA, VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
 
     /**
      * Get a built-in theme by ID, returns NEON_TOKYO as fallback.

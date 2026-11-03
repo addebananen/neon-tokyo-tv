@@ -9,6 +9,10 @@ on:
         description: Run the whole TV test (every home style, both profiles), as a release does
         type: boolean
         default: false
+      theme_review:
+        description: Run the focused Aurora Cinema and launcher visual review (animations enabled)
+        type: boolean
+        default: false
       prerelease:
         description: Publish the APK as a test release once the TV test passes, to install on the TV before it reaches main
         type: boolean
@@ -188,7 +192,7 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: bash .github/scripts/tv-smoke.sh neon-tokyo-test.apk tv-shots
+          script: ${{ inputs.theme_review && 'bash .github/scripts/theme-review.sh neon-tokyo-test.apk tv-shots' || 'bash .github/scripts/tv-smoke.sh neon-tokyo-test.apk tv-shots' }}
 
       # Screenshots are for reading, not a check: a push that loses a race with another run's
       # screenshots must never hold back a release whose test passed
