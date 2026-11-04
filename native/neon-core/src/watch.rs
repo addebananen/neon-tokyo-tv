@@ -12,7 +12,8 @@ pub const WATCHED_REMAINING_MS: u64 = 30_000;
 
 /// A film or an episode someone has started. `id` is the playback id: the film's id, or
 /// `<series id>:<season>:<episode>` for an episode, whatever id format the addon uses.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct WatchEntry {
     pub profile_id: String,
     pub id: String,
@@ -31,7 +32,8 @@ pub struct WatchEntry {
 }
 
 /// The next episode of a series whose started episodes are all watched.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct SeriesNextUp {
     pub profile_id: String,
     pub series_id: String,

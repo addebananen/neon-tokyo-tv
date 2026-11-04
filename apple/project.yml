@@ -1,0 +1,90 @@
+# XcodeGen spec: `xcodegen generate` makes NeonTokyo.xcodeproj. The project file itself is not
+# kept in git; CI makes it on GitHub's Macs, so nobody needs a Mac to work on the app.
+name: NeonTokyo
+options:
+  bundleIdPrefix: com.neontokyo
+  deploymentTarget:
+    iOS: "17.0"
+    tvOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "1"
+    NEON_VERSION: 0.2.0-dev
+    PRODUCT_BUNDLE_IDENTIFIER: com.neontokyo.tv
+    PRODUCT_NAME: NeonTokyo
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    OTHER_LDFLAGS: ["-lc++"]
+targetTemplates:
+  NeonApp:
+    type: application
+    sources:
+      - path: NeonTokyo/Shared
+      - path: Generated/neon_core.swift
+      - path: ../app/src/main/res/font/kanit_medium.ttf
+        buildPhase: resources
+      - path: ../app/src/main/res/font/kanit_medium_italic.ttf
+        buildPhase: resources
+      - path: ../app/src/main/res/font/kanit_semibold_italic.ttf
+        buildPhase: resources
+    dependencies:
+      - framework: Generated/NeonCore.xcframework
+        embed: false
+targets:
+  NeonTokyo-iOS:
+    templates: [NeonApp]
+    platform: iOS
+    scheme: {}
+    sources:
+      - path: NeonTokyo/iOS
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: NeonTokyo/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Neon Tokyo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NeonVersion: $(NEON_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIAppFonts: [kanit_medium.ttf, kanit_medium_italic.ttf, kanit_semibold_italic.ttf]
+        UIBackgroundModes: [audio]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        LSApplicationQueriesSchemes: [youtube]
+  NeonTokyo-tvOS:
+    templates: [NeonApp]
+    platform: tvOS
+    scheme: {}
+    sources:
+      - path: NeonTokyo/tvOS
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "3"
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+    info:
+      path: NeonTokyo/tvOS/Info.plist
+      properties:
+        CFBundleDisplayName: Neon Tokyo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NeonVersion: $(NEON_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIAppFonts: [kanit_medium.ttf, kanit_medium_italic.ttf, kanit_semibold_italic.ttf]
+        UIUserInterfaceStyle: Dark
+        UIRequiredDeviceCapabilities: [arm64]
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        LSApplicationQueriesSchemes: [youtube]

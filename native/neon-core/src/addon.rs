@@ -10,7 +10,8 @@ use serde_json::Value;
 use crate::error::CoreError;
 
 /// One catalog an addon offers, as a home row or a search target.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct CatalogDef {
     pub addon_base_url: String,
     pub addon_name: String,
@@ -27,7 +28,8 @@ pub struct CatalogDef {
 }
 
 /// An addon's manifest, with its address so later requests know where to go.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct AddonManifest {
     pub base_url: String,
     pub id: String,
@@ -46,7 +48,8 @@ pub struct AddonManifest {
 }
 
 /// A resource the manifest limits to some types or id prefixes.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct ResourceRule {
     pub name: String,
     pub types: Vec<String>,
@@ -54,7 +57,8 @@ pub struct ResourceRule {
 }
 
 /// A poster on a row: what a catalog lists.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct MetaItem {
     pub id: String,
     pub kind: String,
@@ -70,7 +74,8 @@ pub struct MetaItem {
 }
 
 /// An episode, or a part of a film collection.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct Video {
     /// The addon's own id for it, which stream requests use.
     pub id: String,

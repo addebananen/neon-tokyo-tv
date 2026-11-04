@@ -8,7 +8,8 @@
 use crate::watch::{SeriesNextUp, WatchEntry};
 
 /// Something on someone's watchlist.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct WatchlistItem {
     pub profile_id: String,
     pub id: String,
