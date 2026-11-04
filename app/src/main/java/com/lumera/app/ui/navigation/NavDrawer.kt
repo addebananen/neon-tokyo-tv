@@ -2,6 +2,8 @@ package com.lumera.app.ui.navigation
 
 import androidx.activity.compose.BackHandler
 import com.lumera.app.ui.theme.LocalTextMuted
+import com.lumera.app.ui.theme.Glass
+import com.lumera.app.ui.theme.isGlass
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -296,11 +298,17 @@ fun SidebarItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
+    val glass = isGlass
 
     val showIndicator = if (isDrawerActive) isFocused else isSelected
 
+    // On glass the focused row is a white capsule, so its writing turns dark
     val contentColor by animateColorAsState(
-        targetValue = if (showIndicator) Color.White else LocalTextMuted.current,
+        targetValue = when {
+            glass && isFocused -> Glass.OnFocused
+            showIndicator -> Color.White
+            else -> LocalTextMuted.current
+        },
         label = "contentColor"
     )
 
@@ -312,7 +320,7 @@ fun SidebarItem(
     )
 
     val textScale by animateFloatAsState(
-        targetValue = if (isFocused) 1.15f else 1.0f,
+        targetValue = if (isFocused && !glass) 1.15f else 1.0f,
         label = "TextScale"
     )
 
@@ -329,6 +337,8 @@ fun SidebarItem(
 
     val displayText = customLabel ?: screen.label
 
+    // The glass capsule sits in from the edges, the icon staying where the narrow menu has it
+    val inset = if (glass) 10.dp else 0.dp
     Box(
         modifier = modifier
             .height(50.dp)
@@ -338,15 +348,16 @@ fun SidebarItem(
             onClick = { onNavigate(screen) },
             modifier = Modifier
                 .fillMaxSize()
+                .padding(horizontal = inset, vertical = if (glass) 3.dp else 0.dp)
                 .onFocusChanged { isFocused = it.isFocused },
-            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+            shape = ClickableSurfaceDefaults.shape(if (glass) CircleShape else RoundedCornerShape(12.dp)),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (glass) Glass.LIFT_SMALL else 1.0f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = Color.Transparent,
-                focusedContainerColor = Color.Transparent,
-                pressedContainerColor = Color.Transparent,
+                focusedContainerColor = if (glass) Glass.PaneFocused else Color.Transparent,
+                pressedContainerColor = if (glass) Glass.PaneFocused else Color.Transparent,
                 contentColor = contentColor,
-                focusedContentColor = Color.White
+                focusedContentColor = if (glass) Glass.OnFocused else Color.White
             )
         ) {
             Row(
@@ -359,13 +370,14 @@ fun SidebarItem(
                     contentDescription = displayText,
                     tint = contentColor,
                     modifier = Modifier
-                        .padding(start = iconStartPadding)
+                        .padding(start = iconStartPadding - inset)
                         .size(screen.iconSize)
                 )
 
                 Text(
                     text = displayText,
-                    fontSize = 13.sp,
+                    fontSize = if (glass) 15.sp else 13.sp,
+                    fontWeight = if (glass) androidx.compose.ui.text.font.FontWeight.Medium else null,
                     color = contentColor,
                     maxLines = 1,
                     softWrap = false,
@@ -383,8 +395,8 @@ fun SidebarItem(
             }
         }
 
-        // Soft neon bloom behind the indicator bar
-        Box(
+        // Soft neon bloom behind the indicator bar; glass marks the page with its capsule alone
+        if (!glass) Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .height(40.dp)
@@ -394,7 +406,7 @@ fun SidebarItem(
                     Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.32f), Color.Transparent))
                 )
         )
-        Box(
+        if (!glass) Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .height(22.dp)
@@ -452,7 +464,7 @@ fun ProfileAvatarItem(
     )
     
     val borderColor by animateColorAsState(
-        targetValue = if (showIndicator) accentColor else Color.Transparent,
+        targetValue = if (showIndicator) (if (isGlass) Color.White else accentColor) else Color.Transparent,
         animationSpec = tween(200),
         label = "borderColor"
     )

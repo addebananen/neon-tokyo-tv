@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -26,7 +27,8 @@ fun DetailsLoadingSweep() {
     val sweepWidth = 220
 
     val transition = rememberInfiniteTransition(label = "sweep")
-    val offsetDp by transition.animateFloat(
+    // Read while placing, so the sweep slides along without recomposing every frame
+    val offsetDp = transition.animateFloat(
         initialValue = -sweepWidth.toFloat(),
         targetValue = (screenWidth + sweepWidth).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -38,7 +40,7 @@ fun DetailsLoadingSweep() {
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(
             modifier = Modifier
-                .offset(x = offsetDp.dp)
+                .offset { IntOffset(offsetDp.value.dp.roundToPx(), 0) }
                 .fillMaxHeight()
                 .fillMaxWidth(sweepWidth.toFloat() / screenWidth.toFloat())
                 .background(

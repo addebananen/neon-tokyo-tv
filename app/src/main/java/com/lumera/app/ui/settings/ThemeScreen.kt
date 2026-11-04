@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -318,7 +320,7 @@ private fun ThemeAddButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(50.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.05f))
             .border(
@@ -374,7 +376,7 @@ private fun ThemeCard(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.scale(scale)
+        modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale }
     ) {
         // Theme Card
         Column(
@@ -414,8 +416,8 @@ private fun ThemeCard(
             Box(
                 modifier = Modifier
                     .size(28.dp)
-                    .scale(penScale)
-                    .alpha(penAlpha)
+                    .graphicsLayer { scaleX = penScale; scaleY = penScale }
+                    .graphicsLayer { alpha = penAlpha }
                     .clip(CircleShape)
                     .background(if (isPenFocused) Color.White else Color.Transparent)
                     .clickable(

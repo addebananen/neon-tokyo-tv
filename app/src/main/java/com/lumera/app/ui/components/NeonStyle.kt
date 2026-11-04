@@ -57,6 +57,10 @@ import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.sp
 import com.lumera.app.R
 import com.lumera.app.ui.theme.KanitFamily
+import androidx.compose.ui.composed
+import com.lumera.app.ui.theme.themed
+import com.lumera.app.ui.theme.isGlass
+import com.lumera.app.ui.theme.Glass
 
 /** The Neon Tokyo colours, for screens that look the same whatever theme a profile picked. */
 object NeonPalette {
@@ -141,6 +145,7 @@ fun NeonText(
     softWrap: Boolean = true,
     glow: () -> Float = { 1f }
 ) {
+    val style = style.themed()
     val shadow = style.shadow
     val plain = remember(style, color, textAlign) {
         style.copy(
@@ -366,7 +371,30 @@ fun NeonSkylineBackdrop(
  * while drawing, so the light comes and goes without recomposing anything. Put it before the
  * control's clip, or the glow is cut off.
  */
-fun Modifier.neonFocusRing(color: Color, corner: Dp, lit: () -> Float): Modifier = drawWithCache {
+fun Modifier.neonFocusRing(color: Color, corner: Dp, lit: () -> Float): Modifier = composed {
+    if (isGlass) glassFocusRing(corner, lit) else neonRing(color, corner, lit)
+}
+
+/**
+ * The glass themes' answer to the neon tube: a clean white rim and a faint frost, nothing that
+ * glows. [lit] is read while drawing, as with the tube.
+ */
+private fun Modifier.glassFocusRing(corner: Dp, lit: () -> Float): Modifier = drawWithCache {
+    val radius = CornerRadius(corner.toPx())
+    val inset = 1.dp.toPx()
+    val rimTopLeft = Offset(inset, inset)
+    val rimSize = Size(size.width - 2 * inset, size.height - 2 * inset)
+    val rimRadius = CornerRadius((corner.toPx() - inset).coerceAtLeast(0f))
+    val rim = Stroke(2.dp.toPx())
+    onDrawWithContent {
+        val a = lit().coerceIn(0f, 1f)
+        if (a > 0f) drawRoundRect(Color.White, cornerRadius = radius, alpha = 0.1f * a)
+        drawContent()
+        if (a > 0f) drawRoundRect(Color.White, rimTopLeft, rimSize, rimRadius, style = rim, alpha = 0.92f * a)
+    }
+}
+
+private fun Modifier.neonRing(color: Color, corner: Dp, lit: () -> Float): Modifier = drawWithCache {
     val radius = CornerRadius(corner.toPx())
     val outline = Path().apply { addRoundRect(RoundRect(size.toRect(), radius)) }
     // Wider and fainter strokes around the edge, which read as one soft glow
@@ -394,8 +422,12 @@ fun Modifier.neonFocusRing(color: Color, corner: Dp, lit: () -> Float): Modifier
     }
 }
 
-/** Dialog panel: deep violet glass with a magenta to cyan edge. */
-fun Modifier.neonPanel(shape: Shape = RoundedCornerShape(24.dp)): Modifier = this
+/** Dialog panel: deep violet glass with a magenta to cyan edge; on glass themes, deep blue glass with a hairline. */
+fun Modifier.neonPanel(shape: Shape = RoundedCornerShape(24.dp)): Modifier = composed {
+    if (isGlass) background(Color(0xF20C2135), shape).border(1.dp, Glass.Hairline, shape) else neonPanelPlain(shape)
+}
+
+private fun Modifier.neonPanelPlain(shape: Shape): Modifier = this
     .background(NeonPalette.Panel, shape)
     .border(
         width = 1.5.dp,

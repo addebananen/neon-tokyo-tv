@@ -1,5 +1,7 @@
 package com.lumera.app.ui.player.base
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -1038,7 +1040,7 @@ private fun NextEpisodeButton(
         Row(
             modifier = Modifier
                 .height(40.dp)
-                .scale(scale)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.White.copy(0.07f))
                 .border(
@@ -1094,7 +1096,7 @@ private fun PlayNextEpisodeButton(
         modifier = Modifier
             .padding(32.dp)
             .height(40.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.07f))
             .border(
@@ -1143,7 +1145,7 @@ private fun SkipIntroButton(
         modifier = Modifier
             .padding(32.dp)
             .height(40.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.07f))
             .border(
@@ -1634,7 +1636,7 @@ private fun PlayerErrorButton(
     Row(
         modifier = Modifier
             .height(40.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.07f))
             .border(
@@ -2094,7 +2096,7 @@ private fun AudioLanguageListItem(
 
     Box(
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(background)
@@ -2192,7 +2194,7 @@ private fun AudioVariantListItem(
 
     Box(
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(background)
@@ -2645,7 +2647,7 @@ private fun SubtitleLanguageListItem(
 
     Box(
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(background)
@@ -2750,7 +2752,7 @@ private fun SubtitleVariantListItem(
 
     Box(
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(background)
@@ -2841,7 +2843,7 @@ private fun PlayerSubtitleColorChip(
     Box(
         modifier = modifier
             .size(24.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
             .then(
                 if (isTransparent) {
@@ -3094,7 +3096,7 @@ private fun PanelListItem(
 
     Box(
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(background)

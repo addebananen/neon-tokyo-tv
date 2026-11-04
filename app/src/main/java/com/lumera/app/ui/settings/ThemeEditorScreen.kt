@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -511,7 +513,7 @@ private fun ColorSlotButton(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(12.dp))
             .background(if (isSelected) color.copy(0.2f) else Color.White.copy(0.05f))
             .border(2.dp, borderColor, RoundedCornerShape(12.dp))
@@ -664,7 +666,7 @@ private fun EditorButton(
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .height(44.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)

@@ -1731,6 +1731,63 @@ else
 fi
 fi
 
+# --- Deep Blue: the calm glass theme, picked in Settings › Theme ----------------
+menu_go Settings
+sleep 4
+if focus_down_to "Theme" 4; then
+  key DPAD_RIGHT
+  sleep 2
+  key DPAD_DOWN DPAD_DOWN
+  sleep 1
+  if focus_right_to "Deep Blue" 4; then
+    key DPAD_CENTER
+    sleep 3
+    shot deepblue-theme
+    menu_go Home
+    if ! wait_for "Continue\|Popular\|Trending\|Top" 30; then fail "home did not come back in Deep Blue"; fi
+    sleep 6
+    shot deepblue-home
+    key DPAD_DOWN
+    sleep 2
+    shot deepblue-row
+    key DPAD_DOWN DPAD_RIGHT DPAD_RIGHT
+    sleep 2
+    shot deepblue-poster
+    key DPAD_CENTER
+    sleep 10
+    shot deepblue-details
+    key DPAD_DOWN
+    sleep 2
+    shot deepblue-details-down
+    key BACK
+    sleep 3
+    key DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT DPAD_LEFT
+    sleep 2
+    shot deepblue-menu
+    menu_go Search
+    sleep 4
+    shot deepblue-search
+    menu_go Settings
+    sleep 4
+    key DPAD_RIGHT
+    sleep 2
+    shot deepblue-settings
+    menu_go "Profile Avatar"
+    if wait_for "watching" 20; then
+      sleep 2
+      shot deepblue-profiles
+      key DPAD_CENTER
+      sleep 10
+    else
+      fail "Change Profile did not open the profile screen in Deep Blue"
+    fi
+  else
+    fail "Settings › Theme offers no Deep Blue"
+  fi
+else
+  fail "no Theme entry in Settings"
+fi
+
 # --- Leaving: two quick presses of Back switch the app off like an old TV ------
 menu_go Home
 sleep 6

@@ -1,5 +1,7 @@
 package com.lumera.app.ui.addons
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -216,7 +218,7 @@ private fun AddonImportRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(if (isFocused && !isDisabled) 2.dp else 0.dp, borderColor, RoundedCornerShape(8.dp))

@@ -371,6 +371,7 @@ fun TopNavItem(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val accentColor = MaterialTheme.colorScheme.primary
+    val glass = com.lumera.app.ui.theme.isGlass
 
     // Like NavDrawer: when bar is active, show indicator on focus; when inactive, show on selected
     val showIndicator = if (isTopNavActive) isFocused else isSelected
@@ -381,6 +382,7 @@ fun TopNavItem(
     // Animations
     val iconColor by animateColorAsState(
         targetValue = when {
+            glass && isFocused -> com.lumera.app.ui.theme.Glass.OnFocused
             isFocused -> Color.White
             showIndicator -> Color.White
             else -> Color.White.copy(alpha = 0.5f)
@@ -413,6 +415,8 @@ fun TopNavItem(
     // Bubble background color
     val bubbleColor by animateColorAsState(
         targetValue = when {
+            glass && isFocused -> com.lumera.app.ui.theme.Glass.PaneFocused
+            glass && showIndicator -> com.lumera.app.ui.theme.Glass.Pane
             isFocused -> accentColor.copy(alpha = 0.2f)
             showIndicator -> accentColor.copy(alpha = 0.2f)
             else -> Color.Transparent
@@ -458,10 +462,10 @@ fun TopNavItem(
             scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = bubbleColor,
-                focusedContainerColor = accentColor.copy(alpha = 0.2f),
-                pressedContainerColor = accentColor.copy(alpha = 0.2f),
+                focusedContainerColor = if (glass) com.lumera.app.ui.theme.Glass.PaneFocused else accentColor.copy(alpha = 0.2f),
+                pressedContainerColor = if (glass) com.lumera.app.ui.theme.Glass.PaneFocused else accentColor.copy(alpha = 0.2f),
                 contentColor = iconColor,
-                focusedContentColor = Color.White
+                focusedContentColor = if (glass) com.lumera.app.ui.theme.Glass.OnFocused else Color.White
             )
         ) {
             // Icon + Text row
@@ -525,7 +529,7 @@ fun TopNavProfileAvatar(
     
     // Border color animation
     val borderColor by animateColorAsState(
-        targetValue = if (showIndicator) accentColor else Color.Transparent,
+        targetValue = if (showIndicator) (if (com.lumera.app.ui.theme.isGlass) Color.White else accentColor) else Color.Transparent,
         animationSpec = tween(200),
         label = "borderColor"
     )

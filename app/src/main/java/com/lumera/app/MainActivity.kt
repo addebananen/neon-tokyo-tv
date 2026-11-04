@@ -756,9 +756,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun splashEnabled(): Boolean =
-        profileConfigurationManager.getLastActiveProfileId()?.let { id ->
+        (profileConfigurationManager.getLastActiveProfileId()?.let { id ->
             runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
-        }?.splashEnabled ?: true
+        }?.splashEnabled ?: true).also {
+            getSharedPreferences("ui_look", MODE_PRIVATE).edit().putBoolean(KEY_SPLASH_ON, it).apply()
+        }
+
+    /**
+     * Whether the intro plays, at launch. The answer from the last time the app was put away
+     * is kept, so a cold start does not wait for the database to open; it is looked up afresh
+     * behind the intro. Only the very first launch asks the database while starting.
+     */
+    private fun splashEnabledAtLaunch(): Boolean {
+        val prefs = getSharedPreferences("ui_look", MODE_PRIVATE)
+        if (!prefs.contains(KEY_SPLASH_ON)) return splashEnabled()
+        lifecycleScope.launch(Dispatchers.IO) { splashEnabled() }
+        return prefs.getBoolean(KEY_SPLASH_ON, true)
+    }
 
     /** The first screen has something to show: the intro leaves as soon as it has played. */
     private fun onSplashAppReady() {
@@ -844,7 +858,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val splashEnabledInProfile = splashEnabled()
+        val splashEnabledInProfile = splashEnabledAtLaunch()
         // Brought back after the TV slept and the app was put away: the intro plays again when
         // it has been a while, not when the screen was only turned or rebuilt a moment ago
         val shownAgo = safeState?.getLong(KEY_SPLASH_SHOWN_AT, 0L)?.takeIf { it > 0L }?.let { SystemClock.elapsedRealtime() - it }
@@ -940,6 +954,21 @@ class MainActivity : ComponentActivity() {
             // Resolve theme from profile's themeId
             val currentTheme by themeManager.currentTheme.collectAsState()
 
+            // Who's watching? comes in the house neon, or in the glass theme the last one to
+            // watch had, so leaving a calm profile doesn't flash back to neon
+            val uiPrefs = remember { getSharedPreferences("ui_look", MODE_PRIVATE) }
+            var pickerThemeId by remember { mutableStateOf(uiPrefs.getString("picker_theme", null) ?: DefaultThemes.NEON_TOKYO.id) }
+            // From the profile itself, not the theme in use: that one goes back to neon on the way out
+            val profileThemeId = currentProfile?.themeId
+            LaunchedEffect(profileThemeId) {
+                val themeId = profileThemeId ?: return@LaunchedEffect
+                val wanted = if (com.lumera.app.ui.theme.UiStyle.of(themeId) == com.lumera.app.ui.theme.UiStyle.Glass) themeId else DefaultThemes.NEON_TOKYO.id
+                if (wanted != pickerThemeId) {
+                    pickerThemeId = wanted
+                    uiPrefs.edit().putString("picker_theme", wanted).apply()
+                }
+            }
+
             // Get round corners setting from profile (default true)
             val roundCorners = currentProfile?.roundCorners ?: true
             val hubRoundCorners = currentProfile?.hubRoundCorners ?: true
@@ -982,7 +1011,7 @@ class MainActivity : ComponentActivity() {
                         if (!isRestoringSession) {
                             // PROFILE SELECTION / CREATION
                             // Profile selection always uses the house Neon Tokyo look
-                            LumeraTheme(theme = DefaultThemes.NEON_TOKYO) {
+                            LumeraTheme(theme = DefaultThemes.getById(pickerThemeId)) {
                                 val profileViewModel = hiltViewModel<ProfileViewModel>()
                                 val profiles by profileViewModel.profiles.collectAsState()
                                 // The intro fades into the profiles, so it waits for them to be there
@@ -2465,6 +2494,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val KEY_SPLASH_SHOWN = "splash_shown"
         private const val KEY_SPLASH_SHOWN_AT = "splash_shown_at"
+        private const val KEY_SPLASH_ON = "splash_on"
 
         /** Neon Home's Continue watching: the profile to log in as and the title to open. */
         const val EXTRA_OPEN_PROFILE = "nt_open_profile"

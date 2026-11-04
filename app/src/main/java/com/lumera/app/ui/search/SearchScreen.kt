@@ -1,11 +1,14 @@
 package com.lumera.app.ui.search
 
+import com.lumera.app.ui.theme.themed
+
 import com.lumera.app.ui.components.NeonType
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -214,7 +217,7 @@ fun SearchScreen(
                         Text(
                             text = "Discover",
                             // The same neon italic as the row titles on the home screen
-                            style = NeonType.rowTitle(18.sp),
+                            style = NeonType.rowTitle(18.sp).themed(),
                             color = Color.White.copy(0.9f),
                             modifier = Modifier.padding(bottom = filterGap)
                         )
@@ -333,7 +336,7 @@ fun SearchScreen(
                                 Text(
                                     text = "Movies",
                                     // The same neon italic as the row titles on the home screen
-                                    style = NeonType.rowTitle(18.sp),
+                                    style = NeonType.rowTitle(18.sp).themed(),
                                     color = Color.White.copy(0.9f),
                                     modifier = Modifier.padding(bottom = if (isTopNav) 12.dp else 4.dp)
                                 )
@@ -387,7 +390,7 @@ fun SearchScreen(
                                 Text(
                                     text = "Series",
                                     // The same neon italic as the row titles on the home screen
-                                    style = NeonType.rowTitle(18.sp),
+                                    style = NeonType.rowTitle(18.sp).themed(),
                                     color = Color.White.copy(0.9f),
                                     modifier = Modifier.padding(bottom = if (isTopNav) 12.dp else 4.dp)
                                 )
@@ -445,9 +448,11 @@ fun SearchScreen(
                             }
                         }
                 ) {
-                    // Gradient background
+                    // Gradient background. A glass theme puts the field on its own frosted capsule instead,
+                    // over the picture behind the page, which a band of flat colour would cut across.
                     val backgroundColor = MaterialTheme.colorScheme.background
-                    Box(
+                    val glass = com.lumera.app.ui.theme.isGlass
+                    if (!glass) Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(searchBarHeight + 32.dp)
@@ -472,6 +477,15 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(searchBarHeight)
+                            .then(
+                                if (glass) Modifier
+                                    .padding(vertical = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xE60C2135))
+                                    .border(1.dp, com.lumera.app.ui.theme.Glass.Hairline, CircleShape)
+                                    .padding(horizontal = 20.dp)
+                                else Modifier
+                            )
                     ) {
                         Icon(
                             Icons.Default.Search,
@@ -923,10 +937,13 @@ fun KeyButton(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val dynamicContentColor = Color.White
-    // Lit like the cards: the accent's edge and glow on a tinted key, rather than a white block
+    // Lit like the cards: the accent's edge and glow on a tinted key, rather than a white block.
+    // Glass themes do have the white key, its letter dark, as on the Apple TV's keyboard.
+    val glass = com.lumera.app.ui.theme.isGlass
+    val keyFocused by interactionSource.collectIsFocusedAsState()
+    val dynamicContentColor = if (glass && keyFocused) com.lumera.app.ui.theme.Glass.OnFocused else Color.White
     val accent = MaterialTheme.colorScheme.primary
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(if (glass) 8.dp else 6.dp)
 
     Surface(
         onClick = onClick,
@@ -935,12 +952,12 @@ fun KeyButton(
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = Color.White.copy(0.08f),
-            focusedContainerColor = accent.copy(alpha = 0.3f),
+            focusedContainerColor = if (glass) com.lumera.app.ui.theme.Glass.PaneFocused else accent.copy(alpha = 0.3f),
         ),
-        border = ClickableSurfaceDefaults.border(
+        border = if (glass) ClickableSurfaceDefaults.border() else ClickableSurfaceDefaults.border(
             focusedBorder = Border(border = BorderStroke(1.5.dp, accent), shape = shape)
         ),
-        glow = ClickableSurfaceDefaults.glow(
+        glow = if (glass) ClickableSurfaceDefaults.glow() else ClickableSurfaceDefaults.glow(
             focusedGlow = Glow(elevationColor = accent.copy(alpha = 0.5f), elevation = 8.dp)
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.1f)

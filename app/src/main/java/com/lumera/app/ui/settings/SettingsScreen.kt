@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.*
@@ -340,15 +342,18 @@ fun SettingsSidebarItem(
     // - If selected but not focused: partial highlight (white text)
     val showHighlight = isFocused || isSelected
     
+    // Glass: the focused row is a white capsule, its writing dark; the open one is simply white
+    val glass = com.lumera.app.ui.theme.isGlass
     val contentColor by animateColorAsState(
-        if (showHighlight) Color.White else Color.White.copy(0.4f), 
+        if (glass && isFocused) com.lumera.app.ui.theme.Glass.OnFocused else if (showHighlight) Color.White else Color.White.copy(0.4f),
         label = "Content"
     )
-    val accent = MaterialTheme.colorScheme.primary
+    val accent = if (glass) Color.White else MaterialTheme.colorScheme.primary
     // The open section's icon takes the accent colour and a neon mark lights up beside it; the
     // mark springs, so as the focus runs down the list the light seems to run with it
     val iconColor by animateColorAsState(
         when {
+            glass && isFocused -> com.lumera.app.ui.theme.Glass.OnFocused
             isSelected -> accent
             isFocused -> Color.White
             else -> Color.White.copy(0.4f)
@@ -363,20 +368,27 @@ fun SettingsSidebarItem(
     val focusLight by animateFloatAsState(if (isFocused) 1f else 0f, tween(160), label = "SectionFocus")
 
     // Scale only when focused
-    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f)
+    val scale by animateFloatAsState(if (isFocused) (if (glass) com.lumera.app.ui.theme.Glass.LIFT_SMALL else 1.05f) else 1f, if (glass) com.lumera.app.ui.theme.Glass.Motion else spring<Float>())
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .drawBehind {
                 if (focusLight > 0f) {
-                    drawRoundRect(Color.White, cornerRadius = CornerRadius(12.dp.toPx()), alpha = 0.06f * focusLight)
+                    if (glass) drawRoundRect(Color.White, cornerRadius = CornerRadius(size.height / 2f), alpha = 0.94f * focusLight)
+                    else drawRoundRect(Color.White, cornerRadius = CornerRadius(12.dp.toPx()), alpha = 0.06f * focusLight)
                 }
-                val m = mark
-                if (m > 0f) {
+                val m = if (glass) mark * (1f - focusLight) else mark
+                if (m > 0f && glass) {
+                    drawRoundRect(
+                        Color.White.copy(alpha = 0.12f),
+                        cornerRadius = CornerRadius(size.height / 2f),
+                        alpha = m.coerceAtMost(1f)
+                    )
+                } else if (m > 0f) {
                     val bloom = 40.dp.toPx()
                     drawRect(
                         Brush.horizontalGradient(listOf(accent.copy(alpha = 0.3f), Color.Transparent), startX = 0f, endX = bloom),

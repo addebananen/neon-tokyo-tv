@@ -1,5 +1,7 @@
 package com.lumera.app.ui.details
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.activity.compose.BackHandler
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
@@ -14,6 +16,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import com.lumera.app.ui.theme.Glass
+import com.lumera.app.ui.theme.glassLift
+import com.lumera.app.ui.theme.isGlass
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -301,7 +306,7 @@ fun DetailsScreen(
             val backdrop = remember(currentMovie.background, currentMovie.poster) {
                 backdropRequest(detailsContext, currentMovie.background, currentMovie.poster)
             }
-            Box(modifier = Modifier.alpha(contentAlpha)) {
+            Box(modifier = Modifier.graphicsLayer { alpha = contentAlpha }) {
             AsyncImage(
                 model = backdrop?.request,
                 contentDescription = null,
@@ -361,7 +366,7 @@ fun DetailsScreen(
                     .onFocusChanged { heroHasFocus = it.hasFocus },
                 verticalArrangement = Arrangement.Bottom
             ) {
-                val titleStyle = NeonType.headline(36.sp, glow = MaterialTheme.colorScheme.primary)
+                val titleStyle = NeonType.headline(36.sp, glow = MaterialTheme.colorScheme.primary).themed()
 
                 if (!currentMovie.logo.isNullOrEmpty()) {
                     TitleLogo(
@@ -939,6 +944,8 @@ private fun ExpandableIconButton(
     val holdFill = remember { Animatable(0f) }
     var holdJob by remember { mutableStateOf<Job?>(null) }
     var holdDone by remember { mutableStateOf(false) }
+    // The fill that shows a hold shows on a white glass button too
+    val holdTint = if (isGlass) Glass.OnFocused else Color.White
     val holdModifier = if (onHold == null) Modifier else Modifier
         .onPreviewKeyEvent { event ->
             if (event.key != Key.DirectionCenter && event.key != Key.Enter && event.key != Key.NumPadEnter) return@onPreviewKeyEvent false
@@ -973,16 +980,20 @@ private fun ExpandableIconButton(
         }
         .drawBehind {
             val f = holdFill.value
-            if (f > 0f) drawRect(Color.White.copy(alpha = 0.16f), size = Size(size.width * f, size.height))
+            if (f > 0f) drawRect(holdTint.copy(alpha = 0.16f), size = Size(size.width * f, size.height))
         }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val accentColor = MaterialTheme.colorScheme.primary
+    // On glass a button is frosted at rest and turns white in focus, its writing dark, in
+    // sentence case: the Apple TV's buttons
+    val glass = isGlass
+    val shownLabel = if (glass) label else label.uppercase()
 
     val showText = isFocused
 
     // Estimate expanded width: icon(18) + padding(12+12) + gap(8) + text
     // ~8dp per uppercase character, minimum 110dp to fit short labels like RESUME/WATCHED
-    val expandedWidth = (42 + 8 + (label.uppercase().length * 8)).coerceIn(110, 220).dp
+    val expandedWidth = (42 + 8 + (shownLabel.length * (if (glass) 9 else 8))).coerceIn(110, 220).dp
 
     // Bubble width: icon-only → icon + label
     val bubbleWidth by animateDpAsState(
@@ -1006,6 +1017,8 @@ private fun ExpandableIconButton(
     // Icon and border colors
     val iconColor by animateColorAsState(
         targetValue = when {
+            glass && isFocused -> Glass.OnFocused
+            glass -> Color.White.copy(alpha = if (isActive) 1f else 0.85f)
             isFocused -> accentColor
             isActive -> accentColor
             else -> Color.White.copy(alpha = 0.7f)
@@ -1015,6 +1028,7 @@ private fun ExpandableIconButton(
     )
     val borderColor by animateColorAsState(
         targetValue = when {
+            glass -> if (isFocused) Color.Transparent else Glass.Hairline
             isFocused -> accentColor
             isActive -> accentColor.copy(alpha = 0.5f)
             else -> Color.White.copy(alpha = 0.15f)
@@ -1024,6 +1038,8 @@ private fun ExpandableIconButton(
     )
     val bgColor by animateColorAsState(
         targetValue = when {
+            glass && isFocused -> Glass.PaneFocused
+            glass -> if (isActive) Color.White.copy(alpha = 0.24f) else Glass.Pane
             isFocused -> accentColor.copy(alpha = 0.15f)
             isActive -> accentColor.copy(alpha = 0.08f)
             else -> Color.White.copy(alpha = 0.07f)
@@ -1033,7 +1049,8 @@ private fun ExpandableIconButton(
     )
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.05f else 1f,
+        targetValue = if (isFocused) (if (glass) Glass.LIFT_SMALL else 1.05f) else 1f,
+        animationSpec = if (glass) Glass.Motion else spring<Float>(),
         label = "btnScale"
     )
 
@@ -1041,12 +1058,20 @@ private fun ExpandableIconButton(
         modifier = modifier
             .width(bubbleWidth)
             .height(42.dp)
-            .scale(scale)
+            // Read while drawing, so the button grows without recomposing on every frame
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                if (glass) {
+                    shadowElevation = 10.dp.toPx() * ((scale - 1f) / (Glass.LIFT_SMALL - 1f)).coerceIn(0f, 1f)
+                    shape = RoundedCornerShape(21.dp)
+                }
+            }
             .clip(RoundedCornerShape(21.dp))
             .background(bgColor)
             .then(holdModifier)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
+                width = if (isFocused && !glass) 2.dp else 1.dp,
                 color = borderColor,
                 shape = RoundedCornerShape(21.dp)
             )
@@ -1066,9 +1091,10 @@ private fun ExpandableIconButton(
         if (showText) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = label.uppercase(),
-                color = accentColor,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                text = shownLabel,
+                color = if (glass) Glass.OnFocused else accentColor,
+                style = if (glass) MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                else MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
@@ -1096,7 +1122,7 @@ private fun DialogButton(
     Box(
         modifier = modifier
             .height(50.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.08f))
             .border(
@@ -1140,7 +1166,7 @@ private fun ImdbBadge() {
 private fun SectionHeader(title: String, textColor: Color, modifier: Modifier = Modifier) {
     Text(
         text = title,
-        style = NeonType.rowTitle(),
+        style = NeonType.rowTitle().themed(),
         color = textColor.copy(alpha = 0.9f),
         modifier = modifier
     )
@@ -1248,7 +1274,7 @@ private fun CastCard(member: TmdbCastInfo, accentColor: Color, textColor: Color,
         modifier = modifier
             .width(96.dp)
             .height(110.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.TopCenter
@@ -1356,7 +1382,7 @@ private fun StudioChip(studio: TmdbCompanyInfo, textColor: Color, accentColor: C
         modifier = modifier
             .width(140.dp)
             .height(56.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
             .border(
@@ -1445,18 +1471,19 @@ private fun RecommendationCard(item: TmdbMetaPreview, accentColor: Color, modifi
     val roundCorners = LocalRoundCorners.current
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val cardShape = if (roundCorners) RoundedCornerShape(if (isFocused) 16.dp else 12.dp) else RectangleShape
+    val glass = isGlass
+    val cardShape = if (!roundCorners) RectangleShape else if (glass) RoundedCornerShape(Glass.CardCorner) else RoundedCornerShape(if (isFocused) 16.dp else 12.dp)
     val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "recScale")
 
     Box(
         modifier = modifier
             .width(120.dp)
             .height(180.dp)
-            .scale(scale)
+            .then(if (glass) Modifier.glassLift(isFocused, cardShape) else Modifier.graphicsLayer { scaleX = scale; scaleY = scale })
             .clip(cardShape)
             .background(Color.White.copy(0.06f))
             .border(
-                width = if (isFocused) 2.dp else 0.dp,
+                width = if (isFocused && !glass) 2.dp else 0.dp,
                 color = if (isFocused) accentColor else Color.Transparent,
                 shape = cardShape
             )

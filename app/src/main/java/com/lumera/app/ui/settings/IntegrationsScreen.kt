@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
@@ -272,7 +274,7 @@ private fun IntegrationItem(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .border(if (isFocused) 2.dp else 0.dp, borderColor, RoundedCornerShape(12.dp))
@@ -628,7 +630,7 @@ private fun ManagementMenuItem(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
@@ -978,7 +980,7 @@ private fun TmdbToggleItem(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
@@ -1121,7 +1123,7 @@ private fun IntegrationButton(
     Box(
         modifier = modifier
             .height(50.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
