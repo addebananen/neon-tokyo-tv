@@ -7,40 +7,52 @@ struct ProfilePickerView: View {
     @Environment(\.neon) private var theme
     @State private var adding = false
     @State private var name = ""
+    private let badge = Metrics.posterWidth * 0.8
 
     var body: some View {
         VStack(spacing: Metrics.rowSpacing) {
             NeonTitle(text: model.liveProfiles.isEmpty ? "Welcome to Neon Tokyo" : "Who's watching?", size: Metrics.titleSize * 1.4)
-            HStack(spacing: Metrics.cardSpacing) {
+            HStack(alignment: .top, spacing: Metrics.cardSpacing * 1.4) {
                 ForEach(model.liveProfiles, id: \.id) { p in
-                    Button {
-                        model.select(p)
-                    } label: {
-                        ProfileBadgeView(profile: p, size: Metrics.posterWidth * 0.8)
-                    }
-                    .buttonStyle(NeonCardStyle(radius: Metrics.posterWidth))
-                    .contextMenu {
-                        Button("Remove profile", role: .destructive) { model.remove(p) }
+                    VStack(spacing: 14) {
+                        Button {
+                            model.select(p)
+                        } label: {
+                            ProfileBadgeView(profile: p, size: badge, showName: false)
+                        }
+                        .buttonStyle(NeonTileStyle(radius: badge, glow: Color(hexString: p.color), pop: 1.1))
+                        .contextMenu {
+                            Button("Remove profile", role: .destructive) { model.remove(p) }
+                        }
+                        Text(p.name)
+                            .font(.system(size: Metrics.bodySize * 0.9, weight: .medium))
+                            .foregroundStyle(theme.text)
                     }
                 }
-                Button {
-                    name = ""
-                    adding = true
-                } label: {
-                    VStack(spacing: 10) {
+                VStack(spacing: 14) {
+                    Button {
+                        name = ""
+                        adding = true
+                    } label: {
                         Image(systemName: "plus")
                             .font(.system(size: Metrics.titleSize, weight: .light))
-                            .frame(width: Metrics.posterWidth * 0.8, height: Metrics.posterWidth * 0.8)
+                            .foregroundStyle(theme.muted)
+                            .frame(width: badge, height: badge)
                             .background(Circle().strokeBorder(theme.muted, style: StrokeStyle(lineWidth: 2, dash: [6, 6])))
-                        Text("Add profile").font(.system(size: Metrics.bodySize * 0.85)).foregroundStyle(theme.muted)
+                            .padding(8)
                     }
-                    .padding(8)
+                    .buttonStyle(NeonTileStyle(radius: badge, pop: 1.1))
+                    Text("Add profile")
+                        .font(.system(size: Metrics.bodySize * 0.9))
+                        .foregroundStyle(theme.muted)
                 }
-                .buttonStyle(NeonCardStyle(radius: Metrics.posterWidth))
             }
+            .neonFloorLight()
             .tvFocusSection()
         }
         .padding(Metrics.edge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(NeonWorld(dim: 0.05))
         .alert("New profile", isPresented: $adding) {
             TextField("Name", text: $name)
             Button("Create") {

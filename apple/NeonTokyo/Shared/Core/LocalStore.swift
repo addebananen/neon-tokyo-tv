@@ -12,6 +12,9 @@ enum LocalStore {
     static func set(_ value: String?, _ key: String) { defaults.set(value, forKey: key) }
     static func strings(_ key: String) -> [String]? { defaults.stringArray(forKey: key) }
     static func set(_ value: [String], _ key: String) { defaults.set(value, forKey: key) }
+    static func remove(_ key: String) { defaults.removeObject(forKey: key) }
+    static func bool(_ key: String, default value: Bool) -> Bool { defaults.object(forKey: key) == nil ? value : defaults.bool(forKey: key) }
+    static func set(_ value: Bool, _ key: String) { defaults.set(value, forKey: key) }
 
     static func cache(_ name: String) -> String? {
         guard let url = cacheURL(name) else { return nil }

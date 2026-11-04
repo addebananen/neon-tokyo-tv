@@ -13,12 +13,14 @@ struct SearchView: View {
             LazyVStack(alignment: .leading, spacing: Metrics.rowSpacing) {
                 if searching { ProgressView().padding(Metrics.edge) }
                 ForEach(results) { group in
-                    RowSection(title: "\(group.catalog.addonName) · \(Self.kindName(group.catalog.kind))") {
+                    TileRow(title: "\(group.catalog.addonName) · \(Self.kindName(group.catalog.kind))", key: group.id,
+                            count: group.items.count, tileWidth: Metrics.posterWidth) { focus in
                         ForEach(group.items) { item in
-                            NavigationLink(value: Route.details(item)) {
-                                PosterArt(title: item.name, poster: item.poster)
+                            TileLink(route: .details(item), art: item.poster, focus: focus, key: group.id + "|" + item.id) {
+                                PosterTile(title: item.name, poster: item.poster, progress: model.progress(item.id),
+                                           watched: model.isWatched(item.id))
                             }
-                            .buttonStyle(NeonCardStyle())
+                            .modifier(EdgeSettle())
                         }
                     }
                 }
@@ -27,8 +29,10 @@ struct SearchView: View {
                 }
             }
             .padding(.vertical, Metrics.rowSpacing)
+            .neonFloorLight()
         }
-        .background(NeonBackground())
+        .scrollClipDisabled()
+        .background(NeonBackground(dim: 0.45))
         .searchable(text: $query, prompt: "Films, series, anime")
         .task(id: query) {
             // wait for typing to pause

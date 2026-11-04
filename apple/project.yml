@@ -13,6 +13,10 @@ settings:
     MARKETING_VERSION: "0.2.0"
     CURRENT_PROJECT_VERSION: "1"
     NEON_VERSION: 0.2.0-dev
+    # CI fills these in: when it built the app (for the update check) and the Trakt app's keys
+    NEON_BUILT_AT: "0"
+    TRAKT_CLIENT_ID: ""
+    TRAKT_CLIENT_SECRET: ""
     PRODUCT_BUNDLE_IDENTIFIER: com.neontokyo.tv
     PRODUCT_NAME: NeonTokyo
     CODE_SIGN_STYLE: Automatic
@@ -51,6 +55,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NeonVersion: $(NEON_VERSION)
+        NeonBuiltAt: $(NEON_BUILT_AT)
+        TraktClientId: $(TRAKT_CLIENT_ID)
+        TraktClientSecret: $(TRAKT_CLIENT_SECRET)
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIAppFonts: [kanit_medium.ttf, kanit_medium_italic.ttf, kanit_semibold_italic.ttf]
@@ -79,6 +86,9 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NeonVersion: $(NEON_VERSION)
+        NeonBuiltAt: $(NEON_BUILT_AT)
+        TraktClientId: $(TRAKT_CLIENT_ID)
+        TraktClientSecret: $(TRAKT_CLIENT_SECRET)
         UILaunchScreen:
           UIColorName: LaunchBackground
         UIAppFonts: [kanit_medium.ttf, kanit_medium_italic.ttf, kanit_semibold_italic.ttf]

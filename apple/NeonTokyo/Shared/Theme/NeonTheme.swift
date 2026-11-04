@@ -73,6 +73,10 @@ enum Metrics {
     static let heroHeight: CGFloat = 420
     #endif
     static var posterHeight: CGFloat { posterWidth / NeonTokens.posterAspect }
+    /// How tall a row of tiles is, title included, to keep the focused row in one place.
+    static func rowHeight(tile: CGFloat) -> CGFloat {
+        titleSize * 0.8 * 1.3 + cardSpacing * 0.5 + tile + cardSpacing * 1.8
+    }
 }
 
 /// Kanit, the Android app's neon font, from the same font files.
@@ -99,66 +103,29 @@ struct NeonTitle: View {
     }
 }
 
-/// The page background: the theme's night colour with a faint glow from the bottom, like the
-/// Android app's LumeraBackground.
+/// The page background: Neon Tokyo's world (skyline, stars, the rolling grid), dimmed a little
+/// so what is on top reads clearly.
 struct NeonBackground: View {
-    @Environment(\.neon) private var theme
+    var dim: Double = 0.25
 
     var body: some View {
-        ZStack {
-            theme.background
-            LinearGradient(
-                colors: [theme.background, theme.surface.opacity(0.55), theme.primary.opacity(theme.focus == .glow ? 0.18 : 0.08)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        .ignoresSafeArea()
+        NeonWorld(dim: dim)
     }
 }
 
-/// Cards and buttons: Neon grows a little and glows; Deep Blue grows more and catches light like
-/// glass. On iPhone a press shrinks the card a touch instead.
+/// Lists and big buttons (sources, episodes, profiles): Neon Home's focus with a smaller pop,
+/// since they are wide.
 struct NeonCardStyle: ButtonStyle {
     var radius: CGFloat = NeonTokens.shapeCardRadius
+    var pop: CGFloat = 1.025
 
     func makeBody(configuration: Configuration) -> some View {
-        NeonCardBody(configuration: configuration, radius: radius)
+        NeonTileStyle(radius: radius, pop: pop).makeBody(configuration: configuration)
     }
 }
 
-private struct NeonCardBody: View {
-    let configuration: ButtonStyle.Configuration
-    let radius: CGFloat
-    @Environment(\.isFocused) private var focused
-    @Environment(\.neon) private var theme
-
-    var body: some View {
-        let glow = theme.focus == .glow
-        configuration.label
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay {
-                if glass && focused {
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(LinearGradient(colors: [.white.opacity(0.28), .clear, .white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .allowsHitTesting(false)
-                }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(glow ? theme.primary : .white.opacity(0.7), lineWidth: focused ? (glow ? 3 : 1.5) : 0)
-            }
-            .shadow(color: focused ? (glow ? theme.primary.opacity(NeonTokens.focusGlowOpacity) : .black.opacity(0.5)) : .clear,
-                    radius: focused ? NeonTokens.focusGlowRadius : 0, y: glow ? 0 : 18)
-            .scaleEffect(focused ? theme.focusScale : (configuration.isPressed ? 0.96 : 1))
-            .animation(.easeOut(duration: NeonTokens.motionFocusMs / 1000), value: focused)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-
-    private var glass: Bool { theme.focus == .glass }
-}
-
-/// A pill button for actions (Play, Sources, Add to list).
+/// A pill button for actions (Play, Watchlist, Trailer). Focused, it pops on Neon Home's spring
+/// and lights white with a neon halo; the prominent one (Play) glows in the theme's colours.
 struct NeonPillStyle: ButtonStyle {
     var prominent = false
 
@@ -174,17 +141,31 @@ private struct NeonPillBody: View {
     @Environment(\.neon) private var theme
 
     var body: some View {
-        let lit = focused || prominent
+        let glow = theme.focus == .glow
+        let pressed = configuration.isPressed
+        let scale: CGFloat = pressed ? 0.95 : (focused ? 1.08 : 1)
         configuration.label
             .font(.system(size: Metrics.bodySize, weight: .semibold))
             .padding(.horizontal, Metrics.bodySize * 1.1)
             .padding(.vertical, Metrics.bodySize * 0.55)
-            .foregroundStyle(lit ? theme.background : theme.text)
-            .background(
-                Capsule().fill(lit ? (focused ? theme.text : theme.primary) : theme.surface.opacity(0.7))
-            )
-            .shadow(color: focused && theme.focus == .glow ? theme.primary.opacity(0.8) : .clear, radius: 18)
-            .scaleEffect(focused ? 1.06 : (configuration.isPressed ? 0.95 : 1))
-            .animation(.easeOut(duration: NeonTokens.motionFocusMs / 1000), value: focused)
+            .foregroundStyle(focused ? theme.background : theme.text)
+            .background {
+                ZStack {
+                    if focused {
+                        Capsule().fill(theme.text)
+                    } else if prominent {
+                        Capsule().fill(LinearGradient(colors: [theme.primary, theme.primary.mixed(with: theme.secondary, 0.35)],
+                                                      startPoint: .leading, endPoint: .trailing))
+                    } else {
+                        Capsule().fill(theme.surface.opacity(0.72))
+                        Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                    }
+                }
+            }
+            .shadow(color: focused ? (glow ? theme.primary.opacity(0.85) : .black.opacity(0.45)) : (prominent && glow ? theme.primary.opacity(0.45) : .clear),
+                    radius: focused ? 20 : 12, y: glow ? 0 : 10)
+            .scaleEffect(scale)
+            .animation(focused && !pressed ? NeonMotion.popSpring : NeonMotion.settle, value: scale)
+            .animation(focused ? NeonMotion.tubeOn : NeonMotion.tubeOff, value: focused)
     }
 }

@@ -32,12 +32,27 @@ final class AppModel {
 
     private static let historyLimit: UInt32 = 400
 
+    /// Updates for this app, looked for on GitHub.
+    let updates = Updater()
+    @ObservationIgnored private var accountsStore: Accounts?
+
+    /// Stremio and Trakt for the active profile.
+    var accounts: Accounts {
+        if let a = accountsStore { return a }
+        let a = Accounts(model: self)
+        accountsStore = a
+        return a
+    }
+
     init() {
         load()
         if demo {
             showIntro = launchScreen == nil
             if liveProfiles.isEmpty { createProfile(name: "Neon") }
             if activeProfileId == nil { activeProfileId = liveProfiles.first?.id }
+        } else {
+            accounts.load(profileId: activeProfileId)
+            updates.start()
         }
     }
 
@@ -94,6 +109,7 @@ final class AppModel {
     func select(_ profile: Profile?) {
         activeProfileId = profile?.id
         saveProfiles()
+        accounts.load(profileId: activeProfileId)
     }
 
     func remove(_ profile: Profile) {
@@ -155,6 +171,15 @@ final class AppModel {
             addonUrls.append(base)
             LocalStore.set(addonUrls, "addons")
         }
+        await refreshAddons()
+    }
+
+    /// Addons from a Stremio account that are not here yet, added after the ones already here.
+    func mergeAddons(_ bases: [String]) async {
+        let fresh = bases.filter { !addonUrls.contains($0) }
+        guard !fresh.isEmpty else { return }
+        addonUrls.append(contentsOf: fresh)
+        LocalStore.set(addonUrls, "addons")
         await refreshAddons()
     }
 
@@ -253,11 +278,30 @@ final class AppModel {
         saveWatch()
     }
 
+    /// The player closed: saves where it stopped, tells Trakt, and lets the accounts sync.
+    func playerClosed(_ item: PlayItem, positionMs: UInt64, durationMs: UInt64) {
+        saveProgress(item, positionMs: positionMs, durationMs: durationMs)
+        accounts.scrobbleStop(playbackId: item.playbackId, kind: item.kind, positionMs: positionMs, durationMs: durationMs)
+        accounts.changed()
+    }
+
+    /// What sync merged: the whole history (and the watchlist, when given).
+    func applySynced(history newHistory: [WatchEntry], watchlist newWatchlist: [WatchlistItem]?) {
+        history = newHistory
+        if let newWatchlist { watchlist = newWatchlist }
+        saveWatch()
+    }
+
+    /// Where to start as a share of the film, when only the share is known (from Trakt).
+    func resumeShare(_ playbackId: String) -> Double {
+        resumeFraction(entry: entry(playbackId))
+    }
+
     func isWatched(_ playbackId: String) -> Bool { entry(playbackId)?.watched == true }
 
     func progress(_ playbackId: String) -> Double {
         guard let e = entry(playbackId), e.durationMs > 0, !e.watched else { return 0 }
-        return Double(e.positionMs) / Double(e.durationMs)
+        return min(Double(e.positionMs) / Double(e.durationMs), 1)
     }
 
     // MARK: - Watchlist
@@ -280,6 +324,7 @@ final class AppModel {
                                            addedAtMs: now, updatedAtMs: now, deleted: false))
         }
         saveWatch()
+        accounts.changed()
     }
 }
 

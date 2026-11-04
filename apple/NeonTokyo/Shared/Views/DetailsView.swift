@@ -15,52 +15,76 @@ struct DetailsView: View {
     private var isSeries: Bool { meta.kind == "series" || !(detail?.videos.isEmpty ?? true) && meta.kind != "movie" }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            NeonImage(url: meta.background ?? meta.poster)
-                .ignoresSafeArea()
-                .overlay(LinearGradient(colors: [theme.background.opacity(0.35), theme.background.opacity(0.92), theme.background],
-                                        startPoint: .top, endPoint: .bottom).ignoresSafeArea())
-                .overlay(LinearGradient(colors: [theme.background.opacity(0.9), .clear], startPoint: .leading, endPoint: .trailing).ignoresSafeArea())
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                NeonWorld(dim: 0.55)
+                // the title's own picture, drifting, fading into the night on the left and below
+                DriftingPicture(url: Art.background(meta.id, meta.background) ?? meta.poster)
+                    .id(meta.id)
+                    .frame(width: g.size.width * (wide ? 0.8 : 1), height: g.size.height * (wide ? 0.86 : 0.62))
+                    .clipped()
+                    .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: wide ? 0.42 : 0)],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0.45), .init(color: .clear, location: 1)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: g.size.width, height: g.size.height, alignment: .topTrailing)
+                    .transition(.opacity)
 
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: Metrics.rowSpacing * 0.6) {
-                    Spacer().frame(height: Metrics.heroHeight * 0.32)
-                    if let logo = meta.logo {
-                        NeonImage(url: logo, mode: .fit)
-                            .frame(maxWidth: Metrics.posterWidth * 2.6, maxHeight: Metrics.posterWidth * 0.9, alignment: .leading)
-                    } else {
-                        NeonTitle(text: meta.name, size: Metrics.titleSize * 1.5)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: Metrics.rowSpacing * 0.55) {
+                        Spacer().frame(height: g.size.height * (wide ? 0.2 : 0.3))
+                        VStack(alignment: .leading, spacing: Metrics.rowSpacing * 0.45) {
+                            LogoOrTitle(title: meta.name, logo: Art.logo(meta.id, meta.logo), maxWidth: Metrics.posterWidth * 2.8,
+                                        maxHeight: Metrics.posterWidth * 0.75, size: Metrics.titleSize * 1.6)
+                                .modifier(Staggered(index: 0))
+                            FactsLine(item: meta)
+                                .modifier(Staggered(index: 1))
+                            if let d = meta.description {
+                                Text(d)
+                                    .font(.system(size: Metrics.bodySize))
+                                    .foregroundStyle(theme.text.opacity(0.88))
+                                    .frame(maxWidth: Metrics.posterWidth * 4.6, alignment: .leading)
+                                    .lineLimit(5)
+                                    .shadow(color: .black.opacity(0.6), radius: 8)
+                                    .modifier(Staggered(index: 2))
+                            }
+                            actions
+                                .modifier(Staggered(index: 3))
+                                .tvFocusSection()
+                            if let detail, !detail.cast.isEmpty {
+                                Text("Cast: " + detail.cast.prefix(6).joined(separator: ", "))
+                                    .font(.system(size: Metrics.bodySize * 0.8))
+                                    .foregroundStyle(theme.muted)
+                                    .lineLimit(2)
+                                    .modifier(Staggered(index: 4))
+                            }
+                            if failed {
+                                Text("Could not load the details. Check the connection and your addons.")
+                                    .foregroundStyle(theme.error)
+                            }
+                        }
+                        .padding(.horizontal, Metrics.edge)
+                        if isSeries, let detail { episodes(detail) }
                     }
-                    FactsLine(item: meta)
-                    if let d = meta.description {
-                        Text(d)
-                            .font(.system(size: Metrics.bodySize))
-                            .foregroundStyle(theme.text.opacity(0.88))
-                            .frame(maxWidth: Metrics.posterWidth * 5, alignment: .leading)
-                            .lineLimit(6)
-                    }
-                    actions
-                        .tvFocusSection()
-                    if let detail, !detail.cast.isEmpty {
-                        Text("Cast: " + detail.cast.prefix(6).joined(separator: ", "))
-                            .font(.system(size: Metrics.bodySize * 0.8))
-                            .foregroundStyle(theme.muted)
-                            .lineLimit(2)
-                    }
-                    if isSeries, let detail { episodes(detail) }
-                    if failed {
-                        Text("Could not load the details. Check the connection and your addons.")
-                            .foregroundStyle(theme.error)
-                    }
+                    .padding(.bottom, Metrics.rowSpacing * 2)
+                    .neonFloorLight()
                 }
-                .padding(.horizontal, Metrics.edge)
-                .padding(.bottom, Metrics.rowSpacing * 2)
+                .scrollClipDisabled()
             }
         }
+        .ignoresSafeArea()
         .background(theme.background)
         .neonNavigationChrome()
         .task(id: "\(item.id)|\(model.manifests.count)") { await load() }
     }
+
+    /// Apple TV and iPad: the picture sits to the right; on a phone it fills the top.
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    private var wide: Bool { sizeClass == .regular }
+    #else
+    private var wide: Bool { true }
+    #endif
 
     private func load() async {
         guard !model.manifests.isEmpty else { return }
@@ -155,24 +179,27 @@ struct DetailsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(seasons, id: \.self) { s in
-                        Button("Season \(s)") { season = s }
-                            .buttonStyle(NeonPillStyle(prominent: s == season))
+                        Button("Season \(s)") {
+                            withAnimation(NeonMotion.fastOutSlowIn(0.35)) { season = s }
+                        }
+                        .buttonStyle(NeonPillStyle(prominent: s == season))
                     }
                 }
-                .padding(.vertical, 12)
+                .padding(.horizontal, Metrics.edge)
+                .padding(.vertical, 14)
             }
             .scrollClipDisabled()
             .tvFocusSection()
 
-            LazyVStack(alignment: .leading, spacing: Metrics.cardSpacing * 0.6) {
-                ForEach(detail.videos.filter { $0.season == season }, id: \.id) { v in
-                    NavigationLink(value: Route.sources(request(for: v))) {
-                        EpisodeRow(video: v, seriesId: meta.id)
-                    }
-                    .buttonStyle(NeonCardStyle())
+            let list = detail.videos.filter { $0.season == season }
+            TileRow(title: "Season \(season)", key: "ep", count: list.count, tileWidth: WideTileSize.width) { focus in
+                ForEach(list, id: \.id) { v in
+                    EpisodeTile(video: v, seriesId: meta.id, fallback: meta.background, route: .sources(request(for: v)), focus: focus)
+                        .modifier(EdgeSettle())
                 }
             }
-            .tvFocusSection()
+            .id(season)
+            .transition(.opacity)
         }
     }
 
@@ -182,50 +209,56 @@ struct DetailsView: View {
     }
 }
 
-struct EpisodeRow: View {
+/// An episode as a wide 16:9 tile, Neon Home style: its still, the number, how far you got;
+/// its name and story under it.
+struct EpisodeTile: View {
     let video: Video
     let seriesId: String
+    let fallback: String?
+    let route: Route
+    let focus: FocusState<String?>.Binding
     @Environment(AppModel.self) private var model
     @Environment(\.neon) private var theme
 
     var body: some View {
         let pid = episodePlaybackId(seriesId: seriesId, video: video)
-        HStack(alignment: .top, spacing: Metrics.cardSpacing * 0.6) {
-            ZStack(alignment: .bottomLeading) {
-                NeonImage(url: video.thumbnail)
-                    .frame(width: Metrics.posterWidth * 1.3, height: Metrics.posterWidth * 1.3 * 9 / 16)
-                    .clipped()
-                let p = model.progress(pid)
-                if p > 0.01 { ProgressBar(value: p).padding(6) }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("\(video.episode). \(video.title)")
-                        .font(.system(size: Metrics.bodySize, weight: .semibold))
-                        .foregroundStyle(theme.text)
-                        .lineLimit(1)
-                    if model.isWatched(pid) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.primary)
+        let w = WideTileSize.width
+        let h = w * 9 / 16
+        let art = video.thumbnail ?? fallback
+        VStack(alignment: .leading, spacing: Metrics.cardSpacing * 0.45) {
+            TileLink(route: route, art: art, radius: NeonTokens.shapeCardRadius + 2, focus: focus, key: "ep|" + video.id) {
+                ZStack(alignment: .bottomLeading) {
+                    NeonImage(url: art)
+                        .frame(width: w, height: h)
+                        .clipped()
+                    LinearGradient(colors: [.black.opacity(0), .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                    HStack(spacing: 8) {
+                        Badge(text: "E\(video.episode)")
+                        if model.isWatched(pid) { Badge(text: "Watched", strong: true) }
+                    }
+                    .padding(h * 0.07)
+                    let p = model.progress(pid)
+                    if p > 0.01 {
+                        ProgressLine(value: p)
+                            .padding(.horizontal, h * 0.07)
+                            .padding(.bottom, 6)
+                            .frame(width: w, height: h, alignment: .bottom)
                     }
                 }
-                if let o = video.overview {
-                    Text(o)
-                        .font(.system(size: Metrics.bodySize * 0.8))
-                        .foregroundStyle(theme.muted)
-                        .lineLimit(2)
-                }
-                if let r = video.released {
-                    Text(String(r.prefix(10)))
-                        .font(.system(size: Metrics.bodySize * 0.7))
-                        .foregroundStyle(theme.muted.opacity(0.8))
-                }
+                .frame(width: w, height: h)
             }
-            Spacer(minLength: 0)
+            Text(video.title)
+                .font(.system(size: Metrics.bodySize * 0.9, weight: .semibold))
+                .foregroundStyle(theme.text)
+                .lineLimit(1)
+            if let o = video.overview {
+                Text(o)
+                    .font(.system(size: Metrics.bodySize * 0.72))
+                    .foregroundStyle(theme.muted)
+                    .lineLimit(2)
+            }
         }
-        .padding(10)
-        .frame(maxWidth: Metrics.posterWidth * 6, alignment: .leading)
-        .background(theme.panel.opacity(0.6))
+        .frame(width: w, alignment: .leading)
     }
 }
 

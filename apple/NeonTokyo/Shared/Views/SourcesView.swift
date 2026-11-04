@@ -39,7 +39,7 @@ struct SourcesView: View {
             }
             .padding(Metrics.edge)
         }
-        .background(NeonBackground())
+        .background(NeonBackground(dim: 0.55))
         .task(id: request.videoId) {
             loading = true
             streams = await model.streams(kind: request.kind, videoId: request.videoId)
@@ -54,7 +54,8 @@ struct SourcesView: View {
     private func start(_ s: StreamSource) {
         guard let address = s.url, let url = URL(string: address) else { return }
         playing = PlayRequest(url: url, headers: s.requestHeaders, item: request.play,
-                              startMs: model.resumePosition(request.play.playbackId))
+                              startMs: model.resumePosition(request.play.playbackId),
+                              startShare: model.resumeShare(request.play.playbackId))
     }
 }
 
@@ -101,4 +102,5 @@ struct PlayRequest: Identifiable {
     let headers: [StreamHeader]
     let item: PlayItem
     let startMs: UInt64
+    var startShare: Double = 0
 }

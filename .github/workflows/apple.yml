@@ -35,7 +35,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A quick look at every Swift file on Linux before waiting for a Mac: a typo fails here in a
+  # minute instead of after the queue for a macOS runner.
+  swift-syntax:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Parse the Swift sources
+        run: |
+          swiftc --version
+          fail=0
+          while IFS= read -r f; do
+            swiftc -parse "$f" || { echo "::error file=$f::Swift could not parse this file"; fail=1; }
+          done < <(find apple -name '*.swift')
+          exit $fail
+
   build:
+    needs: swift-syntax
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: macos-15
     timeout-minutes: 90
@@ -43,6 +63,8 @@ jobs:
       # the same release name as the Android app: nt.<its run number> for main releases
       NEON_VERSION: ${{ github.event_name == 'workflow_run' && format('0.2.0-nt.{0}', github.event.workflow_run.run_number) || format('0.2.0-apple.{0}', github.run_number) }}
       BUILD_NUMBER: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.run_number || github.run_number }}
+      TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+      TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,7 +99,8 @@ jobs:
             if ! xcodebuild -project NeonTokyo.xcodeproj -scheme NeonTokyo-$p -configuration Release -sdk $sdk \
                 -destination "generic/platform=$p" -derivedDataPath build/$p \
                 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-                NEON_VERSION="$NEON_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build > build-$p.log 2>&1; then
+                NEON_VERSION="$NEON_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" NEON_BUILT_AT="$(date +%s)000" \
+                TRAKT_CLIENT_ID="$TRAKT_CLIENT_ID" TRAKT_CLIENT_SECRET="$TRAKT_CLIENT_SECRET" build > build-$p.log 2>&1; then
               grep -E "error:|fatal" build-$p.log | sort -u | head -80
               tail -30 build-$p.log
               exit 1

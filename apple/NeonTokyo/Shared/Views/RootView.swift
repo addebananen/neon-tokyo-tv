@@ -6,7 +6,8 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            NeonBackground()
+            // the screens draw their own world; this is only what shows between them
+            model.theme.background.ignoresSafeArea()
             if model.activeProfile == nil {
                 ProfilePickerView()
                     .transition(.opacity)

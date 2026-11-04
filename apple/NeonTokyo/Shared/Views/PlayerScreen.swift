@@ -30,6 +30,9 @@ struct PlayerScreen: UIViewControllerRepresentable {
         context.coordinator.attach(player)
         if request.startMs > 0 {
             player.seek(to: CMTime(value: CMTimeValue(request.startMs), timescale: 1000), toleranceBefore: .zero, toleranceAfter: .positiveInfinity)
+        } else if request.startShare > 0 {
+            // from Trakt only the share is known: seek once the length is
+            context.coordinator.seekToShare(request.startShare)
         }
         player.play()
         return vc
@@ -57,6 +60,7 @@ struct PlayerScreen: UIViewControllerRepresentable {
         private weak var player: AVPlayer?
         private var observer: Any?
         private var endObserver: NSObjectProtocol?
+        private var readyObserver: NSKeyValueObservation?
 
         init(model: AppModel, item: PlayItem) {
             self.model = model
@@ -73,15 +77,30 @@ struct PlayerScreen: UIViewControllerRepresentable {
             }
         }
 
+        func seekToShare(_ share: Double) {
+            guard let item = player?.currentItem else { return }
+            readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+                guard item.status == .readyToPlay else { return }
+                let d = item.duration.seconds
+                guard d.isFinite, d > 0 else { return }
+                DispatchQueue.main.async {
+                    self?.player?.seek(to: CMTime(seconds: d * share, preferredTimescale: 1000),
+                                       toleranceBefore: .zero, toleranceAfter: .positiveInfinity)
+                    self?.readyObserver = nil
+                }
+            }
+        }
+
         func finish() {
-            save()
+            save(closing: true)
             if let observer, let player { player.removeTimeObserver(observer) }
             if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
             observer = nil
             endObserver = nil
+            readyObserver = nil
         }
 
-        private func save(atEnd: Bool = false) {
+        private func save(atEnd: Bool = false, closing: Bool = false) {
             guard let player, let current = player.currentItem else { return }
             let duration = current.duration.seconds
             guard duration.isFinite, duration > 0 else { return }
@@ -91,7 +110,13 @@ struct PlayerScreen: UIViewControllerRepresentable {
             let item = self.item
             let pos = UInt64(position * 1000)
             let dur = UInt64(duration * 1000)
-            Task { @MainActor in model.saveProgress(item, positionMs: pos, durationMs: dur) }
+            Task { @MainActor in
+                if closing {
+                    model.playerClosed(item, positionMs: pos, durationMs: dur)
+                } else {
+                    model.saveProgress(item, positionMs: pos, durationMs: dur)
+                }
+            }
         }
     }
 }

@@ -4,12 +4,17 @@ import SwiftUI
 struct NeonImage: View {
     let url: String?
     var mode: ContentMode = .fill
+    /// A soft panel shows while the picture loads; off for pictures that fade in over others.
+    var placeholder = true
     @State private var image: UIImage?
     @Environment(\.neon) private var theme
 
     var body: some View {
         ZStack {
-            Rectangle().fill(theme.surface.opacity(0.55))
+            if placeholder {
+                Rectangle().fill(LinearGradient(colors: [theme.surface.opacity(0.6), theme.panel.opacity(0.75)],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing))
+            }
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -23,85 +28,6 @@ struct NeonImage: View {
             let loaded = await ImageLoader.shared.image(for: url)
             withAnimation(.easeOut(duration: 0.2)) { image = loaded }
         }
-    }
-}
-
-/// A poster on a row, with the title written on it when there is no picture and a thin bar for
-/// how far someone got.
-struct PosterArt: View {
-    let title: String
-    let poster: String?
-    var progress: Double = 0
-    var watched = false
-    @Environment(\.neon) private var theme
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            NeonImage(url: poster)
-                .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
-                .clipped()
-            if poster == nil {
-                Text(title)
-                    .font(.system(size: Metrics.bodySize, weight: .semibold))
-                    .foregroundStyle(theme.text)
-                    .padding(10)
-                    .frame(width: Metrics.posterWidth, height: Metrics.posterHeight, alignment: .bottomLeading)
-            }
-            if progress > 0.01 {
-                ProgressBar(value: progress)
-                    .padding(8)
-            }
-            if watched {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: Metrics.bodySize))
-                    .foregroundStyle(theme.primary, theme.background)
-                    .padding(8)
-                    .frame(width: Metrics.posterWidth, height: Metrics.posterHeight, alignment: .topTrailing)
-            }
-        }
-        .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
-        .accessibilityLabel(title)
-    }
-}
-
-struct ProgressBar: View {
-    let value: Double
-    @Environment(\.neon) private var theme
-
-    var body: some View {
-        GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.black.opacity(0.55))
-                Capsule().fill(theme.primary).frame(width: g.size.width * min(max(value, 0), 1))
-                    .shadow(color: theme.focus == .glow ? theme.primary : .clear, radius: 4)
-            }
-        }
-        .frame(height: 5)
-    }
-}
-
-/// A titled row that scrolls sideways. Cards may grow and glow past the row's edge.
-struct RowSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: () -> Content
-    @Environment(\.neon) private var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Metrics.cardSpacing * 0.5) {
-            Text(title)
-                .font(theme.focus == .glow ? NeonFont.heading(Metrics.titleSize * 0.8) : .system(size: Metrics.titleSize * 0.8, weight: .semibold))
-                .foregroundStyle(theme.text)
-                .padding(.horizontal, Metrics.edge)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: Metrics.cardSpacing) {
-                    content()
-                }
-                .padding(.horizontal, Metrics.edge)
-                .padding(.vertical, Metrics.cardSpacing * 0.6)
-            }
-            .scrollClipDisabled()
-        }
-        .tvFocusSection()
     }
 }
 

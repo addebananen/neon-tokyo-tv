@@ -3,6 +3,7 @@ import SwiftUI
 struct WatchlistView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.neon) private var theme
+    @FocusState private var focused: String?
 
     var body: some View {
         ScrollView {
@@ -15,15 +16,16 @@ struct WatchlistView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: Metrics.posterWidth), spacing: Metrics.cardSpacing)],
                       alignment: .leading, spacing: Metrics.cardSpacing) {
                 ForEach(items, id: \.id) { w in
-                    NavigationLink(value: Route.details(w.asMeta)) {
-                        PosterArt(title: w.title, poster: w.poster)
+                    TileLink(route: .details(w.asMeta), art: w.poster, focus: $focused, key: "wl|" + w.id) {
+                        PosterTile(title: w.title, poster: w.poster, progress: model.progress(w.id), watched: model.isWatched(w.id))
                     }
-                    .buttonStyle(NeonCardStyle())
                 }
             }
             .padding(Metrics.edge)
+            .neonFloorLight()
         }
-        .background(NeonBackground())
+        .scrollClipDisabled()
+        .background(NeonBackground(dim: 0.45))
         .navigationTitle("Watchlist")
         .neonRoutes()
     }
