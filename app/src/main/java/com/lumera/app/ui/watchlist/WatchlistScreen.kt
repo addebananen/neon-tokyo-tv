@@ -1,5 +1,7 @@
 package com.lumera.app.ui.watchlist
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,9 +99,9 @@ fun WatchlistScreen(
         if (movies.isEmpty() && series.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    NeonText("WATCHLIST", style = NeonType.eyebrow(13.sp))
+                    NeonText("WATCHLIST", style = NeonType.eyebrow(13.sp).themed())
                     Spacer(Modifier.height(8.dp))
-                    NeonText("Nothing saved yet", style = NeonType.headline(30.sp))
+                    NeonText("Nothing saved yet", style = NeonType.headline(30.sp).themed())
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Press the bookmark on a film or series and it waits for you here.",
@@ -120,7 +122,7 @@ fun WatchlistScreen(
                 // Takes the place of the old top gap, so both rows still fit on the screen
                 NeonText(
                     text = watchlistCount(movies.size, series.size),
-                    style = NeonType.eyebrow(13.sp),
+                    style = NeonType.eyebrow(13.sp).themed(),
                     maxLines = 1,
                     modifier = Modifier.padding(start = startPadding)
                 )

@@ -1,5 +1,7 @@
 package com.lumera.app.ui.profiles
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.RepeatMode
@@ -8,6 +10,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,6 +65,9 @@ import com.lumera.app.ui.components.NeonType
 import com.lumera.app.ui.components.neonPanel
 import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.ui.theme.DefaultThemes
+import com.lumera.app.ui.theme.Glass
+import com.lumera.app.ui.theme.isGlass
+import com.lumera.app.ui.components.DeepBlueBackdrop
 import com.lumera.app.ui.theme.LumeraTheme
 import com.lumera.app.ui.theme.ThemeManager
 import kotlinx.coroutines.delay
@@ -82,9 +88,11 @@ fun ProfileScreen(
     val isLoading by viewModel.isLoading.collectAsState()
 
     val isWelcome = wizardStep == 0 && profiles.isEmpty()
+    val glass = isGlass
     Box(modifier = Modifier.fillMaxSize()) {
-        // The skyline stays put while the steps fade over it; it dims on screens with more to read
-        NeonSkylineBackdrop(
+        // The skyline stays put while the steps fade over it; it dims on screens with more to read.
+        // Who last watched in a glass theme comes back to the deep blue instead.
+        if (glass) DeepBlueBackdrop() else NeonSkylineBackdrop(
             dim = when {
                 isLoading -> 0.75f
                 isWelcome -> 0.05f
@@ -153,9 +161,9 @@ fun WelcomeView(onStart: () -> Unit) {
                 .padding(start = 96.dp)
                 .widthIn(max = 520.dp)
         ) {
-            NeonText("WELCOME TO", style = NeonType.eyebrow(15.sp))
+            NeonText("WELCOME TO", style = NeonType.eyebrow(15.sp).themed())
             Spacer(Modifier.height(6.dp))
-            NeonText("NEON TOKYO", style = NeonType.display(64.sp))
+            NeonText("NEON TOKYO", style = NeonType.display(64.sp).themed())
             Spacer(Modifier.height(14.dp))
             Text(
                 "Films, series and anime, after dark.",
@@ -195,9 +203,9 @@ fun ProfileSelectorView(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        NeonText("NEON TOKYO", style = NeonType.eyebrow())
+        NeonText(if (isGlass) "Neon Tokyo" else "NEON TOKYO", style = NeonType.eyebrow(color = if (isGlass) Glass.Dim else NeonPalette.Cyan).themed())
         Spacer(Modifier.height(8.dp))
-        NeonText("Who's watching?", style = NeonType.headline(36.sp))
+        NeonText("Who's watching?", style = NeonType.headline(36.sp).themed())
 
         Spacer(Modifier.height(50.dp))
 
@@ -344,7 +352,7 @@ fun ProfileOptionsDialog(
 
                     NeonText(
                         text = profile.name.uppercase(),
-                        style = NeonType.headline(24.sp)
+                        style = NeonType.headline(24.sp).themed()
                     )
                     Spacer(Modifier.height(32.dp))
 
@@ -423,7 +431,7 @@ fun DeleteConfirmationDialog(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 NeonText(
                     text = "Delete Profile?",
-                    style = NeonType.headline(24.sp)
+                    style = NeonType.headline(24.sp).themed()
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
@@ -476,7 +484,7 @@ fun WizardNameStep(initialName: String, onNext: (String) -> Unit, onCancel: () -
     ) {
         NeonText(
             if(initialName.isEmpty()) "What should we call you?" else "Update your name",
-            style = NeonType.headline(32.sp)
+            style = NeonType.headline(32.sp).themed()
         )
         Spacer(Modifier.height(32.dp))
 
@@ -526,7 +534,7 @@ fun WizardAvatarStep(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        NeonText("Choose your picture", style = NeonType.headline(32.sp))
+        NeonText("Choose your picture", style = NeonType.headline(32.sp).themed())
         Spacer(Modifier.height(16.dp))
         Text("A photo of you makes it feel like yours. Or pick an avatar.", color = NeonPalette.Lilac)
 
@@ -648,6 +656,9 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
     BackHandler { onBack() }
 
     LumeraTheme(theme = previewTheme) {
+        // A glass theme shows its own deep blue behind the choice, fading in over the skyline
+        val glassPreview by animateFloatAsState(if (isGlass) 1f else 0f, tween(400), label = "theme_glass")
+        if (glassPreview > 0f) DeepBlueBackdrop(Modifier.graphicsLayer { alpha = glassPreview })
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -658,7 +669,7 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             // Offset for theme name labels below circles (not present in avatar selector)
             Spacer(Modifier.height(32.dp))
             
-            NeonText("Choose a theme", style = NeonType.headline(32.sp))
+            NeonText("Choose a theme", style = NeonType.headline(32.sp).themed())
             Spacer(Modifier.height(16.dp))
             Text("Select a color scheme for your experience.", color = NeonPalette.Lilac)
 
@@ -846,7 +857,9 @@ fun ProfileCard(
     
     val context = LocalContext.current
 
-    val scale by animateFloatAsState(if (isCardFocused) 1.1f else 1f)
+    // Glass: the photo lifts towards you on a shadow, with no ring or halo round it
+    val glass = isGlass
+    val scale by animateFloatAsState(if (isCardFocused) (if (glass) 1.14f else 1.1f) else 1f, if (glass) Glass.Motion else spring<Float>())
     val borderAlpha by animateFloatAsState(if (isCardFocused || isEditFocused) 1f else 0f)
 
     // CONVERT STRING ("avatar_5") -> Source (Int or File)
@@ -874,11 +887,15 @@ fun ProfileCard(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    if (glass) {
+                        shape = CircleShape
+                        shadowElevation = 20.dp.toPx() * ((scale - 1f) / 0.14f).coerceIn(0f, 1f)
+                    }
                 }
                 // Neon halo that fades in with the focus ring (drawn before the clip so it can spill out)
                 .drawBehind {
                     val lit = preparingPulse?.value ?: borderAlpha
-                    if (lit > 0f) {
+                    if (lit > 0f && (!glass || preparingPulse != null)) {
                         drawCircle(
                             brush = Brush.radialGradient(
                                 0.55f to bloomColor.copy(alpha = 0.5f * lit),
@@ -890,8 +907,8 @@ fun ProfileCard(
                     }
                 }
                 .clip(CircleShape)
-                .background(NeonPalette.Violet)
-                .border(3.dp, ringColor.copy(alpha = borderAlpha), CircleShape)
+                .background(if (glass) Color(0xFF16344F) else NeonPalette.Violet)
+                .border(3.dp, ringColor.copy(alpha = if (glass) 0f else borderAlpha), CircleShape)
                 .then(focusModifier)
                 .onPreviewKeyEvent { event ->
                     val isConfirm = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
@@ -922,9 +939,10 @@ fun ProfileCard(
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            text = profile.name.uppercase(),
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = if(isCardFocused || isEditFocused) Color.White else NeonPalette.Lilac
+            text = if (glass) profile.name else profile.name.uppercase(),
+            style = if (glass) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, fontSize = 20.sp)
+            else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+            color = if(isCardFocused || isEditFocused) Color.White else if (glass) Glass.Dim else NeonPalette.Lilac
         )
         
         Spacer(Modifier.height(8.dp))
@@ -962,7 +980,8 @@ fun ProfileCard(
 fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val scale by animateFloatAsState(if (isFocused) 1.1f else 1f)
+    val glass = isGlass
+    val scale by animateFloatAsState(if (isFocused) (if (glass) 1.14f else 1.1f) else 1f, if (glass) Glass.Motion else spring<Float>())
 
     val focusModifier = if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier
 
@@ -973,22 +992,41 @@ fun AddProfileCard(onClick: () -> Unit, focusRequester: FocusRequester? = null) 
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    if (glass) {
+                        shape = CircleShape
+                        shadowElevation = 20.dp.toPx() * ((scale - 1f) / 0.14f).coerceIn(0f, 1f)
+                    }
                 }
                 .clip(CircleShape)
-                .background(NeonPalette.Violet.copy(alpha = 0.6f))
-                .border(2.dp, if (isFocused) MaterialTheme.colorScheme.primary else NeonPalette.Lilac.copy(alpha = 0.35f), CircleShape)
+                .background(
+                    when {
+                        glass && isFocused -> Glass.PaneFocused
+                        glass -> Glass.Pane
+                        else -> NeonPalette.Violet.copy(alpha = 0.6f)
+                    }
+                )
+                .border(
+                    if (glass) 1.dp else 2.dp,
+                    when {
+                        glass -> if (isFocused) Color.Transparent else Glass.Hairline
+                        isFocused -> MaterialTheme.colorScheme.primary
+                        else -> NeonPalette.Lilac.copy(alpha = 0.35f)
+                    },
+                    CircleShape
+                )
                 .then(focusModifier)
                 .clickable(interactionSource = interactionSource, indication = null) { onClick() }
                 .focusable(interactionSource = interactionSource),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(40.dp))
+            Icon(Icons.Default.Add, null, tint = if (glass && isFocused) Glass.OnFocused else Color.White, modifier = Modifier.size(40.dp))
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "ADD PROFILE",
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-            color = if(isFocused) Color.White else NeonPalette.Lilac
+            if (glass) "Add profile" else "ADD PROFILE",
+            style = if (glass) MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, fontSize = 20.sp)
+            else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+            color = if(isFocused) Color.White else if (glass) Glass.Dim else NeonPalette.Lilac
         )
         Spacer(Modifier.height(8.dp))
         Spacer(Modifier.height(32.dp))

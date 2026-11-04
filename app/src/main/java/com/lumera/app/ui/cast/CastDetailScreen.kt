@@ -1,5 +1,7 @@
 package com.lumera.app.ui.cast
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.compose.animation.core.Spring
 import com.lumera.app.ui.components.NeonType
 import androidx.compose.animation.core.animateFloatAsState
@@ -299,7 +301,7 @@ private fun FilmographySection(
     ) {
         Text(
             text = "Filmography",
-            style = NeonType.rowTitle(),
+            style = NeonType.rowTitle().themed(),
             color = textColor.copy(alpha = 0.9f)
         )
         Spacer(modifier = Modifier.width(10.dp))

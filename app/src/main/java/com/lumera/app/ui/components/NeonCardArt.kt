@@ -45,6 +45,10 @@ fun NeonCardArt(
     fontSize: Int = 19,
     maxLines: Int = 2
 ) {
+    if (com.lumera.app.ui.theme.isGlass) {
+        GlassCardArt(title, fontSize, maxLines, modifier)
+        return
+    }
     val accent = remember(title) { NeonAccents.forTitle(title) }
     val lit = rememberNeonLit(focused, enabled = glow)
     Box(
@@ -178,5 +182,49 @@ object NeonAccents {
     fun forTitle(title: String): Color {
         val key = title.trim().lowercase()
         return known[key] ?: palette[(key.hashCode() and Int.MAX_VALUE) % palette.size]
+    }
+}
+
+/**
+ * The glass themes' card for a title without a picture: deep water lit faintly in the title's
+ * colour from above, and the title set plainly in white.
+ */
+@Composable
+private fun GlassCardArt(title: String, fontSize: Int, maxLines: Int, modifier: Modifier) {
+    val accent = remember(title) { NeonAccents.forTitle(title) }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val water = Brush.verticalGradient(
+                    0f to lerp(Color(0xFF16344F), accent, 0.22f),
+                    1f to Color(0xFF071726)
+                )
+                val light = Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.12f), Color.Transparent),
+                    center = Offset(size.width * 0.5f, 0f),
+                    radius = size.width * 0.9f
+                )
+                onDrawBehind {
+                    drawRect(water)
+                    drawRect(light)
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.padding(horizontal = 12.dp),
+            style = TextStyle(
+                fontFamily = com.lumera.app.ui.theme.GlassFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = fontSize.sp,
+                lineHeight = (fontSize * 1.2f).sp,
+                color = Color(0xFFF2F8FF)
+            ),
+            textAlign = TextAlign.Center,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

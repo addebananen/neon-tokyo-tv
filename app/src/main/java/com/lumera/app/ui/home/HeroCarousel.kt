@@ -1,5 +1,7 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.compose.animation.AnimatedContent
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
@@ -301,7 +303,7 @@ fun HeroCarousel(
                                 fallback = {
                                     NeonText(
                                         text = item.name,
-                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
+                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary).themed(),
                                         color = Color.White,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -312,7 +314,7 @@ fun HeroCarousel(
                         } else {
                             NeonText(
                                 text = item.name,
-                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
+                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary).themed(),
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,

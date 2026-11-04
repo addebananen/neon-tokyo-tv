@@ -80,13 +80,18 @@ fun LumeraTheme(
         error = errorColor
     )
 
+    val style = UiStyle.of(theme.id)
     MobileMaterialTheme(
         colorScheme = mobileScheme,
-        typography = LumeraTypography
+        typography = if (style == UiStyle.Glass) GlassTypography else LumeraTypography
     ) {
-        TvMaterialTheme(colorScheme = tvScheme) {
+        TvMaterialTheme(
+            colorScheme = tvScheme,
+            typography = if (style == UiStyle.Glass) GlassTvTypography else DefaultTvTypography
+        ) {
             CompositionLocalProvider(
                 LocalThemeId provides theme.id,
+                LocalUiStyle provides style,
                 LocalTextMuted provides Color(theme.textMutedColor.toInt()),
                 content = content
             )

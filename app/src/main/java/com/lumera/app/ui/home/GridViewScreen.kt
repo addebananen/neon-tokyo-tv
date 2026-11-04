@@ -1,5 +1,7 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.activity.compose.BackHandler
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
@@ -442,7 +444,7 @@ fun GridViewScreen(
                 // Category title
                 NeonText(
                     text = title,
-                    style = NeonType.headline(28.sp, glow = MaterialTheme.colorScheme.primary)
+                    style = NeonType.headline(28.sp, glow = MaterialTheme.colorScheme.primary).themed()
                 )
             }
         }

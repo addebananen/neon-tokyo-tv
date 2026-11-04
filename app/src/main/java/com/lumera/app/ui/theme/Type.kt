@@ -50,3 +50,50 @@ val LumeraTypography = Typography(
         color = TextSecondary
     )
 )
+
+// The glass themes: the same sizes, in Outfit, upright and set close; every style in the face,
+// those no screen sets itself too, so nothing falls back to the system's
+private fun TextStyle.inGlass() = copy(fontFamily = GlassFamily)
+
+val GlassTypography: Typography = Typography().let { d ->
+    Typography(
+        displayLarge = d.displayLarge.inGlass(),
+        displayMedium = d.displayMedium.inGlass(),
+        displaySmall = d.displaySmall.inGlass(),
+        headlineLarge = d.headlineLarge.inGlass(),
+        headlineMedium = d.headlineMedium.inGlass(),
+        headlineSmall = d.headlineSmall.inGlass(),
+        titleLarge = LumeraTypography.titleLarge.glassy(),
+        titleMedium = LumeraTypography.titleMedium.glassy(),
+        titleSmall = d.titleSmall.inGlass(),
+        bodyLarge = LumeraTypography.bodyLarge.inGlass(),
+        bodyMedium = d.bodyMedium.inGlass(),
+        bodySmall = d.bodySmall.inGlass(),
+        labelLarge = d.labelLarge.inGlass(),
+        labelMedium = d.labelMedium.inGlass(),
+        labelSmall = LumeraTypography.labelSmall.inGlass()
+    )
+}
+
+/** The same for the TV components' own type. */
+val GlassTvTypography: androidx.tv.material3.Typography = androidx.tv.material3.Typography().let { d ->
+    androidx.tv.material3.Typography(
+        displayLarge = d.displayLarge.inGlass(),
+        displayMedium = d.displayMedium.inGlass(),
+        displaySmall = d.displaySmall.inGlass(),
+        headlineLarge = d.headlineLarge.inGlass(),
+        headlineMedium = d.headlineMedium.inGlass(),
+        headlineSmall = d.headlineSmall.inGlass(),
+        titleLarge = d.titleLarge.inGlass(),
+        titleMedium = d.titleMedium.inGlass(),
+        titleSmall = d.titleSmall.inGlass(),
+        bodyLarge = d.bodyLarge.inGlass(),
+        bodyMedium = d.bodyMedium.inGlass(),
+        bodySmall = d.bodySmall.inGlass(),
+        labelLarge = d.labelLarge.inGlass(),
+        labelMedium = d.labelMedium.inGlass(),
+        labelSmall = d.labelSmall.inGlass()
+    )
+}
+
+val DefaultTvTypography = androidx.tv.material3.Typography()

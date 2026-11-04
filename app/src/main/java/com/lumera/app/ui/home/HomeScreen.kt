@@ -1,5 +1,7 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.activity.compose.BackHandler
 import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.ui.components.NeonText
@@ -435,7 +437,7 @@ fun CinematicLayout(
                                         fallback = {
                                             NeonText(
                                                 text = item.name,
-                                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
+                                                style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary).themed(),
                                                 color = Color.White,
                                                 maxLines = 2,
                                                 softWrap = true,
@@ -447,7 +449,7 @@ fun CinematicLayout(
                                 } else {
                                     NeonText(
                                         text = item.name,
-                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary),
+                                        style = NeonType.headline(34.sp, glow = MaterialTheme.colorScheme.primary).themed(),
                                         color = Color.White,
                                         maxLines = 2,
                                         softWrap = true,

@@ -21,6 +21,23 @@ object DefaultThemes {
         category = "colorful"
     )
 
+    /**
+     * The calm one, after the Apple TV and Neon Home's Deep Blue: the sea's blue, white writing
+     * and glass that lifts in focus instead of neon. Its look besides the colours is [UiStyle.Glass].
+     */
+    val DEEP_BLUE = ThemeEntity(
+        id = "deep_blue",
+        name = "Deep Blue",
+        primaryColor = 0xFF8FDCFF,      // Light through the water
+        backgroundColor = 0xFF061423,   // The deep
+        surfaceColor = 0xFF102A40,      // Glass over the deep
+        textColor = 0xFFF2F8FF,         // White
+        textMutedColor = 0xFF9DB4C8,    // Sea grey
+        errorColor = 0xFFFF6B6B,
+        isBuiltIn = true,
+        category = "dark"
+    )
+
     val VOID = ThemeEntity(
         id = "void",
         name = "Void",
@@ -128,7 +145,7 @@ object DefaultThemes {
     /**
      * All built-in themes in display order.
      */
-    val ALL = listOf(NEON_TOKYO, VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
+    val ALL = listOf(NEON_TOKYO, DEEP_BLUE, VOID, NEON, OCEAN, SUNSET, EMERALD, AMBER, CRIMSON, SLATE)
 
     /**
      * Get a built-in theme by ID, returns NEON_TOKYO as fallback.

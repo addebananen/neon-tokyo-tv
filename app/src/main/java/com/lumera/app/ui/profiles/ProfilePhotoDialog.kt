@@ -1,5 +1,7 @@
 package com.lumera.app.ui.profiles
 
+import com.lumera.app.ui.theme.themed
+
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
@@ -239,9 +241,9 @@ private fun PhotoWaiting(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            NeonText("PROFILE PHOTO", style = NeonType.eyebrow())
+            NeonText("PROFILE PHOTO", style = NeonType.eyebrow().themed())
             Spacer(Modifier.height(6.dp))
-            NeonText(if (offline) "No network" else "Add your photo", style = NeonType.headline(32.sp))
+            NeonText(if (offline) "No network" else "Add your photo", style = NeonType.headline(32.sp).themed())
             Spacer(Modifier.height(20.dp))
             if (offline) {
                 Text(
@@ -399,11 +401,11 @@ private fun PhotoPreview(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            NeonText("PROFILE PHOTO", style = NeonType.eyebrow())
+            NeonText("PROFILE PHOTO", style = NeonType.eyebrow().themed())
             Spacer(Modifier.height(6.dp))
             NeonText(
                 text = if (profileName.isBlank()) "Looking good!" else "Looking good, $profileName!",
-                style = NeonType.headline(32.sp),
+                style = NeonType.headline(32.sp).themed(),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )

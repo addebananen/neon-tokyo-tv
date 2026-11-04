@@ -44,6 +44,9 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.size.Scale
 import com.lumera.app.ui.theme.LocalRoundCorners
+import com.lumera.app.ui.theme.Glass
+import com.lumera.app.ui.theme.glassLift
+import com.lumera.app.ui.theme.isGlass
 
 /**
  * ============================================================================
@@ -75,17 +78,18 @@ fun LumeraCard(
     var isFocused by remember { mutableStateOf(false) }
     val glowColor = MaterialTheme.colorScheme.primary
     val roundCorners = LocalRoundCorners.current
-    
+    val glass = isGlass
+
     // Shape based on user preference
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
-    val focusedCardShape = if (roundCorners) RoundedCornerShape(16.dp) else RectangleShape
+    val cardShape = if (!roundCorners) RectangleShape else if (glass) RoundedCornerShape(Glass.CardCorner) else RoundedCornerShape(12.dp)
+    val focusedCardShape = if (!roundCorners) RectangleShape else if (glass) cardShape else RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
             .width(140.dp)
             .aspectRatio(2f / 3f)
             .zIndex(if (isFocused) 10f else 0f)
-            .graphicsLayer { clip = false }
+            .then(if (glass) Modifier.glassLift(isFocused, cardShape) else Modifier.graphicsLayer { clip = false })
     ) {
         Surface(
             onClick = onClick,
@@ -99,20 +103,21 @@ fun LumeraCard(
                 shape = cardShape,
                 focusedShape = focusedCardShape
             ),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+            // On glass the card lifts by itself (glassLift), with no ring and no bloom
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (glass) 1f else 1.05f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
                 contentColor = Color.White
             ),
-            border = ClickableSurfaceDefaults.border(
+            border = if (glass) ClickableSurfaceDefaults.border() else ClickableSurfaceDefaults.border(
                 focusedBorder = Border(
                     border = BorderStroke(2.dp, glowColor),
                     shape = focusedCardShape
                 )
             ),
             // Neon bloom around the focused card only, one shadow on screen at a time
-            glow = ClickableSurfaceDefaults.glow(
+            glow = if (glass) ClickableSurfaceDefaults.glow() else ClickableSurfaceDefaults.glow(
                 focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = 12.dp)
             )
         ) {

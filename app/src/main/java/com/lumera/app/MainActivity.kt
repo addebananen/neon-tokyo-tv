@@ -940,6 +940,21 @@ class MainActivity : ComponentActivity() {
             // Resolve theme from profile's themeId
             val currentTheme by themeManager.currentTheme.collectAsState()
 
+            // Who's watching? comes in the house neon, or in the glass theme the last one to
+            // watch had, so leaving a calm profile doesn't flash back to neon
+            val uiPrefs = remember { getSharedPreferences("ui_look", MODE_PRIVATE) }
+            var pickerThemeId by remember { mutableStateOf(uiPrefs.getString("picker_theme", null) ?: DefaultThemes.NEON_TOKYO.id) }
+            // From the profile itself, not the theme in use: that one goes back to neon on the way out
+            val profileThemeId = currentProfile?.themeId
+            LaunchedEffect(profileThemeId) {
+                val themeId = profileThemeId ?: return@LaunchedEffect
+                val wanted = if (com.lumera.app.ui.theme.UiStyle.of(themeId) == com.lumera.app.ui.theme.UiStyle.Glass) themeId else DefaultThemes.NEON_TOKYO.id
+                if (wanted != pickerThemeId) {
+                    pickerThemeId = wanted
+                    uiPrefs.edit().putString("picker_theme", wanted).apply()
+                }
+            }
+
             // Get round corners setting from profile (default true)
             val roundCorners = currentProfile?.roundCorners ?: true
             val hubRoundCorners = currentProfile?.hubRoundCorners ?: true
@@ -982,7 +997,7 @@ class MainActivity : ComponentActivity() {
                         if (!isRestoringSession) {
                             // PROFILE SELECTION / CREATION
                             // Profile selection always uses the house Neon Tokyo look
-                            LumeraTheme(theme = DefaultThemes.NEON_TOKYO) {
+                            LumeraTheme(theme = DefaultThemes.getById(pickerThemeId)) {
                                 val profileViewModel = hiltViewModel<ProfileViewModel>()
                                 val profiles by profileViewModel.profiles.collectAsState()
                                 // The intro fades into the profiles, so it waits for them to be there

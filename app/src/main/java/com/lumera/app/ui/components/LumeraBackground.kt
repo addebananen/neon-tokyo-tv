@@ -1,6 +1,10 @@
 package com.lumera.app.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.lumera.app.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +22,8 @@ fun LumeraBackground(
     content: @Composable () -> Unit
 ) {
     val backgroundColor = MaterialTheme.colorScheme.background
-    val isNeonTokyo = LocalThemeId.current == DefaultThemes.NEON_TOKYO.id
+    val themeId = LocalThemeId.current
+    val isNeonTokyo = themeId == DefaultThemes.NEON_TOKYO.id
 
     Box(
         modifier = Modifier
@@ -26,8 +31,24 @@ fun LumeraBackground(
             .background(backgroundColor)
             .then(if (isNeonTokyo) Modifier.neonTokyoBackdrop() else Modifier)
     ) {
+        if (themeId == DefaultThemes.DEEP_BLUE.id) DeepBlueBackdrop()
         content()
     }
+}
+
+/**
+ * The Deep Blue theme's backdrop: Neon Home's Deep Blue film, as if seen through frosted glass,
+ * deep and still. One small picture the graphics chip scales up; it never moves, so it costs
+ * nothing once drawn.
+ */
+@Composable
+fun DeepBlueBackdrop(modifier: Modifier = Modifier) {
+    Image(
+        painter = painterResource(R.drawable.theme_deepblue_backdrop),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier.fillMaxSize()
+    )
 }
 
 /**
