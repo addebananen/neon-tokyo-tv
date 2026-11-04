@@ -34,11 +34,11 @@ measured FPS or memory improvement claim until that comparison has been performe
 
 ## Cloud validation
 
-169 debug unit tests passed with no failures or skips. The default Lint runner crashes
+171 debug unit tests passed with no failures or skips. The default Lint runner crashes
 in AndroidX's NonNullableMutableLiveDataDetector due to a Kotlin analysis API mismatch.
 A temporary `-Pandroid.experimental.lint.version=8.9.2` completes analysis without
-disabling checks. Its first report contains 170 error, 301 warning and 21 information
-entries across the existing application; this is not a clean Lint pass.
+disabling checks. The latest completed report at `85342e7` contains 168 error, 299 warning and
+21 information entries across the application; this is not a clean Lint pass.
 
 Follow-up review fixes: defer screensaver drift reads to placement, load motion
 preferences through an effect rather than a Unit-returning remember, and use the
@@ -59,3 +59,14 @@ names. A focused emulator review (`theme_review=true`, `prerelease=false`) selec
 Aurora Cinema through the real profile wizard, visits content/settings, checks the
 persisted selection after restart, and records D-pad motion with animations enabled.
 This is independent of the launcher's Aurora style and does not change its profile.
+
+
+The full cloud launcher run `41623429752` passed its build, unit, TV setup, TV smoke
+and Siri Remote jobs. The first focused app-theme run `41700272529` passed its
+build/unit/setup/Siri jobs but stopped on a wizard focus-label assertion. The review
+now captures the wizard before selection and verifies the actual persisted theme in
+settings; failed steps also retain screenshots and the UI tree for diagnosis.
+
+Cinema also adapts shared hero/section typography and image-free poster placeholders,
+without neon shadows, flicker or perspective grids. Watched/new-episode badges use
+dark text against its pale accent. Theme swatches use a single clickable focus target.

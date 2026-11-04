@@ -785,8 +785,7 @@ fun ThemePickItem(
                 .size(120.dp)
                 .then(focusModifier)
                 .semantics { contentDescription = theme.name }
-                .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-                .focusable(interactionSource = interactionSource),
+                .clickable(interactionSource = interactionSource, indication = null) { onClick() },
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -831,7 +830,7 @@ fun ThemePickItem(
         Text(
             text = theme.name,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.White else NeonPalette.Lilac
+            color = if (isFocused) Color.White else LocalTextMuted.current
         )
     }
 }

@@ -181,7 +181,7 @@ fun LumeraCard(
                     }
                     Text(
                         "✓",
-                        color = Color.White,
+                        color = if (cinema) MaterialTheme.colorScheme.onPrimary else Color.White,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -200,7 +200,7 @@ fun LumeraCard(
                     ) {
                         Text(
                             "+1",
-                            color = Color.White,
+                            color = if (cinema) MaterialTheme.colorScheme.onPrimary else Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
