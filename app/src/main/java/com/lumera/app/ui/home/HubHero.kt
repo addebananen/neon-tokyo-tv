@@ -1,5 +1,7 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.themed
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
@@ -52,13 +54,15 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier = Modifier) {
-    val accent = remember(title) { NeonAccents.forTitle(title) }
+    val glass = com.lumera.app.ui.theme.isGlass
+    // On glass the names are set in white and sentence case, the folder's colour left to its art
+    val accent = remember(title, glass) { if (glass) com.lumera.app.ui.theme.Glass.Dim else NeonAccents.forTitle(title) }
     Column(modifier = modifier.padding(top = 28.dp)) {
-        NeonText(rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent))
+        NeonText(if (glass) rowTitle else rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent).themed())
         Spacer(Modifier.height(6.dp))
         NeonText(
             text = title,
-            style = NeonType.display(56.sp, glow = accent),
+            style = NeonType.display(56.sp, glow = accent).themed(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -66,7 +70,7 @@ fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier =
         Text(
             text = NeonTokyoStarterPack.hubBlurb(title, rowId),
             style = MaterialTheme.typography.bodyLarge,
-            color = NeonPalette.Lilac,
+            color = if (glass) com.lumera.app.ui.theme.Glass.Dim else NeonPalette.Lilac,
             maxLines = 2,
             // Wraps before it reaches a service's scene on the right
             modifier = Modifier.widthIn(max = 520.dp)
@@ -101,6 +105,7 @@ fun HubHeroGlow(title: String, modifier: Modifier = Modifier) {
 @Composable
 fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val glass = com.lumera.app.ui.theme.isGlass
     val motion = rememberSceneMotion(code, "hero")
     // The entrance waits for both layers, so the subject never shows before its scene
     var sceneDone by remember { mutableStateOf(false) }
@@ -123,6 +128,7 @@ fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
                     // The scene starts a little larger than its box; the fades only cover the box
                     clip = true
                 }
+                .then(if (glass) Modifier.backdropFades(backgroundColor, mask = true) else Modifier)
         ) {
             // The subject layer is cut to where it sits, so the scene waits to know where that is
             if (motion != null) {
@@ -153,7 +159,7 @@ fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
                     onSubject = { subjectDone = true }
                 )
             }
-            Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
+            if (!glass) Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
             NoiseOverlay()
         }
     }

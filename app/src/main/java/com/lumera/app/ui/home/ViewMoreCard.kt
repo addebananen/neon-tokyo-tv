@@ -1,5 +1,7 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.glassLift
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,15 +49,18 @@ fun ViewMoreCard(
     val roundCorners = LocalRoundCorners.current
     
     // Shape based on user preference
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
-    val focusedCardShape = if (roundCorners) RoundedCornerShape(16.dp) else RectangleShape
+    val glass = com.lumera.app.ui.theme.isGlass
+    val cardShape = if (!roundCorners) RectangleShape else if (glass) RoundedCornerShape(com.lumera.app.ui.theme.Glass.CardCorner) else RoundedCornerShape(12.dp)
+    val focusedCardShape = if (!roundCorners) RectangleShape else if (glass) cardShape else RoundedCornerShape(16.dp)
+    // On glass the card is a frosted pane that turns white in focus, its arrow and words dark
+    val accent = if (glass) com.lumera.app.ui.theme.Glass.OnFocused else MaterialTheme.colorScheme.primary
 
     Box(
         modifier = modifier
             .width(140.dp)
             .aspectRatio(2f / 3f)
             .zIndex(if (isFocused) 10f else 0f)
-            .graphicsLayer { clip = false }
+            .then(if (glass) Modifier.glassLift(isFocused, cardShape, gloss = false) else Modifier.graphicsLayer { clip = false })
     ) {
         Surface(
             onClick = onClick,
@@ -69,13 +74,13 @@ fun ViewMoreCard(
                 shape = cardShape,
                 focusedShape = focusedCardShape
             ),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (glass) 1f else 1.05f),
             colors = ClickableSurfaceDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                containerColor = if (glass) com.lumera.app.ui.theme.Glass.Pane else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                focusedContainerColor = if (glass) com.lumera.app.ui.theme.Glass.PaneFocused else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                 contentColor = Color.White
             ),
-            border = ClickableSurfaceDefaults.border(
+            border = if (glass) ClickableSurfaceDefaults.border() else ClickableSurfaceDefaults.border(
                 focusedBorder = Border(
                     border = BorderStroke(2.dp, glowColor),
                     shape = focusedCardShape
@@ -91,7 +96,7 @@ fun ViewMoreCard(
                     painter = painterResource(id = R.drawable.ic_view_more_arrow),
                     contentDescription = "View More",
                     modifier = Modifier.size(48.dp),
-                    tint = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f)
+                    tint = if (isFocused) accent else Color.White.copy(alpha = 0.8f)
                 )
                 Text(
                     text = "View More",
@@ -99,7 +104,7 @@ fun ViewMoreCard(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     ),
-                    color = if (isFocused) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.9f)
+                    color = if (isFocused) accent else Color.White.copy(alpha = 0.9f)
                 )
             }
         }

@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import com.lumera.app.ui.addons.VoidDialog
 import com.lumera.app.ui.details.FilterDropdown
 import androidx.compose.foundation.layout.widthIn
@@ -40,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -643,7 +646,7 @@ fun SettingToggleRow(
             .height(48.dp)
             .then(backModifier)
             .then(upBlockModifier)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .neonFocusRing(accentColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(if (isFocused) 0.08f else 0.05f))
@@ -716,7 +719,7 @@ fun SettingToggleChip(
     Row(
         modifier = Modifier
             .then(backModifier)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .neonFocusRing(accentColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(if (isChecked) accentColor.copy(0.15f) else Color.White.copy(0.05f))
@@ -824,7 +827,7 @@ fun <T> SettingOptionRow(
                         .height(32.dp)
                         .then(if (index == 0) backModifier else Modifier)
                         .then(if (index == 0) upBlockModifier else Modifier)
-                        .scale(scale)
+                        .graphicsLayer { scaleX = scale; scaleY = scale }
                         .neonFocusRing(accentColor, 6.dp) { lit }
                         .clip(RoundedCornerShape(6.dp))
                         .background(if (isSelected) accentColor.copy(0.1f) else Color.Transparent)
@@ -882,6 +885,7 @@ fun <T> VoidSegmentedControl(
     onFocus: () -> Unit = {}
 ) {
     val accent = MaterialTheme.colorScheme.primary
+    val glass = com.lumera.app.ui.theme.isGlass
     val gap = 12.dp
     // A lit pill sits behind the chosen option and glides over to the next one chosen. A row of
     // one is a button, with nothing chosen.
@@ -907,6 +911,11 @@ fun <T> VoidSegmentedControl(
                 onDrawBehind {
                     if (chosen < 0) return@onDrawBehind
                     val x = slide.value * (width + gapPx)
+                    if (glass) {
+                        // A frosted pill under the chosen option, the way tvOS marks a segment
+                        drawRoundRect(Color.White, Offset(x, 0f), Size(width, size.height), CornerRadius(size.height / 2f), alpha = 0.16f)
+                        return@onDrawBehind
+                    }
                     drawRoundRect(accent, Offset(x, 0f), Size(width, size.height), radius, alpha = 0.14f)
                     drawRoundRect(
                         accent,
@@ -959,6 +968,57 @@ fun <T> VoidSegmentedControl(
  * a neon tube around it rather than growing it, as a wide option that grows pushes past the
  * edges of the ones beside it.
  */
+/** A glass theme's segment: a white capsule that lifts a little in focus, with dark lettering. */
+@Composable
+private fun RowScope.GlassSegment(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    interactionSource: MutableInteractionSource,
+    isFocused: Boolean,
+    keyModifier: Modifier
+) {
+    val t by animateFloatAsState(if (isFocused) 1f else 0f, com.lumera.app.ui.theme.Glass.Motion, label = "GlassSegment")
+    val shape = androidx.compose.foundation.shape.CircleShape
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .widthIn(min = 100.dp)
+            .fillMaxHeight()
+            .then(keyModifier)
+            .graphicsLayer {
+                val s = 1f + 0.04f * t
+                scaleX = s; scaleY = s
+                shadowElevation = 10.dp.toPx() * t
+                this.shape = shape
+            }
+            .drawBehind {
+                drawRoundRect(
+                    com.lumera.app.ui.theme.Glass.PaneFocused,
+                    cornerRadius = CornerRadius(size.height / 2f),
+                    alpha = t.coerceIn(0f, 1f)
+                )
+            }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (isSelected || isFocused) FontWeight.SemiBold else FontWeight.Medium,
+                fontSize = 14.sp
+            ),
+            color = when {
+                isFocused -> com.lumera.app.ui.theme.Glass.OnFocused
+                isSelected -> Color.White
+                else -> com.lumera.app.ui.theme.Glass.Dim
+            }
+        )
+    }
+}
+
 @Composable
 fun RowScope.SegmentItem(
     label: String,
@@ -975,6 +1035,11 @@ fun RowScope.SegmentItem(
     }
 
     val accent = MaterialTheme.colorScheme.primary
+    val glass = com.lumera.app.ui.theme.isGlass
+    if (glass) {
+        GlassSegment(label, isSelected, onClick, interactionSource, isFocused, keyModifier)
+        return
+    }
     val lit by animateFloatAsState(if (isFocused) 1f else 0f, tween(if (isFocused) 140 else 240), label = "SegmentFocus")
     val textColor by animateColorAsState(
         when {
@@ -1035,7 +1100,7 @@ fun ColorItemFixed(
     Box(
         modifier = modifier // Applied here
             .size(40.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
             .background(color)
             .border(borderWidth, borderColor, CircleShape)
@@ -1290,7 +1355,7 @@ private fun SubtitleColorChip(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .focusable(interactionSource = interactionSource)
             .padding(2.dp)
@@ -1387,7 +1452,7 @@ private fun CompactSliderButton(
     Box(
         modifier = Modifier
             .size(32.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(6.dp))
             .background(Color.White.copy(0.1f))
             .border(
@@ -1458,7 +1523,7 @@ private fun SettingLanguageRow(
             .height(48.dp)
             .then(backModifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.05f))
             .border(
@@ -1961,7 +2026,7 @@ fun AboutSettings(
                         onGoBack(); true
                     } else false
                 }
-                .scale(checkScale)
+                .graphicsLayer { scaleX = checkScale; scaleY = checkScale }
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isCheckFocused) accentColor.copy(0.15f) else Color.White.copy(0.05f))
                 .border(
@@ -2025,7 +2090,7 @@ fun AboutSettings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .scale(dlScale)
+                    .graphicsLayer { scaleX = dlScale; scaleY = dlScale }
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isDlFocused) accentColor.copy(0.3f) else accentColor.copy(0.15f))
                     .border(

@@ -1,5 +1,7 @@
 package com.lumera.app.ui.addons
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -445,7 +447,7 @@ fun VoidAddonItem(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
@@ -577,7 +579,7 @@ fun VoidButton(
     Box(
         modifier = modifier
             .height(50.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .neonFocusRing(activeColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
@@ -684,7 +686,7 @@ fun VoidIconButton(
     Box(
         modifier = modifier
             .size(50.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(1.dp, if (isFocused) Color.Transparent else Color.White.copy(0.2f), RoundedCornerShape(8.dp))

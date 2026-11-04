@@ -1,5 +1,7 @@
 package com.lumera.app.projectivy
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import android.content.Intent
 import android.graphics.SurfaceTexture
 import android.media.MediaPlayer
@@ -255,7 +257,7 @@ private fun Swatch(colour: NeonWallpaper, selected: Boolean, onFocus: () -> Unit
     Box(
         modifier = Modifier
             .size(34.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(if (focused) 14.dp else 0.dp, CircleShape, ambientColor = accent, spotColor = accent)
             .clip(CircleShape)
             .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.55f), NeonPalette.Night)))

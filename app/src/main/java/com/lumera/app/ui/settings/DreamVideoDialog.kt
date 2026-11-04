@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import com.lumera.app.ui.theme.themed
+
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
@@ -278,9 +280,9 @@ private fun VideoWaiting(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            NeonText(if (background) "HOME BACKGROUND" else "SCREENSAVER", style = NeonType.eyebrow())
+            NeonText(if (background) "HOME BACKGROUND" else "SCREENSAVER", style = NeonType.eyebrow().themed())
             Spacer(Modifier.height(6.dp))
-            NeonText(if (offline) "No network" else "Your own video", style = NeonType.headline(32.sp))
+            NeonText(if (offline) "No network" else "Your own video", style = NeonType.headline(32.sp).themed())
             Spacer(Modifier.height(20.dp))
             if (offline) {
                 Text(
@@ -420,9 +422,9 @@ private fun VideoReady(
         }
 
         Column(modifier = Modifier.weight(1f)) {
-            NeonText(if (background) "HOME BACKGROUND" else "SCREENSAVER", style = NeonType.eyebrow())
+            NeonText(if (background) "HOME BACKGROUND" else "SCREENSAVER", style = NeonType.eyebrow().themed())
             Spacer(Modifier.height(6.dp))
-            NeonText("Your video is on", style = NeonType.headline(32.sp))
+            NeonText("Your video is on", style = NeonType.headline(32.sp).themed())
             Spacer(Modifier.height(12.dp))
             Text(
                 if (background) "It loops without sound behind your tiles, and rests while an app is open."
