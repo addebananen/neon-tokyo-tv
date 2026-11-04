@@ -15,7 +15,10 @@ pub mod error;
 pub mod starter;
 pub mod store;
 pub mod stream;
+pub mod stremio;
 pub mod sync;
+pub mod trakt;
+pub mod update;
 pub mod watch;
 
 pub use addon::*;
@@ -23,7 +26,10 @@ pub use error::CoreError;
 pub use starter::*;
 pub use store::*;
 pub use stream::*;
+pub use stremio::*;
 pub use sync::*;
+pub use trakt::*;
+pub use update::*;
 pub use watch::*;
 
 /// The core's version, shown in the apps' About screen so a bug report names the core it ran.

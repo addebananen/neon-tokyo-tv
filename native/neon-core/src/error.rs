@@ -7,6 +7,9 @@ pub enum CoreError {
     /// The text given as an addon address cannot be one.
     #[error("not an addon address: {input}")]
     BadAddress { input: String },
+    /// An account (Stremio, Trakt) no longer accepts the saved sign-in: sign in again.
+    #[error("signed out: {reason}")]
+    SignedOut { reason: String },
 }
 
 impl From<serde_json::Error> for CoreError {

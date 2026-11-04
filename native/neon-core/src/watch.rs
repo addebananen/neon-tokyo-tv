@@ -10,6 +10,10 @@ use crate::addon::Video;
 pub const WATCHED_RATIO: f64 = 0.90;
 pub const WATCHED_REMAINING_MS: u64 = 30_000;
 
+/// The length given to progress known only as a share (Trakt's "paused at 42 %"), until the
+/// player learns the real length. No real video is this long, so it cannot be mistaken.
+pub const PERCENT_DURATION_MS: u64 = 1_000_000_000;
+
 /// A film or an episode someone has started. `id` is the playback id: the film's id, or
 /// `<series id>:<season>:<episode>` for an episode, whatever id format the addon uses.
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize, uniffi::Record)]
@@ -182,9 +186,26 @@ pub fn record_progress(
 #[uniffi::export]
 pub fn resume_position_ms(entry: Option<WatchEntry>) -> u64 {
     match entry {
-        Some(e) if !e.watched && !e.deleted && e.position_ms >= 10_000 => e.position_ms,
+        Some(e) if !e.watched && !e.deleted && e.duration_ms != PERCENT_DURATION_MS && e.position_ms >= 10_000 => e.position_ms,
         _ => 0,
     }
+}
+
+/// How far in to start, as a share of the length (0 to 1), for players that learn the length
+/// only once the video opens. Covers progress that came from Trakt as a percentage.
+#[uniffi::export]
+pub fn resume_fraction(entry: Option<WatchEntry>) -> f64 {
+    match entry {
+        Some(e) if !e.watched && !e.deleted && e.duration_ms > 0 => {
+            let f = e.position_ms as f64 / e.duration_ms as f64;
+            if (0.01..0.95).contains(&f) { f } else { 0.0 }
+        }
+        _ => 0.0,
+    }
+}
+
+fn resume_ms(e: &WatchEntry) -> u64 {
+    if e.duration_ms == PERCENT_DURATION_MS { 0 } else { e.position_ms }
 }
 
 fn progress(e: &WatchEntry) -> f32 {
@@ -242,7 +263,7 @@ pub fn continue_watching(
                 season: if ep { parts[parts.len() - 2].parse().ok() } else { None },
                 episode: if ep { parts[parts.len() - 1].parse().ok() } else { None },
                 resume_id: Some(chosen.id.clone()),
-                resume_position_ms: chosen.position_ms,
+                resume_position_ms: resume_ms(chosen),
                 last_activity_ms: chosen.updated_at_ms,
             });
         } else {
@@ -261,7 +282,7 @@ pub fn continue_watching(
                 season: None,
                 episode: None,
                 resume_id: Some(e.id.clone()),
-                resume_position_ms: e.position_ms,
+                resume_position_ms: resume_ms(e),
                 last_activity_ms: e.updated_at_ms,
             });
         }
