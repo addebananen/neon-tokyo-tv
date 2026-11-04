@@ -3,6 +3,10 @@ name: Build APK
 on:
   push:
     branches: [main, dev]
+    # The web app has its own workflow (web.yml); a web-only change needs no APK or TV test
+    paths-ignore:
+      - 'web/**'
+      - '.github/workflows/web.yml'
   workflow_dispatch:
     inputs:
       full:
