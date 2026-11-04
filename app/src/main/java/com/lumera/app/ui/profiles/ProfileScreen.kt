@@ -604,7 +604,7 @@ private fun UploadAvatarButton(
 
     Row(
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(28.dp))
             .background(
                 if (isFocused) Brush.horizontalGradient(listOf(NeonPalette.Magenta, NeonPalette.Sun))
@@ -954,8 +954,8 @@ fun ProfileCard(
         Box(
             modifier = Modifier
                 .size(32.dp)
-                .scale(editScale)
-                .alpha(pencilAlpha)
+                .graphicsLayer { scaleX = editScale; scaleY = editScale }
+                .graphicsLayer { alpha = pencilAlpha }
                 .clip(CircleShape)
                 .background(if (isEditFocused) Color.White else Color.Transparent)
                 .clickable(

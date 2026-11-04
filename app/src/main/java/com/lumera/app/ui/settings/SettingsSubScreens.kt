@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import com.lumera.app.ui.addons.VoidDialog
 import com.lumera.app.ui.details.FilterDropdown
 import androidx.compose.foundation.layout.widthIn
@@ -643,7 +645,7 @@ fun SettingToggleRow(
             .height(48.dp)
             .then(backModifier)
             .then(upBlockModifier)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .neonFocusRing(accentColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(if (isFocused) 0.08f else 0.05f))
@@ -716,7 +718,7 @@ fun SettingToggleChip(
     Row(
         modifier = Modifier
             .then(backModifier)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .neonFocusRing(accentColor, 8.dp) { lit }
             .clip(RoundedCornerShape(8.dp))
             .background(if (isChecked) accentColor.copy(0.15f) else Color.White.copy(0.05f))
@@ -824,7 +826,7 @@ fun <T> SettingOptionRow(
                         .height(32.dp)
                         .then(if (index == 0) backModifier else Modifier)
                         .then(if (index == 0) upBlockModifier else Modifier)
-                        .scale(scale)
+                        .graphicsLayer { scaleX = scale; scaleY = scale }
                         .neonFocusRing(accentColor, 6.dp) { lit }
                         .clip(RoundedCornerShape(6.dp))
                         .background(if (isSelected) accentColor.copy(0.1f) else Color.Transparent)
@@ -1035,7 +1037,7 @@ fun ColorItemFixed(
     Box(
         modifier = modifier // Applied here
             .size(40.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
             .background(color)
             .border(borderWidth, borderColor, CircleShape)
@@ -1290,7 +1292,7 @@ private fun SubtitleColorChip(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .focusable(interactionSource = interactionSource)
             .padding(2.dp)
@@ -1387,7 +1389,7 @@ private fun CompactSliderButton(
     Box(
         modifier = Modifier
             .size(32.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(6.dp))
             .background(Color.White.copy(0.1f))
             .border(
@@ -1458,7 +1460,7 @@ private fun SettingLanguageRow(
             .height(48.dp)
             .then(backModifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.05f))
             .border(
@@ -1961,7 +1963,7 @@ fun AboutSettings(
                         onGoBack(); true
                     } else false
                 }
-                .scale(checkScale)
+                .graphicsLayer { scaleX = checkScale; scaleY = checkScale }
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isCheckFocused) accentColor.copy(0.15f) else Color.White.copy(0.05f))
                 .border(
@@ -2025,7 +2027,7 @@ fun AboutSettings(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .scale(dlScale)
+                    .graphicsLayer { scaleX = dlScale; scaleY = dlScale }
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isDlFocused) accentColor.copy(0.3f) else accentColor.copy(0.15f))
                     .border(

@@ -1,5 +1,7 @@
 package com.lumera.app.ui.studio
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import com.lumera.app.ui.theme.themed
 
 import androidx.compose.animation.core.Spring
@@ -374,7 +376,7 @@ private fun PosterCard(
         modifier = modifier
             .width(120.dp)
             .height(180.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(cardShape)
             .background(Color.White.copy(0.06f))
             .border(

@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -1200,7 +1202,7 @@ fun VoidEditorItem(
         modifier = modifier
             .fillMaxWidth()
             .height(itemHeight)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
@@ -1298,7 +1300,7 @@ fun VoidHubEditorItem(
         modifier = modifier
             .fillMaxWidth()
             .height(itemHeight)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
@@ -1465,7 +1467,7 @@ fun VoidCompactActionButton(
     Row(
         modifier = modifier
             .height(36.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.07f))
             .border(
@@ -1521,7 +1523,7 @@ fun VoidTabBtn(
     Column(
         modifier = modifier
             .height(40.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .focusable(interactionSource = interactionSource),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1686,7 +1688,7 @@ private fun VoidSliderButton(
     Box(
         modifier = Modifier
             .size(48.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(Color.White.copy(0.1f))
             .border(
@@ -1745,7 +1747,7 @@ fun LayoutOptionItem(
     Box(
         modifier = modifier
             .height(36.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
@@ -1782,7 +1784,7 @@ fun VoidEditorRow(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp))
             .background(if (isFocused) Color.White.copy(0.1f) else Color.White.copy(0.05f))
             .border(

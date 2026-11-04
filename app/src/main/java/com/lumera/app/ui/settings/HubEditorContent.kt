@@ -1,5 +1,7 @@
 package com.lumera.app.ui.settings
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -206,7 +208,7 @@ private fun RowScope.HubShapeItem(
         modifier = modifier
             .weight(1f)
             .height(50.dp) // Match VoidButton height
-            .scale(scale)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(RoundedCornerShape(8.dp)) // Match VoidButton radius
             .background(bgColor)
             .border(borderWidth, borderColor, RoundedCornerShape(8.dp))
