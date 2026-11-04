@@ -1,0 +1,143 @@
+name: Apple apps
+
+# Builds Neon Tokyo for iPhone and Apple TV on GitHub's Macs, so nobody needs a Mac:
+# the shared Rust core, the SwiftUI app, unsigned IPA files (Sideloadly / atvloadly sign them on
+# install) and screenshots from the Apple TV and iPhone simulators (branch apple-screens).
+# When a main release of the Android app passes, its IPA files are added to that same release.
+
+on:
+  push:
+    branches: [main, dev, 'claude/**']
+    paths:
+      - 'apple/**'
+      - 'native/neon-core/**'
+      - 'design/**'
+      - 'tools/gen_tokens.py'
+      - 'app/src/main/res/font/**'
+      - '.github/workflows/apple.yml'
+      - '.github/scripts/apple-screens.sh'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Publish the IPA files as a test release to download now
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apple-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      # the same release name as the Android app: nt.<its run number> for main releases
+      NEON_VERSION: ${{ github.event_name == 'workflow_run' && format('0.2.0-nt.{0}', github.event.workflow_run.run_number) || format('0.2.0-apple.{0}', github.run_number) }}
+      BUILD_NUMBER: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.run_number || github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Design tokens are up to date
+        run: python3 tools/gen_tokens.py --check
+
+      - name: Test the shared core
+        run: cargo test --release --manifest-path native/neon-core/Cargo.toml
+
+      - name: Pick the newest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Build the core for iPhone and Apple TV
+        run: apple/build-core.sh
+
+      - name: Make the Xcode project
+        run: |
+          brew install xcodegen
+          cd apple && xcodegen generate
+
+      - name: Build IPA files
+        run: |
+          cd apple
+          for p in iOS tvOS; do
+            if [ $p = iOS ]; then sdk=iphoneos; else sdk=appletvos; fi
+            if ! xcodebuild -project NeonTokyo.xcodeproj -scheme NeonTokyo-$p -configuration Release -sdk $sdk \
+                -destination "generic/platform=$p" -derivedDataPath build/$p \
+                CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+                NEON_VERSION="$NEON_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build > build-$p.log 2>&1; then
+              grep -E "error:|fatal" build-$p.log | sort -u | head -80
+              tail -30 build-$p.log
+              exit 1
+            fi
+            app=$(find build/$p/Build/Products -maxdepth 2 -name NeonTokyo.app | head -1)
+            rm -rf Payload && mkdir Payload && cp -R "$app" Payload/
+            zip -qry "../NeonTokyo-$p.ipa" Payload
+            ls -l "../NeonTokyo-$p.ipa"
+          done
+
+      - name: Build for the simulators
+        run: |
+          cd apple
+          for p in tvOS iOS; do
+            if [ $p = iOS ]; then sdk=iphonesimulator; else sdk=appletvsimulator; fi
+            if ! xcodebuild -project NeonTokyo.xcodeproj -scheme NeonTokyo-$p -configuration Debug -sdk $sdk \
+                -destination "generic/platform=$p Simulator" -derivedDataPath build/sim-$p \
+                CODE_SIGNING_ALLOWED=NO NEON_VERSION="$NEON_VERSION" build > sim-$p.log 2>&1; then
+              grep -E "error:|fatal" sim-$p.log | sort -u | head -80
+              exit 1
+            fi
+          done
+
+      - name: Screenshots from Apple TV and iPhone
+        run: .github/scripts/apple-screens.sh "$RUNNER_TEMP/apple-screens"
+
+      # screenshots must never hold back a release whose build passed
+      - name: Publish screenshots to the apple-screens branch
+        if: always()
+        continue-on-error: true
+        run: |
+          S="$RUNNER_TEMP/apple-screens"
+          [ -d "$S" ] || exit 0
+          cd "$S"
+          printf 'Apple builds of %s (%s), run %s\n' "$GITHUB_SHA" "$NEON_VERSION" "$GITHUB_RUN_ID" > README.md
+          git init -q -b apple-screens
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Apple screenshots $NEON_VERSION"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" apple-screens
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-tokyo-apple-${{ env.NEON_VERSION }}
+          path: NeonTokyo-*.ipa
+
+      - name: Add the IPA files to the release
+        if: github.event_name == 'workflow_run'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEON_VERSION }}
+          files: NeonTokyo-*.ipa
+
+      - name: Publish a test release
+        if: github.event_name == 'workflow_dispatch' && inputs.prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEON_VERSION }}
+          name: Apple test build ${{ env.NEON_VERSION }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            Test build of Neon Tokyo for iPhone and Apple TV. Unsigned: install with Sideloadly (iPhone) or atvloadly (Apple TV), which sign it with your Apple ID.
+          files: NeonTokyo-*.ipa
