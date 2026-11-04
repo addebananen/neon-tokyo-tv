@@ -192,7 +192,7 @@ class Accounts(private val model: AppModel, private val scope: CoroutineScope) {
                 var wait = code.intervalMs.toLong()
                 while (isActive && now() < code.expiresAtMs) {
                     delay(wait)
-                    val p = Net.call(traktUrl("oauth/device/token"), traktTokenBody(AppInfo.traktClientId, null, code.deviceCode), headers(null))
+                    val p = Net.call(traktUrl("oauth/device/token"), traktTokenBody(AppInfo.traktClientId, AppInfo.traktClientSecret, code.deviceCode), headers(null))
                     when (val r = parseTraktPoll(p.status.toUShort(), p.body, now())) {
                         is TraktPoll.Done -> {
                             val name = runCatching { parseTraktUsername(Net.call(traktUrl("users/settings"), null, headers(r.token.accessToken)).body) }.getOrNull()
@@ -237,7 +237,7 @@ class Accounts(private val model: AppModel, private val scope: CoroutineScope) {
     private suspend fun freshToken(pid: String): TraktLink? {
         var link = trakt ?: return null
         if (traktNeedsRefresh(link.token, now())) {
-            val r = Net.call(traktUrl("oauth/token"), traktRefreshBody(AppInfo.traktClientId, null, link.token.refreshToken), headers(null))
+            val r = Net.call(traktUrl("oauth/token"), traktRefreshBody(AppInfo.traktClientId, AppInfo.traktClientSecret, link.token.refreshToken), headers(null))
             if (r.status == 400 || r.status == 401) {
                 saveTrakt(pid, null)
                 throw CoreException.SignedOut("Trakt sign-in ran out")

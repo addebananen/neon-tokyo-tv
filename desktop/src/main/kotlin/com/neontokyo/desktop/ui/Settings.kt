@@ -89,8 +89,8 @@ fun SettingsScreen() {
             GlassPanel(Modifier.widthIn(max = 1180.dp).fillMaxWidth()) {
                 Section("Look and feel")
                 Choice("Theme", NeonTokens.themes.map { it.name to (it.id == model.themeId) }) { i -> model.setTheme(NeonTokens.themes[i].id) }
-                Choice("Motion", MotionLevel.values().map { it.title to (it == model.motion) }) { i -> model.setMotion(MotionLevel.values()[i]) }
-                Choice("Sounds", listOf("On" to model.sounds, "Off" to !model.sounds)) { i -> model.setSounds(i == 0) }
+                Choice("Motion", MotionLevel.values().map { it.title to (it == model.motion) }) { i -> model.changeMotion(MotionLevel.values()[i]) }
+                Choice("Sounds", listOf("On" to model.sounds, "Off" to !model.sounds)) { i -> model.changeSounds(i == 0) }
             }
         }
 

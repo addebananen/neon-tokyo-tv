@@ -81,6 +81,7 @@ jobs:
         shell: bash
         env:
           TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
         run: ./gradlew -p desktop packageMsi packageExe -PneonVersion="$NEON_VERSION" -PbuildNumber="$BUILD_NUMBER" -PbuiltAt="$(date +%s)000" --no-daemon --stacktrace
 
       - name: Collect the installers

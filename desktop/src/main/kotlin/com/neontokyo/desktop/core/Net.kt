@@ -161,6 +161,11 @@ object AppInfo {
     val traktClientId: String by lazy {
         AppInfo::class.java.getResource("/trakt-client.txt")?.readText()?.trim().orEmpty()
     }
+
+    /** The Trakt app's secret, when its Trakt app still has one; null otherwise. */
+    val traktClientSecret: String? by lazy {
+        AppInfo::class.java.getResource("/trakt-secret.txt")?.readText()?.trim()?.ifEmpty { null }
+    }
 }
 
 /**

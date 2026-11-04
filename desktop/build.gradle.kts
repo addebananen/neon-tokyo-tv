@@ -33,18 +33,22 @@ tasks.processResources { dependsOn(copyFonts) }
 // The version, when CI made the build (for the updater) and the Trakt app's id (a repository
 // secret in CI; empty locally, which turns Trakt off)
 val traktClientId: String = (findProperty("traktClientId") as String?) ?: System.getenv("TRAKT_CLIENT_ID") ?: ""
+// Older Trakt apps still want their secret with the sign-in code; the Android app sends it too
+val traktClientSecret: String = (findProperty("traktClientSecret") as String?) ?: System.getenv("TRAKT_CLIENT_SECRET") ?: ""
 val builtAt: String = (findProperty("builtAt") as String?) ?: "0"
 val writeVersion by tasks.registering {
     val dir = layout.buildDirectory.dir("generated/native")
     inputs.property("version", neonVersion)
     inputs.property("builtAt", builtAt)
     inputs.property("trakt", traktClientId)
+    inputs.property("traktSecret", traktClientSecret)
     outputs.dir(dir)
     doLast {
         val d = dir.get().asFile.apply { mkdirs() }
         File(d, "neon-version.txt").writeText(neonVersion)
         File(d, "neon-built.txt").writeText(builtAt)
         File(d, "trakt-client.txt").writeText(traktClientId)
+        File(d, "trakt-secret.txt").writeText(traktClientSecret)
     }
 }
 tasks.processResources { dependsOn(writeVersion) }

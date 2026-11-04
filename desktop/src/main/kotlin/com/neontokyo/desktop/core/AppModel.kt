@@ -71,12 +71,12 @@ class AppModel(private val scope: CoroutineScope) {
         updates.start()
     }
 
-    fun setMotion(m: com.neontokyo.desktop.ui.MotionLevel) {
+    fun changeMotion(m: com.neontokyo.desktop.ui.MotionLevel) {
         motion = m
         Store.write("motion", m.key)
     }
 
-    fun setSounds(on: Boolean) {
+    fun changeSounds(on: Boolean) {
         sounds = on
         Sound.set(on)
     }
@@ -249,14 +249,17 @@ class AppModel(private val scope: CoroutineScope) {
             nextUp = nextUp.filterNot { it.profileId == pid && it.seriesId == item.seriesId } + n
         }
         saveWatch()
-        accounts.changed()
     }
 
-    /** From mpv's thread: saved on the window's thread, like every other change. */
+    /** From mpv's thread: saved on the window's thread, like every other change. Accounts hear
+     *  of it once the player closes, not every ten seconds while it plays. */
     fun playerProgress(item: PlayItem, positionMs: ULong, durationMs: ULong, final: Boolean) {
         scope.launch {
             saveProgress(item, positionMs, durationMs)
-            if (final) accounts.scrobbleStop(item.playbackId, item.kind, positionMs, durationMs)
+            if (final) {
+                accounts.scrobbleStop(item.playbackId, item.kind, positionMs, durationMs)
+                accounts.changed()
+            }
         }
     }
 
