@@ -17,8 +17,10 @@ done
 # The Swift interface comes from the library itself (UniFFI library mode), built for this Mac
 cargo build --manifest-path "$CORE/Cargo.toml" --release --lib
 rm -rf "$OUT" && mkdir -p "$OUT/headers"
-cargo run --manifest-path "$CORE/Cargo.toml" --release --features cli --bin uniffi-bindgen -- \
-  generate --library "$CORE/target/release/libneon_core.dylib" --language swift --out-dir "$OUT/bindings" --no-format
+# (bindgen reads cargo metadata, so it runs inside the crate)
+ROOT="$PWD"
+(cd "$CORE" && cargo run --release --features cli --bin uniffi-bindgen -- \
+  generate --library "$ROOT/$CORE/target/release/libneon_core.dylib" --language swift --out-dir "$ROOT/$OUT/bindings" --no-format)
 cp "$OUT/bindings/neon_core.swift" "$OUT/neon_core.swift"
 cp "$OUT/bindings/neon_coreFFI.h" "$OUT/headers/"
 cp "$OUT/bindings/neon_coreFFI.modulemap" "$OUT/headers/module.modulemap"

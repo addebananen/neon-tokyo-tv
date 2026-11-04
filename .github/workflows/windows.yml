@@ -1,0 +1,102 @@
+name: Windows app
+
+# Builds Neon Tokyo for Windows on GitHub's Windows runners: the shared Rust core (as a DLL),
+# the Compose Desktop app, and an installer (.msi) and a portable installer (.exe) that Adrian
+# downloads from the release page. When a main release of the Android app passes, the Windows
+# installers are added to that same release, so every platform updates together.
+
+on:
+  push:
+    branches: [main, dev, 'claude/**']
+    paths:
+      - 'desktop/**'
+      - 'native/neon-core/**'
+      - 'design/**'
+      - 'tools/gen_tokens.py'
+      - 'app/src/main/res/font/**'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Publish the installers as a test release to download now
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      # the same release name as the Android app: nt.<its run number> for main releases
+      NEON_VERSION: ${{ github.event_name == 'workflow_run' && format('0.2.0-nt.{0}', github.event.workflow_run.run_number) || format('0.2.0-win.{0}', github.run_number) }}
+      BUILD_NUMBER: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.run_number || github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Design tokens are up to date
+        run: python tools/gen_tokens.py --check
+
+      - name: Test the shared core
+        run: cargo test --release --manifest-path native/neon-core/Cargo.toml
+
+      - name: Build the core as a Windows DLL and its Kotlin interface
+        shell: bash
+        run: desktop/build-core.sh
+
+      - name: Build the installers
+        shell: bash
+        run: ./gradlew -p desktop packageMsi packageExe -PneonVersion="$NEON_VERSION" -PbuildNumber="$BUILD_NUMBER" --no-daemon --stacktrace
+
+      - name: Collect the installers
+        shell: bash
+        run: |
+          mkdir -p out
+          # jpackage names them by the package version; rename to the full Neon version
+          msi=$(find desktop/build/compose/binaries -name '*.msi' | head -1)
+          exe=$(find desktop/build/compose/binaries -name '*.exe' | head -1)
+          cp "$msi" "out/NeonTokyo-$NEON_VERSION.msi"
+          cp "$exe" "out/NeonTokyo-$NEON_VERSION-setup.exe"
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-tokyo-windows-${{ env.NEON_VERSION }}
+          path: out/*
+
+      - name: Add the installers to the release
+        if: github.event_name == 'workflow_run'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEON_VERSION }}
+          files: out/*
+
+      - name: Publish a test release
+        if: github.event_name == 'workflow_dispatch' && inputs.prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEON_VERSION }}
+          name: Windows test build ${{ env.NEON_VERSION }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            Test build of Neon Tokyo for Windows. Download the .msi (normal install) or the -setup.exe (portable installer), open it, and allow it past the Windows SmartScreen notice (More info -> Run anyway), since it is not signed with a paid Microsoft certificate.
+          files: out/*
