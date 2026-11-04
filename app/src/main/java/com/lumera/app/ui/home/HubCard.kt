@@ -163,7 +163,7 @@ fun HubCard(
                     val artCode = remember(hubItem.categoryId, hubItem.title) {
                         NeonTokyoStarterPack.artCode(hubItem.categoryId, hubItem.title)
                     }
-                    if (artCode != null) {
+                    if (artCode != null && !cinema) {
                         // The service's or genre's own scene, coming alive on focus
                         ServiceCardArt(
                             code = artCode,

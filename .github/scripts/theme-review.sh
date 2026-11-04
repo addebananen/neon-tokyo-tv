@@ -211,9 +211,7 @@ shot cinema-movies
 menu_go Settings
 sleep 4
 shot cinema-settings
-key DPAD_RIGHT
-sleep 2
-# The settings sidebar starts on Personalization; Theme is the next entry.
+# Selecting Settings puts focus on Personalization in its sidebar.
 key DPAD_DOWN DPAD_RIGHT
 sleep 3
 shot cinema-theme-picker
@@ -226,7 +224,7 @@ if screen_has "Who's watching?"; then key DPAD_CENTER; sleep 6; fi
 shot cinema-reopened
 menu_go Settings
 sleep 3
-key DPAD_RIGHT DPAD_DOWN DPAD_RIGHT
+key DPAD_DOWN DPAD_RIGHT
 sleep 3
 shot cinema-restored-theme
 assert_cinema_selected

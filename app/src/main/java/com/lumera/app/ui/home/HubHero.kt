@@ -36,12 +36,13 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.lumera.app.data.profile.NeonTokyoStarterPack
 import com.lumera.app.ui.components.NeonAccents
-import com.lumera.app.ui.components.NeonPalette
 import com.lumera.app.ui.components.NeonText
 import com.lumera.app.ui.components.NeonType
 import com.lumera.app.ui.components.NoiseOverlay
 import com.lumera.app.ui.components.SceneLayers
 import com.lumera.app.ui.components.rememberSceneMotion
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import com.lumera.app.ui.theme.LocalTextMuted
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -54,7 +55,7 @@ import kotlin.math.roundToInt
 fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier = Modifier) {
     val accent = remember(title) { NeonAccents.forTitle(title) }
     Column(modifier = modifier.padding(top = 28.dp)) {
-        NeonText(rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent))
+        NeonText(if (LocalCinemaStyle.current) rowTitle else rowTitle.uppercase(), style = NeonType.eyebrow(13.sp, color = accent))
         Spacer(Modifier.height(6.dp))
         NeonText(
             text = title,
@@ -66,7 +67,7 @@ fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier =
         Text(
             text = NeonTokyoStarterPack.hubBlurb(title, rowId),
             style = MaterialTheme.typography.bodyLarge,
-            color = NeonPalette.Lilac,
+            color = LocalTextMuted.current,
             maxLines = 2,
             // Wraps before it reaches a service's scene on the right
             modifier = Modifier.widthIn(max = 520.dp)
@@ -77,13 +78,14 @@ fun HubHero(title: String, rowTitle: String, rowId: String, modifier: Modifier =
 /** Soft glow in the folder's colour behind the hero, in place of a backdrop image. */
 @Composable
 fun HubHeroGlow(title: String, modifier: Modifier = Modifier) {
-    val accent = remember(title) { NeonAccents.forTitle(title) }
+    val cinema = LocalCinemaStyle.current
+    val accent = if (cinema) MaterialTheme.colorScheme.primary else remember(title) { NeonAccents.forTitle(title) }
     Box(
         modifier = modifier
             .fillMaxSize()
             .drawWithCache {
                 val glow = Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.08f), Color.Transparent),
+                    colors = listOf(accent.copy(alpha = if (cinema) 0.10f else 0.30f), accent.copy(alpha = if (cinema) 0.04f else 0.08f), Color.Transparent),
                     center = Offset(size.width * 0.74f, size.height * 0.18f),
                     radius = size.width * 0.55f
                 )
@@ -100,6 +102,8 @@ fun HubHeroGlow(title: String, modifier: Modifier = Modifier) {
  */
 @Composable
 fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
+    // Cinema keeps the folder hero quiet and avoids decoding/animating decorative scene layers.
+    if (LocalCinemaStyle.current) return
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
     val motion = rememberSceneMotion(code, "hero")
     // The entrance waits for both layers, so the subject never shows before its scene

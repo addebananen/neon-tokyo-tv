@@ -39,6 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.lumera.app.data.profile.NeonTokyoStarterPack
@@ -107,16 +110,21 @@ class SceneClock {
 @Composable
 fun rememberSceneClock(running: Boolean): SceneClock {
     val clock = remember { SceneClock() }
-    LaunchedEffect(running) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(running, lifecycle) {
         if (running && clock.energy.value == 0f) clock.time.floatValue = 0f
-        val fade = launch {
-            clock.energy.animateTo(if (running) 1f else 0f, tween(if (running) 700 else 450, easing = LinearEasing))
-        }
-        var last = -1L
-        while (running || fade.isActive) {
-            withFrameNanos { now ->
-                if (last >= 0) clock.time.floatValue += (now - last) / 1_000_000_000f * clock.e
-                last = now
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            if (!running && clock.energy.value == 0f) return@repeatOnLifecycle
+            val fade = launch {
+                clock.energy.animateTo(if (running) 1f else 0f, tween(if (running) 700 else 450, easing = LinearEasing))
+            }
+            // Rebase after returning from another activity; hidden time must not advance the scene.
+            var last = -1L
+            while (running || fade.isActive) {
+                withFrameNanos { now ->
+                    if (last >= 0) clock.time.floatValue += (now - last) / 1_000_000_000f * clock.e
+                    last = now
+                }
             }
         }
     }

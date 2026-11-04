@@ -70,3 +70,8 @@ settings; failed steps also retain screenshots and the UI tree for diagnosis.
 Cinema also adapts shared hero/section typography and image-free poster placeholders,
 without neon shadows, flicker or perspective grids. Watched/new-episode badges use
 dark text against its pale accent. Theme swatches use a single clickable focus target.
+
+Cinema service/genre folders use quiet title cards and a subtle hero wash instead
+of loading the decorative animated scenes. Existing custom folder artwork remains.
+Scene clocks in the app now pause outside RESUMED and rebase timestamps on return,
+including the original neon theme, so opening a player does not keep them running.
