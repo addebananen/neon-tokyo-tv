@@ -27,9 +27,10 @@ class HomeStyleTest {
     }
 
     @Test
-    fun onlyNeonDrawsTheSkylineInsteadOfAPainting() {
+    fun proceduralStylesDoNotRequireDecodedPaintings() {
         assertNull(HomeStyle.Neon.backdrop)
-        HomeStyle.entries.filter { it != HomeStyle.Neon }.forEach { assertNotNull(it.name, it.backdrop) }
+        assertNull(HomeStyle.Aurora.backdrop)
+        HomeStyle.entries.filter { it != HomeStyle.Neon && it != HomeStyle.Aurora }.forEach { assertNotNull(it.name, it.backdrop) }
     }
 
     @Test
@@ -88,4 +89,22 @@ class HomeStyleTest {
         assertEquals(false, liquid.upperTitles)
         assertEquals(neon.accent, liquid.accent)
     }
+    @Test
+    fun auroraDefaultsAndOverridesSurviveStyleSwitches() {
+        val profile = HomeProfile("aurora-test", "Test", HomeStyle.Aurora)
+        assertEquals(true, profile.square)
+        assertEquals(true, profile.namesAlways)
+        assertEquals(false, profile.showConsoles)
+        assertEquals(GlassFocus.Layers, profile.focusMotion)
+        assertEquals(Ambience.None, profile.style.ambience)
+        assertNull(profile.style.video)
+        val custom = profile.copy(focus = GlassFocus.Tilt, squareIcons = false)
+        val blue = custom.wearing(HomeStyle.DeepBlue)
+        assertEquals(GlassFocus.Glow, blue.focusMotion)
+        val restored = blue.wearing(HomeStyle.Aurora)
+        assertEquals(GlassFocus.Tilt, restored.focusMotion)
+        assertEquals(false, restored.square)
+        assertEquals(true, restored.style.look.inGlass(HomeGlass.Frost).calmMotion)
+    }
+
 }

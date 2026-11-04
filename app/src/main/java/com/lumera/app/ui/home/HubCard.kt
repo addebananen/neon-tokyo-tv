@@ -1,5 +1,8 @@
 package com.lumera.app.ui.home
 
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import com.lumera.app.ui.theme.cinemaFocus
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -76,6 +79,7 @@ fun HubCard(
     modifier: Modifier = Modifier,
     onFocused: (() -> Unit)? = null
 ) {
+    val cinema = LocalCinemaStyle.current
     var isFocused by remember { mutableStateOf(false) }
     val glowColor = MaterialTheme.colorScheme.primary
     val roundCorners = LocalHubRoundCorners.current
@@ -88,7 +92,7 @@ fun HubCard(
     }
     
     // Shape based on user preference
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
+    val cardShape = if (roundCorners) RoundedCornerShape(if (cinema) 16.dp else 12.dp) else RectangleShape
     val focusedCardShape = if (roundCorners) RoundedCornerShape(16.dp) else RectangleShape
     
 
@@ -99,6 +103,7 @@ fun HubCard(
             .aspectRatio(shape.aspectRatio)
             .zIndex(if (isFocused) 10f else 0f)
             .graphicsLayer { clip = false }
+            .cinemaFocus(isFocused, cardShape)
     ) {
         Surface(
             onClick = onClick,
@@ -112,7 +117,7 @@ fun HubCard(
                 shape = cardShape,
                 focusedShape = focusedCardShape
             ),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (cinema) 1f else 1.05f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -120,13 +125,13 @@ fun HubCard(
             ),
             border = ClickableSurfaceDefaults.border(
                 focusedBorder = Border(
-                    border = BorderStroke(3.dp, glowColor),
+                    border = BorderStroke(if (cinema) 1.dp else 3.dp, glowColor),
                     shape = focusedCardShape
                 )
             ),
             // Neon bloom around the focused card only, one shadow on screen at a time
             glow = ClickableSurfaceDefaults.glow(
-                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = 12.dp)
+                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = if (cinema) 0.dp else 12.dp)
             )
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -158,7 +163,7 @@ fun HubCard(
                     val artCode = remember(hubItem.categoryId, hubItem.title) {
                         NeonTokyoStarterPack.artCode(hubItem.categoryId, hubItem.title)
                     }
-                    if (artCode != null) {
+                    if (artCode != null && !cinema) {
                         // The service's or genre's own scene, coming alive on focus
                         ServiceCardArt(
                             code = artCode,

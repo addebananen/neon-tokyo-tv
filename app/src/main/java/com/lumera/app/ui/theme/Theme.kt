@@ -35,6 +35,7 @@ fun LumeraTheme(
     theme: ThemeEntity = DefaultThemes.VOID,
     content: @Composable () -> Unit
 ) {
+    val cinema = theme.id == DefaultThemes.AURORA_CINEMA.id
     // Animate all colors for smooth theme transitions
     val primaryColor by animateColorAsState(
         targetValue = Color(theme.primaryColor.toInt()),
@@ -57,14 +58,27 @@ fun LumeraTheme(
         animationSpec = tween(THEME_ANIMATION_DURATION)
     )
 
+    val mutedColor by animateColorAsState(
+        targetValue = Color(theme.textMutedColor.toInt()),
+        animationSpec = tween(THEME_ANIMATION_DURATION), label = "ThemeMuted"
+    )
+
     // A. Configure Mobile Colors
     val mobileScheme = mobileDarkColorScheme(
         primary = primaryColor,
         secondary = primaryColor,
         background = backgroundColor,
         surface = surfaceColor,
+        surfaceVariant = surfaceColor,
+        onSurfaceVariant = mutedColor,
         onPrimary = Color.Black,
         onBackground = textColor,
+        primaryContainer = surfaceColor,
+        onPrimaryContainer = textColor,
+        secondaryContainer = surfaceColor,
+        onSecondaryContainer = textColor,
+        surfaceTint = primaryColor,
+        outline = mutedColor.copy(alpha = 0.45f),
         onSurface = textColor,
         error = errorColor
     )
@@ -75,6 +89,8 @@ fun LumeraTheme(
         secondary = primaryColor,
         background = backgroundColor,
         surface = surfaceColor,
+        surfaceVariant = surfaceColor,
+        onSurfaceVariant = mutedColor,
         onPrimary = Color.Black,
         onSurface = textColor,
         error = errorColor
@@ -82,12 +98,21 @@ fun LumeraTheme(
 
     MobileMaterialTheme(
         colorScheme = mobileScheme,
-        typography = LumeraTypography
+        typography = if (cinema) CinemaTypography else LumeraTypography
     ) {
-        TvMaterialTheme(colorScheme = tvScheme) {
+        TvMaterialTheme(
+            colorScheme = tvScheme,
+            typography = if (cinema) androidx.tv.material3.Typography(
+                titleLarge = CinemaTypography.titleLarge,
+                titleMedium = CinemaTypography.titleMedium,
+                bodyLarge = CinemaTypography.bodyLarge,
+                labelSmall = CinemaTypography.labelSmall
+            ) else androidx.tv.material3.Typography()
+        ) {
             CompositionLocalProvider(
                 LocalThemeId provides theme.id,
-                LocalTextMuted provides Color(theme.textMutedColor.toInt()),
+                LocalCinemaStyle provides cinema,
+                LocalTextMuted provides mutedColor,
                 content = content
             )
         }

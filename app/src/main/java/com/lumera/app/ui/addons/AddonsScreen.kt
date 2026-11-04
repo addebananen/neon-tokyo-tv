@@ -1,5 +1,7 @@
 package com.lumera.app.ui.addons
 
+import com.lumera.app.ui.theme.LocalCinemaStyle
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -546,6 +548,8 @@ fun VoidButton(
     enabled: Boolean = true,
     focusRequester: FocusRequester? = null
 ) {
+    val cinema = LocalCinemaStyle.current
+    val radius = if (cinema) 12.dp else 8.dp
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
@@ -578,20 +582,20 @@ fun VoidButton(
         modifier = modifier
             .height(50.dp)
             .scale(scale)
-            .neonFocusRing(activeColor, 8.dp) { lit }
-            .clip(RoundedCornerShape(8.dp))
+            .then(if (cinema) Modifier else Modifier.neonFocusRing(activeColor, 8.dp) { lit })
+            .clip(RoundedCornerShape(radius))
             .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(radius))
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .then(if (enabled) Modifier.clickable(interactionSource = interactionSource, indication = null) { onClick() } else Modifier)
             .then(if (enabled) Modifier.focusable(interactionSource = interactionSource) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = text.uppercase(),
+            text = if (cinema) text else text.uppercase(),
             // The house typeface, as on the titles; Kanit has no bold, so medium rather than a
             // bold the system would have to fake
-            style = TextStyle(fontFamily = KanitFamily, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 1.sp),
+            style = TextStyle(fontFamily = if (cinema) androidx.compose.ui.text.font.FontFamily.SansSerif else KanitFamily, fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = if (cinema) 0.sp else 1.sp),
             color = textColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -645,12 +649,13 @@ fun VoidDialog(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val cinema = LocalCinemaStyle.current
     Dialog(onDismissRequest = onDismissRequest) {
         Box(
             modifier = modifier
                 .width(400.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.background)
+                .background(if (cinema) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background)
                 .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(16.dp))
                 .padding(24.dp)
         ) {

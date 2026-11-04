@@ -1,5 +1,8 @@
 package com.lumera.app.ui.components
 
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import com.lumera.app.ui.theme.cinemaFocus
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -72,12 +75,13 @@ fun LumeraCard(
     hasNewEpisode: Boolean = false,
     onFocused: (() -> Unit)? = null
 ) {
+    val cinema = LocalCinemaStyle.current
     var isFocused by remember { mutableStateOf(false) }
     val glowColor = MaterialTheme.colorScheme.primary
     val roundCorners = LocalRoundCorners.current
     
     // Shape based on user preference
-    val cardShape = if (roundCorners) RoundedCornerShape(12.dp) else RectangleShape
+    val cardShape = if (roundCorners) RoundedCornerShape(if (cinema) 16.dp else 12.dp) else RectangleShape
     val focusedCardShape = if (roundCorners) RoundedCornerShape(16.dp) else RectangleShape
 
     Box(
@@ -86,6 +90,7 @@ fun LumeraCard(
             .aspectRatio(2f / 3f)
             .zIndex(if (isFocused) 10f else 0f)
             .graphicsLayer { clip = false }
+            .cinemaFocus(isFocused, cardShape)
     ) {
         Surface(
             onClick = onClick,
@@ -99,7 +104,7 @@ fun LumeraCard(
                 shape = cardShape,
                 focusedShape = focusedCardShape
             ),
-            scale = ClickableSurfaceDefaults.scale(focusedScale = 1.05f),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = if (cinema) 1f else 1.05f),
             colors = ClickableSurfaceDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surface,
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -107,13 +112,13 @@ fun LumeraCard(
             ),
             border = ClickableSurfaceDefaults.border(
                 focusedBorder = Border(
-                    border = BorderStroke(2.dp, glowColor),
+                    border = BorderStroke(if (cinema) 1.dp else 2.dp, glowColor),
                     shape = focusedCardShape
                 )
             ),
             // Neon bloom around the focused card only, one shadow on screen at a time
             glow = ClickableSurfaceDefaults.glow(
-                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = 12.dp)
+                focusedGlow = Glow(elevationColor = glowColor.copy(alpha = 0.55f), elevation = if (cinema) 0.dp else 12.dp)
             )
         ) {
             val context = LocalContext.current
@@ -176,7 +181,7 @@ fun LumeraCard(
                     }
                     Text(
                         "✓",
-                        color = Color.White,
+                        color = if (cinema) MaterialTheme.colorScheme.onPrimary else Color.White,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -195,7 +200,7 @@ fun LumeraCard(
                     ) {
                         Text(
                             "+1",
-                            color = Color.White,
+                            color = if (cinema) MaterialTheme.colorScheme.onPrimary else Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )

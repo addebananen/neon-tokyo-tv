@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.lumera.app.ui.theme.KanitFamily
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import androidx.compose.material3.MaterialTheme
 
 /**
  * Neon sign style art for hub cards without an image: a night sky tinted by the
@@ -45,6 +47,28 @@ fun NeonCardArt(
     fontSize: Int = 19,
     maxLines: Int = 2
 ) {
+    if (LocalCinemaStyle.current) {
+        val surface = MaterialTheme.colorScheme.surface
+        val background = MaterialTheme.colorScheme.background
+        Box(
+            modifier = modifier.fillMaxSize().drawWithCache {
+                val wash = Brush.verticalGradient(listOf(surface, background))
+                onDrawBehind { drawRect(wash) }
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = fontSize.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        return
+    }
     val accent = remember(title) { NeonAccents.forTitle(title) }
     val lit = rememberNeonLit(focused, enabled = glow)
     Box(

@@ -50,3 +50,13 @@ val LumeraTypography = Typography(
         color = TextSecondary
     )
 )
+/** Sentence-case, upright type for the quieter cinema theme. Colors inherit the active scheme. */
+val CinemaTypography = Typography(
+    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,
+        fontSize = 30.sp, lineHeight = 38.sp),
+    titleMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,
+        fontSize = 22.sp, lineHeight = 30.sp),
+    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 18.sp, lineHeight = 28.sp),
+    labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,
+        fontSize = 12.sp, lineHeight = 16.sp)
+)

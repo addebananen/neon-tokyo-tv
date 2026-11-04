@@ -57,6 +57,9 @@ import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.sp
 import com.lumera.app.R
 import com.lumera.app.ui.theme.KanitFamily
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.material3.MaterialTheme
 
 /** The Neon Tokyo colours, for screens that look the same whatever theme a profile picked. */
 object NeonPalette {
@@ -75,6 +78,7 @@ object NeonPalette {
  * The glow is the style's shadow; show these with [NeonText] so the glow is never cut off.
  */
 object NeonType {
+    @Composable
     fun display(size: TextUnit = 60.sp, glow: Color = NeonPalette.Magenta) = TextStyle(
         fontFamily = KanitFamily,
         fontWeight = FontWeight.SemiBold,
@@ -84,8 +88,9 @@ object NeonType {
         letterSpacing = 1.sp,
         color = NeonPalette.Text,
         shadow = Shadow(color = glow.copy(alpha = 0.85f), blurRadius = 28f)
-    )
+    ).forActiveTheme()
 
+    @Composable
     fun headline(size: TextUnit = 30.sp, glow: Color = NeonPalette.Magenta) = TextStyle(
         fontFamily = KanitFamily,
         fontWeight = FontWeight.SemiBold,
@@ -95,17 +100,19 @@ object NeonType {
         letterSpacing = 0.5.sp,
         color = NeonPalette.Text,
         shadow = Shadow(color = glow.copy(alpha = 0.55f), blurRadius = 18f)
-    )
+    ).forActiveTheme()
 
     /** Row and section titles. No glow: there are many on screen and they scroll. */
+    @Composable
     fun rowTitle(size: TextUnit = 19.sp) = TextStyle(
         fontFamily = KanitFamily,
         fontWeight = FontWeight.SemiBold,
         fontStyle = FontStyle.Italic,
         fontSize = size,
         letterSpacing = 0.3.sp
-    )
+    ).forActiveTheme()
 
+    @Composable
     fun eyebrow(size: TextUnit = 14.sp, color: Color = NeonPalette.Cyan) = TextStyle(
         fontFamily = KanitFamily,
         fontWeight = FontWeight.Medium,
@@ -113,7 +120,19 @@ object NeonType {
         letterSpacing = 6.sp,
         color = color,
         shadow = Shadow(color = color.copy(alpha = 0.6f), blurRadius = 12f)
-    )
+    ).forActiveTheme()
+
+    @Composable
+    private fun TextStyle.forActiveTheme(): TextStyle = if (LocalCinemaStyle.current) {
+        copy(
+            fontFamily = FontFamily.SansSerif,
+            fontStyle = FontStyle.Normal,
+            letterSpacing = 0.sp,
+            color = MaterialTheme.colorScheme.onBackground,
+            shadow = null
+        )
+    } else this
+
 }
 
 /**

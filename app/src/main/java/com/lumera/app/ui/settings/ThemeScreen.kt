@@ -11,7 +11,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +22,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -97,7 +100,7 @@ fun ThemeScreen(
             color = Color.White
         )
         Text(
-            "Choose a color scheme for your experience.",
+            "Choose the look of Neon Tokyo for this profile.",
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
             color = Color.White.copy(0.6f),
             modifier = Modifier.padding(top = 4.dp)
@@ -204,10 +207,10 @@ fun ThemeScreen(
             contentPadding = PaddingValues(top = 12.dp, bottom = 50.dp),
             modifier = Modifier.weight(1f)
         ) {
-            items(filteredThemes, key = { it.id }) { theme ->
-                val isFirst = filteredThemes.indexOf(theme) == 0
+            itemsIndexed(filteredThemes, key = { _, theme -> theme.id }) { index, theme ->
+                val isFirst = index == 0
                 // Only first column items should go back on Left
-                val isLeftEdge = filteredThemes.indexOf(theme) % 4 == 0
+                val isLeftEdge = index % 4 == 0
                 
                 ThemeCard(
                     theme = theme,
@@ -384,6 +387,7 @@ private fun ThemeCard(
                 .border(2.dp, borderColor, RoundedCornerShape(12.dp))
                 .then(modifier)
                 .then(focusModifier)
+                .semantics { selected = isSelected; contentDescription = theme.name }
                 .clickable(interactionSource = cardInteractionSource, indication = null) { onClick() }
                 .focusable(interactionSource = cardInteractionSource)
                 .padding(12.dp),

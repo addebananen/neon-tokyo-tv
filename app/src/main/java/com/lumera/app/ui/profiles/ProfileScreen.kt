@@ -1,5 +1,10 @@
 package com.lumera.app.ui.profiles
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import com.lumera.app.ui.theme.LocalCinemaStyle
+import com.lumera.app.ui.theme.LocalTextMuted
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.RepeatMode
@@ -658,9 +663,13 @@ fun WizardThemeStep(onFinish: (String) -> Unit, onBack: () -> Unit) {
             // Offset for theme name labels below circles (not present in avatar selector)
             Spacer(Modifier.height(32.dp))
             
-            NeonText("Choose a theme", style = NeonType.headline(32.sp))
+            if (LocalCinemaStyle.current) {
+                Text("Choose a theme", style = MaterialTheme.typography.titleLarge)
+            } else {
+                NeonText("Choose a theme", style = NeonType.headline(32.sp))
+            }
             Spacer(Modifier.height(16.dp))
-            Text("Select a color scheme for your experience.", color = NeonPalette.Lilac)
+            Text("Choose the look of Neon Tokyo for this profile.", color = LocalTextMuted.current)
 
             CenterCarouselRow(
                 itemWidth = 120.dp,
@@ -775,8 +784,8 @@ fun ThemePickItem(
             modifier = Modifier
                 .size(120.dp)
                 .then(focusModifier)
-                .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-                .focusable(interactionSource = interactionSource),
+                .semantics { contentDescription = theme.name }
+                .clickable(interactionSource = interactionSource, indication = null) { onClick() },
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -821,7 +830,7 @@ fun ThemePickItem(
         Text(
             text = theme.name,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (isFocused) Color.White else NeonPalette.Lilac
+            color = if (isFocused) Color.White else LocalTextMuted.current
         )
     }
 }

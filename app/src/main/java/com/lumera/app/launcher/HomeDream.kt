@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -70,7 +71,7 @@ object HomeDream {
         val profile = HomeProfiles.get(context).active()
         profile.dreamVideo?.let { File(it) }?.takeIf { it.length() > 0 }?.let { return VideoDreamView(context, it) }
         val style = profile.style
-        if (profile.background == null && style.backdrop == null && style.video == null) return CityDriveView(context)
+        if (profile.background == null && style == HomeStyle.Neon) return CityDriveView(context)
         return StyleDreamView(context, profile)
     }
 
@@ -135,7 +136,7 @@ class DreamFrame internal constructor(
                     }
                     val driftX by animateDpAsState((minute % 5 * 5).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsX")
                     val driftY by animateDpAsState((minute / 5 % 4 * 4).toInt().dp, tween(3_000, easing = FastOutSlowInEasing), label = "DreamWidgetsY")
-                    DreamWidgets(Modifier.padding(start = start, top = top).offset(driftX, driftY))
+                    DreamWidgets(Modifier.padding(start = start, top = top).offset { IntOffset(driftX.roundToPx(), driftY.roundToPx()) })
                 }
             }
         }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
@@ -272,7 +273,7 @@ private fun DreamClock(look: HomeLook) {
     val date = remember(now) {
         SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale).format(Date(now)).uppercase(locale)
     }
-    Column(Modifier.padding(start = 58.dp, top = 34.dp).offset(driftX, driftY).graphicsLayer { alpha = breath }) {
+    Column(Modifier.padding(start = 58.dp, top = 34.dp).offset { IntOffset(driftX.roundToPx(), driftY.roundToPx()) }.graphicsLayer { alpha = breath }) {
         BasicText(
             time,
             style = TextStyle(
