@@ -10,7 +10,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalFocusManager
@@ -28,8 +32,10 @@ import com.neontokyo.desktop.ui.*
 
 fun main() = application {
     val state = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1600.dp, 900.dp))
+    var closing by remember { mutableStateOf(false) }
     Window(
-        onCloseRequest = ::exitApplication,
+        // switching off like an old TV, then gone
+        onCloseRequest = { if (closing) exitApplication() else closing = true },
         title = "Neon Tokyo",
         state = state,
         icon = painterResource("icon.png"),
@@ -43,7 +49,10 @@ fun main() = application {
     ) {
         val scope = rememberCoroutineScope()
         val model = remember { AppModel(scope) }
-        NeonApp(model)
+        Box(Modifier.fillMaxSize()) {
+            NeonApp(model)
+            if (closing) PowerOff { exitApplication() }
+        }
     }
 }
 
@@ -65,16 +74,28 @@ class Navigator {
 
 val LocalNavigator = staticCompositionLocalOf { Navigator() }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun NeonApp(model: AppModel) {
     val nav = remember { Navigator() }
     val theme = model.theme
+    val spot = remember { Spot() }
     LaunchedEffect(Unit) { model.refreshAddons() }
+    // a new screen: the light on the floor waits for the focus to land again
+    LaunchedEffect(nav.tab, nav.stack.size) { spot.on = false }
     MaterialTheme(colorScheme = darkColorScheme(primary = theme.primary, background = theme.background, surface = theme.panel)) {
-        CompositionLocalProvider(LocalNeon provides theme, LocalNavigator provides nav, LocalModel provides model) {
+        CompositionLocalProvider(
+            LocalNeon provides theme, LocalNavigator provides nav, LocalModel provides model,
+            LocalSpot provides spot, LocalMotion provides model.motion,
+        ) {
             val focus = LocalFocusManager.current
             Box(
-                Modifier.fillMaxSize().onKeyEvent {
+                Modifier.fillMaxSize()
+                    .onPointerEvent(PointerEventType.Move) { e ->
+                        val p = e.changes.firstOrNull()?.position ?: return@onPointerEvent
+                        spot.pointer = Offset(p.x / size.width.coerceAtLeast(1), p.y / size.height.coerceAtLeast(1))
+                    }
+                    .onKeyEvent {
                     if (it.type != KeyEventType.KeyDown) return@onKeyEvent false
                     when (it.key) {
                         // arrow keys move between cards, as the remote does on the TV (text fields use them first)
@@ -87,7 +108,8 @@ fun NeonApp(model: AppModel) {
                     }
                 }
             ) {
-                NeonBackground()
+                NeonWorld(dim = if (model.activeProfile == null) 0f else 0.18f)
+                FloorLight()
                 AnimatedContent(model.activeProfile == null, transitionSpec = {
                     fadeIn(tween(NeonTokens.motionPageMs.toInt())) togetherWith fadeOut(tween(NeonTokens.motionPageMs.toInt()))
                 }) { picking ->

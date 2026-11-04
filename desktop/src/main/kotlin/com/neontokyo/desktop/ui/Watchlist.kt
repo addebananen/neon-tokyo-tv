@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.neontokyo.desktop.LocalModel
 import com.neontokyo.desktop.LocalNavigator
 import com.neontokyo.desktop.Screen
@@ -26,20 +27,18 @@ fun WatchlistScreen() {
     LazyVerticalGrid(
         GridCells.Adaptive((Metrics.posterWidth + Metrics.cardSpacing).dp),
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(Metrics.edge.dp),
+        contentPadding = PaddingValues(start = Metrics.edge.dp, end = Metrics.edge.dp, top = 48.dp, bottom = 96.dp),
         horizontalArrangement = Arrangement.spacedBy(Metrics.cardSpacing.dp),
-        verticalArrangement = Arrangement.spacedBy(Metrics.cardSpacing.dp),
+        verticalArrangement = Arrangement.spacedBy((Metrics.cardSpacing * 1.6f).dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Watchlist", style = neonDisplay())
+                Text("Watchlist", style = neonDisplay((Metrics.titleSize * 1.4f).sp))
                 if (items.isEmpty()) Text("Nothing here yet. Open a film or series and choose Watchlist.", color = theme.muted)
             }
         }
         items(items, key = { it.id }) { w ->
-            FocusCard({ nav.open(Screen.Details(w.asMeta())) }) {
-                PosterArt(w.title, w.poster, model.progress(w.id), model.isWatched(w.id))
-            }
+            PosterCard(w.title, w.poster, onClick = { nav.open(Screen.Details(w.asMeta())) }, progress = model.progress(w.id), watched = model.isWatched(w.id))
         }
     }
 }

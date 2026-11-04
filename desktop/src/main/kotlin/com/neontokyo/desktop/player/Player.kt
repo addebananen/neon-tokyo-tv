@@ -55,7 +55,11 @@ object Player {
      * Opens [url]. [progress] gets (position, duration) in milliseconds from a background thread,
      * every ten seconds and once more when the player closes; only mpv reports it.
      */
-    fun play(url: String, title: String, startMs: ULong, headers: Map<String, String>, progress: (ULong, ULong) -> Unit = { _, _ -> }) {
+    fun play(
+        url: String, title: String, startMs: ULong, headers: Map<String, String>,
+        startFraction: Double = 0.0,
+        progress: (ULong, ULong, Boolean) -> Unit = { _, _, _ -> },
+    ) {
         val start = (startMs / 1000uL).toLong()
         mpv?.let { exe ->
             val pipe = if (windows) "\\\\.\\pipe\\neon-mpv-${System.nanoTime()}"
@@ -65,6 +69,7 @@ object Player {
                 "--input-ipc-server=$pipe", "--osd-font=Kanit", "--osd-color=#F6EAFF", "--osd-border-color=#160A2E",
             )
             if (start > 0) args += "--start=$start"
+            else if (startFraction > 0.0) args += "--start=" + "%.2f".format(java.util.Locale.ROOT, startFraction * 100) + "%"
             if (headers.isNotEmpty()) args += "--http-header-fields=" + headers.entries.joinToString(",") { "${it.key}: ${it.value}" }
             args += url
             val proc = ProcessBuilder(args).redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
@@ -89,13 +94,13 @@ object Player {
     private val data = Regex("\"data\"\\s*:\\s*([0-9.eE+-]+)")
 
     /** Follows mpv's time-pos and duration over its control pipe until mpv closes. */
-    private fun watch(pipe: String, proc: Process, progress: (ULong, ULong) -> Unit) {
+    private fun watch(pipe: String, proc: Process, progress: (ULong, ULong, Boolean) -> Unit) {
         val conn = connect(pipe, proc) ?: return
         var pos = 0.0
         var dur = 0.0
         var lastSent = 0L
-        fun send() {
-            if (dur > 0) progress((pos * 1000).toULong(), (dur * 1000).toULong())
+        fun send(final: Boolean) {
+            if (dur > 0) progress((pos * 1000).toULong(), (dur * 1000).toULong(), final)
         }
         try {
             conn.out.write("{\"command\":[\"observe_property\",1,\"time-pos\"]}\n{\"command\":[\"observe_property\",2,\"duration\"]}\n".toByteArray())
@@ -109,13 +114,13 @@ object Player {
                 val now = System.currentTimeMillis()
                 if (now - lastSent >= 10_000) {
                     lastSent = now
-                    send()
+                    send(false)
                 }
             }
         } catch (_: Exception) {
             // mpv closed the pipe
         } finally {
-            send()
+            send(true)
             runCatching { conn.close() }
             if (!windows) File(pipe).delete()
         }

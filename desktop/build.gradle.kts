@@ -30,10 +30,22 @@ val copyFonts by tasks.registering(Copy::class) {
 }
 tasks.processResources { dependsOn(copyFonts) }
 
+// The version, when CI made the build (for the updater) and the Trakt app's id (a repository
+// secret in CI; empty locally, which turns Trakt off)
+val traktClientId: String = (findProperty("traktClientId") as String?) ?: System.getenv("TRAKT_CLIENT_ID") ?: ""
+val builtAt: String = (findProperty("builtAt") as String?) ?: "0"
 val writeVersion by tasks.registering {
-    val out = layout.buildDirectory.file("generated/native/neon-version.txt")
-    outputs.file(out)
-    doLast { out.get().asFile.apply { parentFile.mkdirs(); writeText(neonVersion) } }
+    val dir = layout.buildDirectory.dir("generated/native")
+    inputs.property("version", neonVersion)
+    inputs.property("builtAt", builtAt)
+    inputs.property("trakt", traktClientId)
+    outputs.dir(dir)
+    doLast {
+        val d = dir.get().asFile.apply { mkdirs() }
+        File(d, "neon-version.txt").writeText(neonVersion)
+        File(d, "neon-built.txt").writeText(builtAt)
+        File(d, "trakt-client.txt").writeText(traktClientId)
+    }
 }
 tasks.processResources { dependsOn(writeVersion) }
 
@@ -50,14 +62,16 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.neontokyo.desktop.MainKt"
-        jvmArgs += listOf("-Dsun.java2d.uiScale.enabled=true")
+        jvmArgs += listOf("-Dsun.java2d.uiScale.enabled=true", "-Dskiko.vsync.enabled=true", "-Dskiko.fps.limit=0")
         nativeDistributions {
+            // mpv, put here by CI, ships inside the installer (resources/mpv)
+            appResourcesRootDir.set(project.layout.projectDirectory.dir("app-resources"))
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Neon Tokyo"
             packageVersion = "0.2.$buildNumber"
             description = "Neon Tokyo: films and series from your Stremio addons"
             vendor = "Neon Tokyo"
-            modules("java.net.http", "jdk.crypto.ec", "java.naming")
+            modules("java.net.http", "jdk.crypto.ec", "java.naming", "java.desktop")
             windows {
                 iconFile.set(project.file("art/neon-tokyo.ico"))
                 menuGroup = "Neon Tokyo"

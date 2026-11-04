@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.neontokyo.desktop.LocalModel
 import com.neontokyo.desktop.LocalNavigator
 import com.neontokyo.desktop.Screen
@@ -43,17 +44,19 @@ fun SearchScreen() {
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = Metrics.edge.dp, bottom = Metrics.edge.dp),
+        contentPadding = PaddingValues(top = 48.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(Metrics.rowSpacing.dp),
     ) {
         item {
             Column(Modifier.padding(horizontal = Metrics.edge.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Search", style = neonDisplay())
+                Text("Search", style = neonDisplay((Metrics.titleSize * 1.4f).sp))
                 OutlinedTextField(
                     query, { query = it },
                     singleLine = true,
                     placeholder = { Text("Films, series, anime…") },
                     colors = neonFieldColors(),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = (Metrics.bodySize * 1.3f).sp, color = theme.text),
                     modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().focusRequester(field),
                 )
                 if (busy) CircularProgressIndicator(color = theme.primary, modifier = Modifier.size(24.dp))
@@ -63,9 +66,7 @@ fun SearchScreen() {
         items(results, key = { (c, _) -> c.addonBaseUrl + c.kind + c.id }) { (c, list) ->
             RowSection("${c.addonName} · ${kindName(c.kind)}") {
                 items(list, key = { it.id }) { m ->
-                    FocusCard({ nav.open(Screen.Details(m)) }) {
-                        PosterArt(m.name, m.poster, model.progress(m.id), model.isWatched(m.id))
-                    }
+                    PosterCard(m.name, m.poster, onClick = { nav.open(Screen.Details(m)) }, progress = model.progress(m.id), watched = model.isWatched(m.id))
                 }
             }
         }

@@ -41,6 +41,13 @@ class AppModel(private val scope: CoroutineScope) {
     var themeId by mutableStateOf(NeonTokens.neonTokyo.id)
         private set
     var showIntro by mutableStateOf(true)
+    var motion by mutableStateOf(com.neontokyo.desktop.ui.MotionLevel.values().firstOrNull { it.key == Store.read("motion")?.trim() } ?: com.neontokyo.desktop.ui.MotionLevel.Full)
+        private set
+    var sounds by mutableStateOf(Sound.enabled)
+        private set
+
+    val accounts = Accounts(this, scope)
+    val updates = Updater(scope)
 
     val theme: NeonThemeTokens get() = NeonTokens.themes.firstOrNull { it.id == themeId } ?: NeonTokens.neonTokyo
     val liveProfiles: List<Profile> get() = profiles.filter { !it.deleted }
@@ -60,6 +67,36 @@ class AppModel(private val scope: CoroutineScope) {
         nextUp = decodeNextUp(Store.read("next-up") ?: "[]")
         watchlist = decodeWatchlist(Store.read("watchlist") ?: "[]")
         themeId = Store.read("theme")?.trim() ?: NeonTokens.neonTokyo.id
+        accounts.load(activeProfileId)
+        updates.start()
+    }
+
+    fun setMotion(m: com.neontokyo.desktop.ui.MotionLevel) {
+        motion = m
+        Store.write("motion", m.key)
+    }
+
+    fun setSounds(on: Boolean) {
+        sounds = on
+        Sound.set(on)
+    }
+
+    /** Addons from a Stremio account: new ones are added after this device's own. */
+    suspend fun mergeAddons(bases: List<String>) {
+        val fresh = bases.filter { it !in addonUrls }
+        if (fresh.isEmpty()) return
+        addonUrls = addonUrls + fresh
+        Store.writeLines("addons", addonUrls)
+        refreshAddons().join()
+    }
+
+    /** What sync merged: the whole history (and watchlist, when given). */
+    fun applySynced(newHistory: List<WatchEntry>, newWatchlist: List<WatchlistItem>?) {
+        history = newHistory
+        if (newWatchlist != null) watchlist = newWatchlist
+        history = trimHistory(history, 2000u, now())
+        Store.write("history", encodeWatchEntries(history))
+        Store.write("watchlist", encodeWatchlist(watchlist))
     }
 
     private fun now() = System.currentTimeMillis()
@@ -94,6 +131,7 @@ class AppModel(private val scope: CoroutineScope) {
     fun select(profile: Profile?) {
         activeProfileId = profile?.id
         saveProfiles()
+        accounts.load(activeProfileId)
     }
 
     fun remove(profile: Profile) {
@@ -211,12 +249,19 @@ class AppModel(private val scope: CoroutineScope) {
             nextUp = nextUp.filterNot { it.profileId == pid && it.seriesId == item.seriesId } + n
         }
         saveWatch()
+        accounts.changed()
     }
 
     /** From mpv's thread: saved on the window's thread, like every other change. */
-    fun playerProgress(item: PlayItem, positionMs: ULong, durationMs: ULong) {
-        scope.launch { saveProgress(item, positionMs, durationMs) }
+    fun playerProgress(item: PlayItem, positionMs: ULong, durationMs: ULong, final: Boolean) {
+        scope.launch {
+            saveProgress(item, positionMs, durationMs)
+            if (final) accounts.scrobbleStop(item.playbackId, item.kind, positionMs, durationMs)
+        }
     }
+
+    /** Where to start: a saved time, or (from Trakt, where only the share is known) a share. */
+    fun resumeFractionOf(playbackId: String): Double = resumeFraction(entry(playbackId))
 
     // Watchlist
 
@@ -237,6 +282,7 @@ class AppModel(private val scope: CoroutineScope) {
             watchlist + WatchlistItem(pid, item.id, item.kind, item.name, item.poster, t, t, false)
         }
         saveWatch()
+        accounts.changed()
     }
 }
 

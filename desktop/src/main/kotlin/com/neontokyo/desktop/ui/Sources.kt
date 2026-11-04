@@ -59,8 +59,8 @@ fun SourcesScreen(request: SourceRequest) {
 private fun start(s: StreamSource, request: SourceRequest, model: AppModel) {
     val url = s.url ?: s.externalUrl ?: return
     val headers = s.requestHeaders.associate { it.name to it.value }
-    Player.play(url, request.play.title, model.resumePosition(request.play.playbackId), headers) { pos, dur ->
-        model.playerProgress(request.play, pos, dur)
+    Player.play(url, request.play.title, model.resumePosition(request.play.playbackId), headers, model.resumeFractionOf(request.play.playbackId)) { pos, dur, final ->
+        model.playerProgress(request.play, pos, dur, final)
     }
 }
 

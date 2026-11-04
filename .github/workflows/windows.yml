@@ -62,9 +62,26 @@ jobs:
         shell: bash
         run: desktop/build-core.sh
 
+      - name: Bundle mpv (plays MKV, HEVC, HDR and ASS subtitles like the TV)
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest \
+            | python -c "import sys,json; a=[x['browser_download_url'] for x in json.load(sys.stdin)['assets'] if x['name'].startswith('mpv-x86_64-') and not x['name'].startswith('mpv-x86_64-v3') and x['name'].endswith('.7z')]; print(a[0])")
+          echo "mpv: $url"
+          curl -fsSL -o mpv.7z "$url"
+          mkdir -p desktop/app-resources/windows/mpv
+          7z e mpv.7z -odesktop/app-resources/windows/mpv mpv.exe -r -y
+          ls -l desktop/app-resources/windows/mpv
+
       - name: Build the installers
         shell: bash
-        run: ./gradlew -p desktop packageMsi packageExe -PneonVersion="$NEON_VERSION" -PbuildNumber="$BUILD_NUMBER" --no-daemon --stacktrace
+        env:
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+        run: ./gradlew -p desktop packageMsi packageExe -PneonVersion="$NEON_VERSION" -PbuildNumber="$BUILD_NUMBER" -PbuiltAt="$(date +%s)000" --no-daemon --stacktrace
 
       - name: Collect the installers
         shell: bash

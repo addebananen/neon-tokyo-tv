@@ -21,6 +21,10 @@ object Store {
         }
     }
 
+    fun delete(name: String) {
+        File(dir, "$name.json").delete()
+    }
+
     fun lines(name: String): List<String>? = read(name)?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() }
     fun writeLines(name: String, lines: List<String>) = write(name, lines.joinToString("\n"))
 }
