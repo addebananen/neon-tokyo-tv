@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -146,12 +147,12 @@ fun Modifier.glassLift(
                 start = Offset(0f, 0f),
                 end = Offset(size.width * 0.55f, size.height)
             )
-            val outline = shape.createOutline(size, layoutDirection, this)
+            val path = shape.createOutline(size, layoutDirection, this).toPath()
             onDrawWithContent {
                 drawContent()
                 val a = t.coerceIn(0f, 1f)
                 if (a > 0.01f) {
-                    androidx.compose.ui.graphics.drawscope.clipPath(outline.toPath()) {
+                    clipPath(path) {
                         drawRect(sheen, alpha = a)
                     }
                 }

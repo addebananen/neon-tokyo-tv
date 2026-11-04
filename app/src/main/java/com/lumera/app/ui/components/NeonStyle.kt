@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.sp
 import com.lumera.app.R
 import com.lumera.app.ui.theme.KanitFamily
+import androidx.compose.ui.composed
 import com.lumera.app.ui.theme.themed
 import com.lumera.app.ui.theme.isGlass
 import com.lumera.app.ui.theme.Glass
@@ -370,7 +371,7 @@ fun NeonSkylineBackdrop(
  * while drawing, so the light comes and goes without recomposing anything. Put it before the
  * control's clip, or the glow is cut off.
  */
-fun Modifier.neonFocusRing(color: Color, corner: Dp, lit: () -> Float): Modifier = androidx.compose.ui.composed {
+fun Modifier.neonFocusRing(color: Color, corner: Dp, lit: () -> Float): Modifier = composed {
     if (isGlass) glassFocusRing(corner, lit) else neonRing(color, corner, lit)
 }
 
@@ -422,7 +423,7 @@ private fun Modifier.neonRing(color: Color, corner: Dp, lit: () -> Float): Modif
 }
 
 /** Dialog panel: deep violet glass with a magenta to cyan edge; on glass themes, deep blue glass with a hairline. */
-fun Modifier.neonPanel(shape: Shape = RoundedCornerShape(24.dp)): Modifier = androidx.compose.ui.composed {
+fun Modifier.neonPanel(shape: Shape = RoundedCornerShape(24.dp)): Modifier = composed {
     if (isGlass) background(Color(0xF20C2135), shape).border(1.dp, Glass.Hairline, shape) else neonPanelPlain(shape)
 }
 
