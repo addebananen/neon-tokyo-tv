@@ -99,6 +99,9 @@ object Glass {
 @ReadOnlyComposable
 fun TextStyle.themed(): TextStyle = if (!isGlass) this else glassy()
 
+/** NeonPalette.Text, kept here so the theme package does not reach into the components. */
+private val NEON_TEXT = Color(0xFFF6EAFF)
+
 internal fun TextStyle.glassy(): TextStyle {
     val wide = letterSpacing.isSp && letterSpacing.value >= 3f
     return copy(
@@ -111,6 +114,8 @@ internal fun TextStyle.glassy(): TextStyle {
         },
         // Labels spaced wide stay a little spaced, all else sits close as Apple sets it
         letterSpacing = if (wide) 1.5.sp else 0.sp,
+        // The neon white has a lilac cast; glass writes in its own cool white
+        color = if (color == NEON_TEXT) Glass.Text else color,
         shadow = shadow?.let { if (it.blurRadius > 0f) Shadow(Color(0x73000814), Offset(0f, 2f), 14f) else it }
     )
 }

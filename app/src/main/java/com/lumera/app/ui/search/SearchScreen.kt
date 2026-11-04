@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -447,9 +448,11 @@ fun SearchScreen(
                             }
                         }
                 ) {
-                    // Gradient background
+                    // Gradient background. A glass theme puts the field on its own frosted capsule instead,
+                    // over the picture behind the page, which a band of flat colour would cut across.
                     val backgroundColor = MaterialTheme.colorScheme.background
-                    Box(
+                    val glass = com.lumera.app.ui.theme.isGlass
+                    if (!glass) Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(searchBarHeight + 32.dp)
@@ -474,6 +477,15 @@ fun SearchScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(searchBarHeight)
+                            .then(
+                                if (glass) Modifier
+                                    .padding(vertical = 4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xE60C2135))
+                                    .border(1.dp, com.lumera.app.ui.theme.Glass.Hairline, CircleShape)
+                                    .padding(horizontal = 20.dp)
+                                else Modifier
+                            )
                     ) {
                         Icon(
                             Icons.Default.Search,

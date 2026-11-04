@@ -105,6 +105,7 @@ fun HubHeroGlow(title: String, modifier: Modifier = Modifier) {
 @Composable
 fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
+    val glass = com.lumera.app.ui.theme.isGlass
     val motion = rememberSceneMotion(code, "hero")
     // The entrance waits for both layers, so the subject never shows before its scene
     var sceneDone by remember { mutableStateOf(false) }
@@ -127,6 +128,7 @@ fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
                     // The scene starts a little larger than its box; the fades only cover the box
                     clip = true
                 }
+                .then(if (glass) Modifier.backdropFades(backgroundColor, mask = true) else Modifier)
         ) {
             // The subject layer is cut to where it sits, so the scene waits to know where that is
             if (motion != null) {
@@ -157,7 +159,7 @@ fun ServiceHeroArt(code: String, modifier: Modifier = Modifier) {
                     onSubject = { subjectDone = true }
                 )
             }
-            Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
+            if (!glass) Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
             NoiseOverlay()
         }
     }

@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -884,6 +885,7 @@ fun <T> VoidSegmentedControl(
     onFocus: () -> Unit = {}
 ) {
     val accent = MaterialTheme.colorScheme.primary
+    val glass = com.lumera.app.ui.theme.isGlass
     val gap = 12.dp
     // A lit pill sits behind the chosen option and glides over to the next one chosen. A row of
     // one is a button, with nothing chosen.
@@ -909,6 +911,11 @@ fun <T> VoidSegmentedControl(
                 onDrawBehind {
                     if (chosen < 0) return@onDrawBehind
                     val x = slide.value * (width + gapPx)
+                    if (glass) {
+                        // A frosted pill under the chosen option, the way tvOS marks a segment
+                        drawRoundRect(Color.White, Offset(x, 0f), Size(width, size.height), CornerRadius(size.height / 2f), alpha = 0.16f)
+                        return@onDrawBehind
+                    }
                     drawRoundRect(accent, Offset(x, 0f), Size(width, size.height), radius, alpha = 0.14f)
                     drawRoundRect(
                         accent,
@@ -961,6 +968,57 @@ fun <T> VoidSegmentedControl(
  * a neon tube around it rather than growing it, as a wide option that grows pushes past the
  * edges of the ones beside it.
  */
+/** A glass theme's segment: a white capsule that lifts a little in focus, with dark lettering. */
+@Composable
+private fun RowScope.GlassSegment(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    interactionSource: MutableInteractionSource,
+    isFocused: Boolean,
+    keyModifier: Modifier
+) {
+    val t by animateFloatAsState(if (isFocused) 1f else 0f, com.lumera.app.ui.theme.Glass.Motion, label = "GlassSegment")
+    val shape = androidx.compose.foundation.shape.CircleShape
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .widthIn(min = 100.dp)
+            .fillMaxHeight()
+            .then(keyModifier)
+            .graphicsLayer {
+                val s = 1f + 0.04f * t
+                scaleX = s; scaleY = s
+                shadowElevation = 10.dp.toPx() * t
+                this.shape = shape
+            }
+            .drawBehind {
+                drawRoundRect(
+                    com.lumera.app.ui.theme.Glass.PaneFocused,
+                    cornerRadius = CornerRadius(size.height / 2f),
+                    alpha = t.coerceIn(0f, 1f)
+                )
+            }
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontWeight = if (isSelected || isFocused) FontWeight.SemiBold else FontWeight.Medium,
+                fontSize = 14.sp
+            ),
+            color = when {
+                isFocused -> com.lumera.app.ui.theme.Glass.OnFocused
+                isSelected -> Color.White
+                else -> com.lumera.app.ui.theme.Glass.Dim
+            }
+        )
+    }
+}
+
 @Composable
 fun RowScope.SegmentItem(
     label: String,
@@ -977,6 +1035,11 @@ fun RowScope.SegmentItem(
     }
 
     val accent = MaterialTheme.colorScheme.primary
+    val glass = com.lumera.app.ui.theme.isGlass
+    if (glass) {
+        GlassSegment(label, isSelected, onClick, interactionSource, isFocused, keyModifier)
+        return
+    }
     val lit by animateFloatAsState(if (isFocused) 1f else 0f, tween(if (isFocused) 140 else 240), label = "SegmentFocus")
     val textColor by animateColorAsState(
         when {

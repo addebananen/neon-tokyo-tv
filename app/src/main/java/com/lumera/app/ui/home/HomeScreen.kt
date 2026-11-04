@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -1204,6 +1205,8 @@ private fun PersistLazyListPosition(
 fun CinematicBackground(item: MetaItem?) {
     // Use the theme's actual background color
     val backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.background
+    // Glass themes paint a picture behind the page, so the backdrop fades out instead of into a colour
+    val glass = com.lumera.app.ui.theme.isGlass
 
     Box(modifier = Modifier.fillMaxSize().zIndex(0f)) {
         Box(modifier = Modifier.align(Alignment.TopEnd).fillMaxWidth(0.65f).fillMaxHeight(0.65f)) {
@@ -1218,7 +1221,7 @@ fun CinematicBackground(item: MetaItem?) {
                         backdropRequest(context, currentItem.background, currentItem.poster)
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize().then(if (glass) Modifier.backdropFades(backgroundColor, mask = true) else Modifier)) {
                         AsyncImage(
                             model = backdrop?.request,
                             contentDescription = null,
@@ -1227,7 +1230,7 @@ fun CinematicBackground(item: MetaItem?) {
                                 .fillMaxSize()
                                 .alpha(if (backdrop?.wash == true) 0.7f else 1f)
                         )
-                        Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
+                        if (!glass) Spacer(modifier = Modifier.fillMaxSize().backdropFades(backgroundColor))
                         com.lumera.app.ui.components.NoiseOverlay()
                     }
                 }
@@ -1242,49 +1245,54 @@ fun CinematicBackground(item: MetaItem?) {
  * the description, and a soft shade sits where the title and text are, so lettering in a
  * backdrop stays behind the title.
  */
-internal fun Modifier.backdropFades(backgroundColor: Color): Modifier = drawWithCache {
+internal fun Modifier.backdropFades(backgroundColor: Color, mask: Boolean = false): Modifier =
+    (if (mask) graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen } else this)
+        .drawWithCache {
+    // As a mask the picture itself fades out, onto whatever backdrop the theme paints behind it
+    fun shade(a: Float) = if (mask) Color.Black.copy(alpha = 1f - a) else backgroundColor.copy(alpha = a)
+    val blend = if (mask) androidx.compose.ui.graphics.BlendMode.DstIn else androidx.compose.ui.graphics.BlendMode.SrcOver
     val leftFade = Brush.horizontalGradient(
         colorStops = arrayOf(
-            0.0f to backgroundColor,
-            0.1f to backgroundColor.copy(0.96f),
-            0.25f to backgroundColor.copy(0.88f),
-            0.4f to backgroundColor.copy(0.74f),
-            0.55f to backgroundColor.copy(0.54f),
-            0.7f to backgroundColor.copy(0.32f),
-            0.85f to backgroundColor.copy(0.12f),
-            1.0f to Color.Transparent
+            0.0f to shade(1f),
+            0.1f to shade(0.96f),
+            0.25f to shade(0.88f),
+            0.4f to shade(0.74f),
+            0.55f to shade(0.54f),
+            0.7f to shade(0.32f),
+            0.85f to shade(0.12f),
+            1.0f to shade(0f)
         ),
         startX = 0f,
         endX = size.width * 0.7f
     )
     val bottomFade = Brush.verticalGradient(
         colorStops = arrayOf(
-            0.0f to Color.Transparent,
-            0.2f to backgroundColor.copy(0.05f),
-            0.35f to backgroundColor.copy(0.15f),
-            0.45f to backgroundColor.copy(0.25f),
-            0.55f to backgroundColor.copy(0.38f),
-            0.65f to backgroundColor.copy(0.52f),
-            0.75f to backgroundColor.copy(0.68f),
-            0.85f to backgroundColor.copy(0.82f),
-            0.92f to backgroundColor.copy(0.92f),
-            1.0f to backgroundColor
+            0.0f to shade(0f),
+            0.2f to shade(0.05f),
+            0.35f to shade(0.15f),
+            0.45f to shade(0.25f),
+            0.55f to shade(0.38f),
+            0.65f to shade(0.52f),
+            0.75f to shade(0.68f),
+            0.85f to shade(0.82f),
+            0.92f to shade(0.92f),
+            1.0f to shade(1f)
         )
     )
     val textShade = Brush.radialGradient(
         colorStops = arrayOf(
-            0.0f to backgroundColor.copy(0.7f),
-            0.55f to backgroundColor.copy(0.34f),
-            1.0f to Color.Transparent
+            0.0f to shade(0.7f),
+            0.55f to shade(0.34f),
+            1.0f to shade(0f)
         ),
         center = Offset(0f, size.height * 0.4f),
         radius = size.width * 0.6f
     )
     onDrawWithContent {
         drawContent()
-        drawRect(brush = leftFade)
-        drawRect(brush = bottomFade)
-        drawRect(brush = textShade)
+        drawRect(brush = leftFade, blendMode = blend)
+        drawRect(brush = bottomFade, blendMode = blend)
+        drawRect(brush = textShade, blendMode = blend)
     }
 }
 
