@@ -756,9 +756,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun splashEnabled(): Boolean =
-        profileConfigurationManager.getLastActiveProfileId()?.let { id ->
+        (profileConfigurationManager.getLastActiveProfileId()?.let { id ->
             runBlocking(Dispatchers.IO) { addonDao.getProfileById(id) }
-        }?.splashEnabled ?: true
+        }?.splashEnabled ?: true).also {
+            getSharedPreferences("ui_look", MODE_PRIVATE).edit().putBoolean(KEY_SPLASH_ON, it).apply()
+        }
+
+    /**
+     * Whether the intro plays, at launch. The answer from the last time the app was put away
+     * is kept, so a cold start does not wait for the database to open; it is looked up afresh
+     * behind the intro. Only the very first launch asks the database while starting.
+     */
+    private fun splashEnabledAtLaunch(): Boolean {
+        val prefs = getSharedPreferences("ui_look", MODE_PRIVATE)
+        if (!prefs.contains(KEY_SPLASH_ON)) return splashEnabled()
+        lifecycleScope.launch(Dispatchers.IO) { splashEnabled() }
+        return prefs.getBoolean(KEY_SPLASH_ON, true)
+    }
 
     /** The first screen has something to show: the intro leaves as soon as it has played. */
     private fun onSplashAppReady() {
@@ -844,7 +858,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val splashEnabledInProfile = splashEnabled()
+        val splashEnabledInProfile = splashEnabledAtLaunch()
         // Brought back after the TV slept and the app was put away: the intro plays again when
         // it has been a while, not when the screen was only turned or rebuilt a moment ago
         val shownAgo = safeState?.getLong(KEY_SPLASH_SHOWN_AT, 0L)?.takeIf { it > 0L }?.let { SystemClock.elapsedRealtime() - it }
@@ -2480,6 +2494,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val KEY_SPLASH_SHOWN = "splash_shown"
         private const val KEY_SPLASH_SHOWN_AT = "splash_shown_at"
+        private const val KEY_SPLASH_ON = "splash_on"
 
         /** Neon Home's Continue watching: the profile to log in as and the title to open. */
         const val EXTRA_OPEN_PROFILE = "nt_open_profile"

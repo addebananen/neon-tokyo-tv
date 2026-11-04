@@ -306,7 +306,7 @@ fun DetailsScreen(
             val backdrop = remember(currentMovie.background, currentMovie.poster) {
                 backdropRequest(detailsContext, currentMovie.background, currentMovie.poster)
             }
-            Box(modifier = Modifier.alpha(contentAlpha)) {
+            Box(modifier = Modifier.graphicsLayer { alpha = contentAlpha }) {
             AsyncImage(
                 model = backdrop?.request,
                 contentDescription = null,
