@@ -15,6 +15,7 @@ on:
       - 'tools/gen_tokens.py'
       - 'app/src/main/res/font/**'
       - '.github/workflows/windows.yml'
+      - '.github/scripts/desktop-screens.sh'
   workflow_dispatch:
     inputs:
       prerelease:
@@ -118,3 +119,39 @@ jobs:
           body: |
             Test build of Neon Tokyo for Windows. Download the .msi (normal install) or the -setup.exe (portable installer), open it, and allow it past the Windows SmartScreen notice (More info -> Run anyway), since it is not signed with a paid Microsoft certificate.
           files: out/*
+
+  # The app on a Linux desktop at 1920 x 1080, screenshots of its main screens on the
+  # windows-screens branch, so how it looks can be checked without a Windows PC.
+  screens:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Linux desktop and fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq xvfb > /dev/null
+          sudo apt-get install -yq fonts-noto-cjk > /dev/null || true
+      - name: Build the core and the app
+        run: |
+          desktop/build-core.sh
+          ./gradlew -p desktop classes -q
+      - name: Screenshots
+        run: .github/scripts/desktop-screens.sh "$RUNNER_TEMP/windows-screens"
+      - name: Publish screenshots to the windows-screens branch
+        if: always()
+        continue-on-error: true
+        run: |
+          S="$RUNNER_TEMP/windows-screens"
+          [ -d "$S" ] || exit 0
+          cd "$S"
+          printf 'Windows app (on Linux, 1920x1080) of %s, run %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > README.md
+          git init -q -b windows-screens
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Windows screenshots $GITHUB_SHA"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" windows-screens

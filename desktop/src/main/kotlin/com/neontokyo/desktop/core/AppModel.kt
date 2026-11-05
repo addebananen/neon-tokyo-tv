@@ -49,6 +49,11 @@ class AppModel(private val scope: CoroutineScope) {
     val accounts = Accounts(this, scope)
     val updates = Updater(scope)
 
+    /** CI screenshots (NEON_DEMO=1): a profile is made and chosen, nothing is looked up on GitHub. */
+    val demo = System.getenv("NEON_DEMO") == "1"
+    /** CI screenshots: the screen to open at once (`settings`, `details:movie:tt15239678`, `intro`). */
+    val launchScreen: String? = System.getenv("NEON_SCREEN")?.trim()?.ifEmpty { null }
+
     val theme: NeonThemeTokens get() = NeonTokens.themes.firstOrNull { it.id == themeId } ?: NeonTokens.neonTokyo
     val liveProfiles: List<Profile> get() = profiles.filter { !it.deleted }
     val activeProfile: Profile? get() = liveProfiles.firstOrNull { it.id == activeProfileId }
@@ -67,8 +72,15 @@ class AppModel(private val scope: CoroutineScope) {
         nextUp = decodeNextUp(Store.read("next-up") ?: "[]")
         watchlist = decodeWatchlist(Store.read("watchlist") ?: "[]")
         themeId = Store.read("theme")?.trim() ?: NeonTokens.neonTokyo.id
-        accounts.load(activeProfileId)
-        updates.start()
+        if (demo) {
+            showIntro = launchScreen == null || launchScreen == "intro"
+            if (liveProfiles.isEmpty()) createProfile("Neon")
+            if (activeProfile == null) activeProfileId = liveProfiles.firstOrNull()?.id
+            accounts.load(activeProfileId)
+        } else {
+            accounts.load(activeProfileId)
+            updates.start()
+        }
     }
 
     fun changeMotion(m: com.neontokyo.desktop.ui.MotionLevel) {

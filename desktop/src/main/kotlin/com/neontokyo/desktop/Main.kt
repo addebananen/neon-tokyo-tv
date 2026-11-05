@@ -23,21 +23,32 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.neontokyo.desktop.core.AppModel
 import com.neontokyo.desktop.theme.LocalNeon
 import com.neontokyo.desktop.theme.NeonTokens
 import com.neontokyo.desktop.ui.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 fun main() = application {
-    val state = rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1600.dp, 900.dp))
+    // CI screenshots (NEON_SHOT=file.png): a 1920 x 1080 window at the screen's corner
+    val shot = System.getenv("NEON_SHOT")?.ifBlank { null }
+    val state = if (shot != null) {
+        rememberWindowState(placement = WindowPlacement.Floating, position = WindowPosition(0.dp, 0.dp), size = DpSize(1920.dp, 1080.dp))
+    } else {
+        rememberWindowState(placement = WindowPlacement.Maximized, size = DpSize(1600.dp, 900.dp))
+    }
     var closing by remember { mutableStateOf(false) }
     Window(
         // switching off like an old TV, then gone
         onCloseRequest = { if (closing) exitApplication() else closing = true },
         title = "Neon Tokyo",
         state = state,
+        undecorated = shot != null,
         icon = painterResource("icon.png"),
         onPreviewKeyEvent = {
             // F11 toggles full screen, like a browser
@@ -53,7 +64,35 @@ fun main() = application {
             NeonApp(model)
             if (closing) PowerOff { exitApplication() }
         }
+        if (shot != null) LaunchedEffect(Unit) { takeScreenshot(window, shot); exitApplication() }
     }
+}
+
+/**
+ * For CI: waits NEON_SHOT_AFTER ms (pictures load), presses NEON_KEYS (`Down,Right`) like the
+ * arrow keys, then saves what the window shows.
+ */
+private suspend fun takeScreenshot(window: java.awt.Window, path: String) {
+    val robot = java.awt.Robot()
+    delay(System.getenv("NEON_SHOT_AFTER")?.toLongOrNull() ?: 20_000L)
+    window.toFront()
+    window.requestFocus()
+    System.getenv("NEON_KEYS").orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { k ->
+        val code = when (k) {
+            "Down" -> java.awt.event.KeyEvent.VK_DOWN
+            "Up" -> java.awt.event.KeyEvent.VK_UP
+            "Left" -> java.awt.event.KeyEvent.VK_LEFT
+            "Right" -> java.awt.event.KeyEvent.VK_RIGHT
+            "Enter" -> java.awt.event.KeyEvent.VK_ENTER
+            else -> return@forEach
+        }
+        robot.keyPress(code)
+        robot.keyRelease(code)
+        delay(500)
+    }
+    delay(1_500)
+    val image = robot.createScreenCapture(window.bounds)
+    withContext(Dispatchers.IO) { javax.imageio.ImageIO.write(image, "png", java.io.File(path)) }
 }
 
 /** Where the app is: a tab, and the screens opened on top of it. */
@@ -80,7 +119,18 @@ fun NeonApp(model: AppModel) {
     val nav = remember { Navigator() }
     val theme = model.theme
     val spot = remember { Spot() }
-    LaunchedEffect(Unit) { model.refreshAddons() }
+    LaunchedEffect(Unit) {
+        model.refreshAddons()
+        // CI screenshots open a screen directly
+        val parts = model.launchScreen?.split(":", limit = 3).orEmpty()
+        when {
+            parts.firstOrNull() == "details" && parts.size == 3 ->
+                nav.open(Screen.Details(uniffi.neon_core.MetaItem(parts[2], parts[1], "", null, null, null, null, null, null, emptyList(), null)))
+            parts.firstOrNull() == "settings" -> nav.switch(Tab.Settings)
+            parts.firstOrNull() == "search" -> nav.switch(Tab.Search)
+            parts.firstOrNull() == "profiles" -> model.select(null)
+        }
+    }
     // a new screen: the light on the floor waits for the focus to land again
     LaunchedEffect(nav.tab, nav.stack.size) { spot.on = false }
     MaterialTheme(colorScheme = darkColorScheme(primary = theme.primary, background = theme.background, surface = theme.panel)) {
