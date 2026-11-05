@@ -17,6 +17,7 @@ shot() { # name, wait ms, keys, screen
 shot intro 1800 "" intro
 shot home 25000 "" ""
 shot home-focus 25000 "Down,Down,Right" ""
+shot home-row2 25000 "Down,Down,Down,Right,Right" ""
 shot details 20000 "" details:movie:tt15239678
 shot series 20000 "" details:series:tt0903747
 shot settings 8000 "" settings
