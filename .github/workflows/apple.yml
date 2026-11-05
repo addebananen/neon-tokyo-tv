@@ -111,36 +111,6 @@ jobs:
             ls -l "../NeonTokyo-$p.ipa"
           done
 
-      - name: Build for the simulators
-        run: |
-          cd apple
-          for p in tvOS iOS; do
-            if [ $p = iOS ]; then sdk=iphonesimulator; else sdk=appletvsimulator; fi
-            if ! xcodebuild -project NeonTokyo.xcodeproj -scheme NeonTokyo-$p -configuration Debug -sdk $sdk \
-                -destination "generic/platform=$p Simulator" -derivedDataPath build/sim-$p \
-                CODE_SIGNING_ALLOWED=NO NEON_VERSION="$NEON_VERSION" build > sim-$p.log 2>&1; then
-              grep -E "error:|fatal" sim-$p.log | sort -u | head -80
-              exit 1
-            fi
-          done
-
-      - name: Screenshots from Apple TV and iPhone
-        run: .github/scripts/apple-screens.sh "$RUNNER_TEMP/apple-screens"
-
-      # screenshots must never hold back a release whose build passed
-      - name: Publish screenshots to the apple-screens branch
-        if: always()
-        continue-on-error: true
-        run: |
-          S="$RUNNER_TEMP/apple-screens"
-          [ -d "$S" ] || exit 0
-          cd "$S"
-          printf 'Apple builds of %s (%s), run %s\n' "$GITHUB_SHA" "$NEON_VERSION" "$GITHUB_RUN_ID" > README.md
-          git init -q -b apple-screens
-          git add -A
-          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Apple screenshots $NEON_VERSION"
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" apple-screens
-
       - uses: actions/upload-artifact@v4
         with:
           name: neon-tokyo-apple-${{ env.NEON_VERSION }}
@@ -164,3 +134,37 @@ jobs:
           body: |
             Test build of Neon Tokyo for iPhone and Apple TV. Unsigned: install with Sideloadly (iPhone) or atvloadly (Apple TV), which sign it with your Apple ID.
           files: NeonTokyo-*.ipa
+
+      # The core's simulator slices are arm64 only (the runners are Apple Silicon), so a
+      # generic simulator build must not ask for x86_64 too
+      - name: Build for the simulators
+        run: |
+          cd apple
+          for p in tvOS iOS; do
+            if [ $p = iOS ]; then sdk=iphonesimulator; else sdk=appletvsimulator; fi
+            if ! xcodebuild -project NeonTokyo.xcodeproj -scheme NeonTokyo-$p -configuration Debug -sdk $sdk \
+                -destination "generic/platform=$p Simulator" -derivedDataPath build/sim-$p \
+                ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+                CODE_SIGNING_ALLOWED=NO NEON_VERSION="$NEON_VERSION" build > sim-$p.log 2>&1; then
+              grep -E "error:|fatal|Undefined symbols|referenced from|ld: |symbol\(s\) not found" sim-$p.log | sort -u | head -80
+              grep -B2 -A12 "Undefined symbols" sim-$p.log | head -60 || true
+              exit 1
+            fi
+          done
+
+      - name: Screenshots from Apple TV and iPhone
+        run: .github/scripts/apple-screens.sh "$RUNNER_TEMP/apple-screens"
+
+      # screenshots must never hold back a release whose build passed
+      - name: Publish screenshots to the apple-screens branch
+        if: always()
+        continue-on-error: true
+        run: |
+          S="$RUNNER_TEMP/apple-screens"
+          [ -d "$S" ] || exit 0
+          cd "$S"
+          printf 'Apple builds of %s (%s), run %s\n' "$GITHUB_SHA" "$NEON_VERSION" "$GITHUB_RUN_ID" > README.md
+          git init -q -b apple-screens
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Apple screenshots $NEON_VERSION"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" apple-screens
