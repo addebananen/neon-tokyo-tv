@@ -68,29 +68,12 @@ fun main() = application {
     }
 }
 
-/**
- * For CI: waits NEON_SHOT_AFTER ms (pictures load), presses NEON_KEYS (`Down,Right`) like the
- * arrow keys, then saves what the window shows.
- */
+/** For CI: waits NEON_SHOT_AFTER ms (pictures load, NEON_KEYS are pressed), then saves what the window shows. */
 private suspend fun takeScreenshot(window: java.awt.Window, path: String) {
     val robot = java.awt.Robot()
+    // the pointer off the cards, so only the keys light one
+    robot.mouseMove(window.x + window.width - 2, window.y + 2)
     delay(System.getenv("NEON_SHOT_AFTER")?.toLongOrNull() ?: 20_000L)
-    window.toFront()
-    window.requestFocus()
-    System.getenv("NEON_KEYS").orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { k ->
-        val code = when (k) {
-            "Down" -> java.awt.event.KeyEvent.VK_DOWN
-            "Up" -> java.awt.event.KeyEvent.VK_UP
-            "Left" -> java.awt.event.KeyEvent.VK_LEFT
-            "Right" -> java.awt.event.KeyEvent.VK_RIGHT
-            "Enter" -> java.awt.event.KeyEvent.VK_ENTER
-            else -> return@forEach
-        }
-        robot.keyPress(code)
-        robot.keyRelease(code)
-        delay(500)
-    }
-    delay(1_500)
     val image = robot.createScreenCapture(window.bounds)
     withContext(Dispatchers.IO) { javax.imageio.ImageIO.write(image, "png", java.io.File(path)) }
 }
@@ -129,6 +112,23 @@ fun NeonApp(model: AppModel) {
             parts.firstOrNull() == "settings" -> nav.switch(Tab.Settings)
             parts.firstOrNull() == "search" -> nav.switch(Tab.Search)
             parts.firstOrNull() == "profiles" -> model.select(null)
+        }
+    }
+    // CI screenshots: NEON_KEYS (`Down,Down,Right`) move the focus like the arrow keys, 3 s before the shot
+    val keys = remember { System.getenv("NEON_KEYS").orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() } }
+    if (keys.isNotEmpty()) {
+        val focus = LocalFocusManager.current
+        LaunchedEffect(Unit) {
+            delay(((System.getenv("NEON_SHOT_AFTER")?.toLongOrNull() ?: 20_000L) - 3_000L - keys.size * 450L).coerceAtLeast(1_000L))
+            keys.forEach { k ->
+                when (k) {
+                    "Down" -> focus.moveFocus(FocusDirection.Down)
+                    "Up" -> focus.moveFocus(FocusDirection.Up)
+                    "Left" -> focus.moveFocus(FocusDirection.Left)
+                    "Right" -> focus.moveFocus(FocusDirection.Right)
+                }
+                delay(450)
+            }
         }
     }
     // a new screen: the light on the floor waits for the focus to land again

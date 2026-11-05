@@ -117,8 +117,8 @@ fun WideTile(
             })
             Column(Modifier.align(Alignment.BottomStart).padding(14.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 if (logoUrl != null && logoOk) {
-                    NeonImage(logoUrl, Modifier.height(54.dp).widthIn(max = 220.dp).fillMaxWidth(), ContentScale.Fit, alignment = Alignment.BottomStart,
-                        placeholder = false, onFailed = { logoOk = false })
+                    NeonLogo(logoUrl, Modifier.height(54.dp).widthIn(max = 220.dp).fillMaxWidth(), Alignment.BottomStart,
+                        onFailed = { logoOk = false })
                 } else {
                     Text(name, style = neonDisplay((Metrics.bodySize * 1.35f).sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }

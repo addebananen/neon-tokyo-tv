@@ -104,7 +104,9 @@ fun DetailsScreen(item: MetaItem) {
         // the title's picture, drifting slowly, melting into the world at the bottom
         Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
             drawContent()
-            drawRect(Brush.verticalGradient(0f to Color.Black, 0.62f to Color.Black.copy(alpha = 0.75f), 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+            // solid down to the middle (the skyline must not show through faces), then melting
+            drawRect(Brush.verticalGradient(0f to Color.Black, 0.52f to Color.Black, 0.8f to Color.Black.copy(alpha = 0.45f), 1f to Color.Transparent),
+                blendMode = BlendMode.DstIn)
         }) {
             NeonImage(
                 Art.background(meta.id, meta.background) ?: meta.poster,
@@ -116,7 +118,9 @@ fun DetailsScreen(item: MetaItem) {
                 placeholder = false,
             )
             Box(Modifier.fillMaxSize().drawWithContent {
-                drawRect(Brush.horizontalGradient(listOf(theme.background.copy(alpha = 0.94f), theme.background.copy(alpha = 0.55f), Color.Transparent), endX = size.width * 0.75f))
+                // the night behind the story, so it reads over any picture
+                drawRect(Brush.horizontalGradient(0f to theme.background.copy(alpha = 0.95f), 0.3f to theme.background.copy(alpha = 0.8f),
+                    0.5f to theme.background.copy(alpha = 0.42f), 0.75f to Color.Transparent))
             })
         }
         LazyColumn(
@@ -127,8 +131,8 @@ fun DetailsScreen(item: MetaItem) {
             item {
                 Column(Modifier.padding(horizontal = Metrics.edge.dp).widthIn(max = 860.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     if (logoUrl != null && logoOk) {
-                        NeonImage(logoUrl, Modifier.height(140.dp).widthIn(max = 520.dp).fillMaxWidth(), ContentScale.Fit, Alignment.CenterStart,
-                            placeholder = false, onFailed = { logoOk = false })
+                        NeonLogo(logoUrl, Modifier.height(140.dp).widthIn(max = 520.dp).fillMaxWidth(), Alignment.CenterStart,
+                            onFailed = { logoOk = false })
                     } else {
                         Text(meta.name, style = neonDisplay((Metrics.titleSize * 1.8f).sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }

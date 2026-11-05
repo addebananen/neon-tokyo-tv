@@ -193,8 +193,8 @@ private fun HeroText(it: MetaItem) {
     ) {
         Staggered(shown, 0) {
             if (logoUrl != null && logoOk) {
-                NeonImage(logoUrl, Modifier.height(120.dp).widthIn(max = 460.dp).fillMaxWidth(), ContentScale.Fit, Alignment.CenterStart,
-                    placeholder = false, onFailed = { logoOk = false })
+                NeonLogo(logoUrl, Modifier.height(120.dp).widthIn(max = 460.dp).fillMaxWidth(), Alignment.CenterStart,
+                    onFailed = { logoOk = false })
             } else {
                 Text(it.name, style = neonDisplay((Metrics.titleSize * 1.7f).sp), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
