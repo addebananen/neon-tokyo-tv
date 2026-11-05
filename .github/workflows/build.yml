@@ -7,6 +7,8 @@ on:
     paths-ignore:
       - 'web/**'
       - '.github/workflows/web.yml'
+      - '.github/workflows/web-screens.yml'
+      - '.github/scripts/web-screens.cjs'
   workflow_dispatch:
     inputs:
       full:
