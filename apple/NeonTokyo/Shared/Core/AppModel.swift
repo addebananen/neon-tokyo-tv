@@ -29,6 +29,8 @@ final class AppModel {
     /// Set by the CI screenshot run (launch argument `-NeonScreen`), opens a screen directly.
     let launchScreen: String? = UserDefaults.standard.string(forKey: "NeonScreen")
     let demo: Bool = UserDefaults.standard.bool(forKey: "NeonDemo")
+    /// CI screenshots (`-NeonFocusFirst YES`): Apple TV focuses the first row's second tile.
+    let focusFirst: Bool = UserDefaults.standard.bool(forKey: "NeonFocusFirst")
 
     private static let historyLimit: UInt32 = 400
 

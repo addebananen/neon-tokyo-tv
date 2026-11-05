@@ -351,6 +351,8 @@ struct TileRow<Content: View>: View {
     let tileWidth: CGFloat
     /// Told the focus key of each tile that takes focus.
     var onFocus: (String) -> Void = { _ in }
+    /// CI screenshots: a tile to focus a moment after the row appears.
+    var autoFocus: String? = nil
     @ViewBuilder let content: (FocusState<String?>.Binding) -> Content
     @FocusState private var focused: String?
     @State private var width: CGFloat = 0
@@ -398,6 +400,11 @@ struct TileRow<Content: View>: View {
             }
         }
         .tvFocusSection()
+        .task(id: autoFocus) {
+            guard let autoFocus else { return }
+            try? await Task.sleep(for: .seconds(2))
+            focused = autoFocus
+        }
     }
 }
 

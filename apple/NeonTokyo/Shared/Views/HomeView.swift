@@ -83,10 +83,11 @@ extension AppModel {
 private struct HomeShelf: View {
     let section: HomeSection
     var onFocus: (String) -> Void = { _ in }
+    var autoFocus: String? = nil
 
     var body: some View {
         TileRow(title: section.title, key: section.key, count: section.tiles.count,
-                tileWidth: section.wide ? WideTileSize.width : Metrics.posterWidth, onFocus: onFocus) { focus in
+                tileWidth: section.wide ? WideTileSize.width : Metrics.posterWidth, onFocus: onFocus, autoFocus: autoFocus) { focus in
             ForEach(section.tiles) { t in
                 TileLink(route: .details(t.item), art: section.wide ? t.art : t.poster,
                          radius: section.wide ? NeonTokens.shapeCardRadius + 4 : NeonTokens.shapeCardRadius,
@@ -264,7 +265,8 @@ private struct TVHome: View {
                         VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
                             Color.clear.frame(height: pivot).id("top")
                             ForEach(sections) { s in
-                                HomeShelf(section: s) { key in focus(key, in: s) }
+                                HomeShelf(section: s, onFocus: { key in focus(key, in: s) },
+                                          autoFocus: model.focusFirst && s.key == sections.first?.key ? s.tiles.dropFirst().first?.key : nil)
                                     .id(s.key)
                             }
                             if sections.isEmpty { HomeEmpty() }

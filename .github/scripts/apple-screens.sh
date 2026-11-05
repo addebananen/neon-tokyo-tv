@@ -35,6 +35,7 @@ shoot() { # platform udid app
   }
   run intro 1
   run home 25
+  [ "$p" = tvOS ] && run home-focus 30 -NeonFocusFirst YES
   run details 20 -NeonScreen details:movie:tt15239678
   run series 20 -NeonScreen details:series:tt0903747
   run settings 8 -NeonScreen settings
