@@ -85,6 +85,12 @@ jobs:
           TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
         run: ./gradlew -p desktop packageMsi packageExe -PneonVersion="$NEON_VERSION" -PbuildNumber="$BUILD_NUMBER" -PbuiltAt="$(date +%s)000" --no-daemon --stacktrace
 
+      - name: The shared core is inside the app
+        shell: bash
+        run: |
+          jar=$(ls desktop/build/libs/*.jar | head -1)
+          jar tf "$jar" | grep -q 'win32-x86-64/neon_core.dll' || { echo "::error::neon_core.dll is missing from $jar, the app would not start"; exit 1; }
+
       - name: Collect the installers
         shell: bash
         run: |
@@ -140,7 +146,8 @@ jobs:
       - name: Build the core and the app
         run: |
           desktop/build-core.sh
-          ./gradlew -p desktop classes -q
+          ./gradlew -p desktop jar -q
+          jar tf desktop/build/libs/*.jar | grep -q 'linux-x86-64/libneon_core.so' || { echo "::error::libneon_core.so is missing from the app"; exit 1; }
       - name: Screenshots
         run: .github/scripts/desktop-screens.sh "$RUNNER_TEMP/windows-screens"
       - name: Publish screenshots to the windows-screens branch

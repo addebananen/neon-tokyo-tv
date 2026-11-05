@@ -22,6 +22,7 @@ sourceSets.main {
     kotlin.srcDir("build/generated/uniffi")
     resources.srcDir("build/generated/native")
     resources.srcDir("build/generated/fonts")
+    resources.srcDir("build/generated/appinfo")
 }
 
 val copyFonts by tasks.registering(Copy::class) {
@@ -37,7 +38,9 @@ val traktClientId: String = (findProperty("traktClientId") as String?) ?: System
 val traktClientSecret: String = (findProperty("traktClientSecret") as String?) ?: System.getenv("TRAKT_CLIENT_SECRET") ?: ""
 val builtAt: String = (findProperty("builtAt") as String?) ?: "0"
 val writeVersion by tasks.registering {
-    val dir = layout.buildDirectory.dir("generated/native")
+    // its own folder: Gradle empties a task's output folder the first time the task runs, and
+    // the core's native library (generated/native, from build-core.sh) must not be in it
+    val dir = layout.buildDirectory.dir("generated/appinfo")
     inputs.property("version", neonVersion)
     inputs.property("builtAt", builtAt)
     inputs.property("trakt", traktClientId)
