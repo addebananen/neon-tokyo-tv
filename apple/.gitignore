@@ -1,0 +1,6 @@
+Generated/
+NeonTokyo.xcodeproj/
+build/
+*.ipa
+NeonTokyo/iOS/Info.plist
+NeonTokyo/tvOS/Info.plist

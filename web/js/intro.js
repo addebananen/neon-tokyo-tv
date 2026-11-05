@@ -8,7 +8,7 @@ export function playIntro() {
     el.className = 'intro';
     el.setAttribute('aria-hidden', 'true');
     const word = (t, cls) => `<span class="${cls}">${[...t].map((c, i) => `<i style="--d:${(i * 53 + (i % 3) * 71) % 420}ms">${c}</i>`).join('')}</span>`;
-    el.innerHTML = `<div class="intro-sign">${word('NEON', 'iw neon')}${word('TOKYO', 'iw tokyo')}<span class="intro-jp">ネオン東京</span><span class="intro-sweep"></span></div><div class="intro-horizon"></div>`;
+    el.innerHTML = `<div class="intro-sun"></div><div class="intro-sign">${word('NEON', 'iw neon')}${word('TOKYO', 'iw tokyo')}<span class="intro-jp">ネオン東京</span><span class="intro-sweep"></span></div><div class="intro-horizon"></div>`;
     document.body.append(el);
     let done = false;
     const finish = () => {

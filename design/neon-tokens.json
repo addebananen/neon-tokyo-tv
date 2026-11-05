@@ -1,0 +1,60 @@
+{
+  "_about": "Neon Tokyo's look in one place. tools/gen_tokens.py turns this into NeonTokens.swift (Apple) and NeonTokens.kt (Windows, later Android). Colours are the Android app's (ui/theme/DefaultThemes.kt, ui/components/NeonStyle.kt).",
+  "themes": [
+    {
+      "id": "neon_tokyo",
+      "name": "Neon Tokyo",
+      "focus": "glow",
+      "primary": "#FF3D9A",
+      "secondary": "#3EF0FF",
+      "warm": "#FFC46B",
+      "background": "#0D0721",
+      "surface": "#2A0F4F",
+      "panel": "#160A2E",
+      "text": "#F6EAFF",
+      "muted": "#B9A6D6",
+      "error": "#FF5A6E"
+    },
+    {
+      "id": "deep_blue",
+      "name": "Deep Blue",
+      "focus": "glass",
+      "primary": "#8FDCFF",
+      "secondary": "#F2F8FF",
+      "warm": "#FFD9A0",
+      "background": "#061423",
+      "surface": "#102A40",
+      "panel": "#0B1E31",
+      "text": "#F2F8FF",
+      "muted": "#9DB4C8",
+      "error": "#FF6B6B"
+    }
+  ],
+  "shape": {
+    "cardRadius": 12,
+    "panelRadius": 24,
+    "buttonRadius": 14
+  },
+  "focus": {
+    "glowScale": 1.05,
+    "glassScale": 1.10,
+    "glowRadius": 22,
+    "glowOpacity": 0.85
+  },
+  "motion": {
+    "focusMs": 160,
+    "pageMs": 280,
+    "introMs": 1800
+  },
+  "poster": {
+    "aspect": 0.6667,
+    "tvWidth": 220,
+    "phoneWidth": 116,
+    "desktopWidth": 180
+  },
+  "fonts": {
+    "display": "Kanit-SemiBoldItalic",
+    "heading": "Kanit-MediumItalic",
+    "label": "Kanit-Medium"
+  }
+}

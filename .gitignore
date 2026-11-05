@@ -66,3 +66,6 @@ app/src/main/jniLibs/*/libneon_siri.so
 native/siri-remote/target/
 native/siri-remote/sim/out/
 __pycache__/
+
+# mpv, fetched by CI into the Windows installer
+desktop/app-resources/windows/

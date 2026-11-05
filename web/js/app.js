@@ -6,6 +6,8 @@ import * as nav from './nav.js';
 import { $, $$, esc, html, poster, imgUrl, toast, modal, closeTopModal, blip, probeMetahub, isApple, isStandalone } from './ui.js';
 import { playIntro } from './intro.js';
 import * as sync from './sync.js';
+import * as trakt from './trakt.js';
+import { worldHtml, leanToward, floorUnder, floorOff } from './world.js';
 import { openPlayer, playerOpen, closePlayer, externalPlayers, chosenPlayer } from './player.js';
 
 export const VERSION = '0.2.0-web.__BUILD__';
@@ -37,7 +39,7 @@ const icon = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 
 function renderShell() {
   $('#app').innerHTML = `
-    <div class="bg" aria-hidden="true"><div class="bg-glow"></div><div class="bg-grid"></div></div>
+    ${worldHtml()}
     <header id="topbar">
       <a href="#/profiles" class="profile-badge" id="profileBadge" aria-label="Switch profile"></a>
       <a href="#/home" class="brand" tabindex="-1" aria-label="Neon Tokyo"><span class="brand-word">NEON<b>TOKYO</b></span><span class="brand-jp">ネオン東京</span></a>
@@ -107,6 +109,7 @@ async function route() {
   if (!store.profile() && r.name !== 'profiles') { location.replace('#/profiles'); return; }
   remember();
   document.body.classList.toggle('on-profiles', r.name === 'profiles');
+  document.body.classList.toggle('quiet-world', !['home', 'movies', 'series', 'profiles', 'service'].includes(r.name));
   setTab(['home', 'movies', 'series', 'search', 'addons', 'settings'].includes(r.name) ? r.name : null);
   const cached = viewCache.get(r.hash);
   const m = main();
@@ -151,27 +154,52 @@ function catalogTitle(addon, c) {
   return new RegExp(w, 'i').test(name) || !w ? name : `${name} ${w}`;
 }
 
+/** `--art` for a card: the lit card's glow is its own picture, blurred, so it glows in the
+ *  picture's colours. Only the lit card reads it, so nothing loads early. */
+function artStyle(src) {
+  return src ? ` style="--art:${esc(`url("${String(src).replace(/["\\\n]/g, (c) => '\\' + c)}")`)}"` : '';
+}
+
+const metahub = (kind, id) => (String(id).startsWith('tt') ? `https://images.metahub.space/${kind}/medium/${id}/img` : '');
+
 function card(m, extra = '') {
   const type = m.type || 'movie';
   const key = `${type}:${m.id}`;
-  return `<a class="card" href="#/detail/${encodeURIComponent(type)}/${encodeURIComponent(m.id)}" data-key="${esc(key)}" ${extra}>
+  return `<a class="card" href="#/detail/${encodeURIComponent(type)}/${encodeURIComponent(m.id)}" data-key="${esc(key)}"${artStyle(imgUrl(m.poster, 300))} ${extra}>
     ${poster(m.poster, m.name, 300)}
     <span class="card-title">${esc(m.name)}</span>
   </a>`;
 }
 
+/** A wide 2:1 tile: the backdrop with the title's logo on it, like an app tile on Neon Home. */
+function wideTile({ href, key, art, logo, name, sub = '', badge = '', progress = 0, attrs = '', after = '' }) {
+  const src = imgUrl(art, 640);
+  return `<a class="card wide" href="${href}" data-key="${esc(key)}"${artStyle(src)} ${attrs}>
+    <div class="poster">${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async" onload="this.classList.add('in')" onerror="this.remove()">` : ''}
+      ${badge}
+      <span class="wide-label">${logo ? `<img class="logo" src="${esc(imgUrl(logo, 500))}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : ''}<b>${esc(name)}</b>${sub ? `<em>${sub}</em>` : ''}</span>
+      ${progress > 0 ? `<span class="progress"><i style="width:${Math.min(100, progress * 100).toFixed(1)}%"></i></span>` : ''}
+    </div>${after}
+  </a>`;
+}
+
 function wideCard(c) {
   const ep = c.season != null && c.episode ? `S${c.season}:E${c.episode}` : '';
-  const key = `cw:${c.id}`;
-  return `<a class="card wide" href="#/detail/${encodeURIComponent(c.kind)}/${encodeURIComponent(c.id)}?resume=1" data-key="${esc(key)}" data-cw="${esc(c.id)}">
-    <div class="poster wide-art">${c.background || c.poster ? `<img src="${esc(imgUrl(c.background || c.poster, 600))}" alt="" loading="lazy" onload="this.classList.add('in')" onerror="this.remove()">` : ''}
-      <span class="poster-fallback">${esc(c.name)}</span>
-      ${c.hasNewEpisode ? '<span class="pill new">New episode</span>' : ''}
-      <span class="wide-label"><b>${esc(c.name)}</b>${ep ? `<em>${ep}</em>` : ''}</span>
-      ${c.progress > 0 ? `<span class="progress"><i style="width:${Math.min(100, c.progress * 100).toFixed(1)}%"></i></span>` : ''}
-    </div>
-    <button class="card-x" data-dismiss="${esc(c.id)}" tabindex="-1" aria-label="Remove from Continue watching">×</button>
-  </a>`;
+  return wideTile({
+    href: `#/detail/${encodeURIComponent(c.kind)}/${encodeURIComponent(c.id)}?resume=1`, key: `cw:${c.id}`,
+    art: c.background || metahub('background', c.id) || c.poster, logo: c.logo || metahub('logo', c.id), name: c.name, sub: ep,
+    badge: c.hasNewEpisode ? '<span class="pill new">New episode</span>' : '', progress: c.progress, attrs: `data-cw="${esc(c.id)}"`,
+    after: `<button class="card-x" data-dismiss="${esc(c.id)}" tabindex="-1" aria-label="Remove from Continue watching">×</button>`,
+  });
+}
+
+function wideMeta(m) {
+  const type = m.type || 'movie';
+  const facts = [m.releaseInfo || m.year, m.imdbRating ? `★ ${m.imdbRating}` : ''].filter(Boolean).map(esc).join(' · ');
+  return wideTile({
+    href: `#/detail/${encodeURIComponent(type)}/${encodeURIComponent(m.id)}`, key: `${type}:${m.id}`,
+    art: m.background || metahub('background', m.id) || m.poster, logo: m.logo || metahub('logo', m.id), name: m.name, sub: facts,
+  });
 }
 
 function rowShell(title, key, { more = '' } = {}) {
@@ -182,17 +210,20 @@ function rowShell(title, key, { more = '' } = {}) {
 }
 
 /** A catalog row that loads when it scrolls near the screen. */
-function catalogRow(addon, c, extra = {}) {
+function catalogRow(addon, c, extra = {}, { wide = false } = {}) {
   const title = catalogTitle(addon, c);
   const seeAll = `#/catalog/${encodeURIComponent(addon.base)}/${encodeURIComponent(c.type)}/${encodeURIComponent(c.id)}`;
   const row = rowShell(title, `${addon.base}|${c.type}|${c.id}`, { more: `<a class="see-all" href="${seeAll}" tabindex="-1">See all</a>` });
+  if (wide) row.classList.add('row-wide');
   row._load = async () => {
     const track = row.querySelector('.row-track');
     try {
       const metas = await core.fetchCatalog(addon.base, c.type, c.id, extra);
       if (!metas.length) { row.remove(); return; }
-      track.innerHTML = metas.slice(0, 30).map((m) => card({ ...m, type: m.type || c.type })).join('') +
-        `<a class="card more" href="${seeAll}" data-key="more:${esc(seeAll)}"><span>See all</span></a>`;
+      track.innerHTML = wide
+        ? metas.slice(0, 20).map((m) => wideMeta({ ...m, type: m.type || c.type })).join('')
+        : metas.slice(0, 30).map((m) => card({ ...m, type: m.type || c.type })).join('') +
+          `<a class="card more" href="${seeAll}" data-key="more:${esc(seeAll)}"><span>See all</span></a>`;
       row.dispatchEvent(new CustomEvent('loaded', { detail: metas, bubbles: true }));
     } catch {
       row.remove();
@@ -406,7 +437,7 @@ function browseView(filter) {
       node.append(html(`<div class="empty"><h2>No addons yet</h2><p>Neon Tokyo gets its films and series from Stremio addons.</p><a class="btn primary" href="#/addons">Add addons</a></div>`));
       return;
     }
-    let heroFed = false;
+    let heroFed = false, first = true;
     for (const addon of addons) {
       if (isServiceAddon(addon) && filter === 'all') {
         const sr = servicesRow(addon);
@@ -416,7 +447,8 @@ function browseView(filter) {
         if (!core.isBrowsable(c)) continue;
         if (filter !== 'all' && c.type !== filter) continue;
         if (isServiceAddon(addon) && SERVICE_CODES.has(c.id)) continue; // behind the service cards
-        const row = catalogRow(addon, c);
+        const row = catalogRow(addon, c, {}, { wide: first && c.type !== 'anime' });
+        if (c.type !== 'anime') first = false;
         if (h && !heroFed && c.type !== 'anime') {
           heroFed = true;
           row.addEventListener('loaded', (e) => h.setItems(e.detail, c.type), { once: true });
@@ -574,7 +606,7 @@ function seriesTarget(meta) {
   const started = st.history.filter((e) => e.profile_id === pid && !e.deleted && core.canonicalSeriesId(e.id) === meta.id)
     .sort((a, b) => b.updated_at_ms - a.updated_at_ms);
   const last = started[0];
-  if (last && !last.watched && byPid(last.id)) return { video: byPid(last.id), resume: last.position_ms >= 10000 };
+  if (last && !last.watched && byPid(last.id)) return { video: byPid(last.id), resume: last.position_ms >= 10000 || core.resumeFraction(last) > 0 };
   if (last && last.watched) {
     const next = core.findNextEpisode(meta.id, last.id, videos);
     if (next) return { video: next, resume: false, next: true };
@@ -585,7 +617,8 @@ function seriesTarget(meta) {
 function renderDetail(node, meta, focusResume) {
   const isSeries = meta.type === 'series' || (meta.videos && meta.videos.length > 1);
   const e = !isSeries ? store.entry(meta.id) : null;
-  const resumeMs = core.resumePositionMs(e);
+  const share = core.resumeFraction(e); // from Trakt: only how far, not the length
+  const resumeMs = core.resumePositionMs(e) || (share ? 1 : 0);
   const runtime = meta.runtime || '';
   const facts = [meta.releaseInfo || meta.year, runtime, meta.imdbRating ? `<span class="imdb">IMDb</span> ${esc(meta.imdbRating)}` : ''].filter(Boolean);
   const trailer = (meta.trailerStreams || []).find((t) => t.ytId) || (meta.trailers || []).find((t) => t.source);
@@ -607,7 +640,7 @@ function renderDetail(node, meta, focusResume) {
         ${!isSeries ? `<button class="btn ghost" data-watched data-key="d:watched"></button>` : ''}
         ${resumeMs ? '<button class="btn ghost" data-restart data-key="d:restart">' + icon('<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>') + '<span>From start</span></button>' : ''}
       </div>
-      ${resumeMs && e.duration_ms ? `<div class="resume-bar"><span class="progress"><i style="width:${(e.position_ms / e.duration_ms * 100).toFixed(1)}%"></i></span><em>${Math.round((e.duration_ms - e.position_ms) / 60000)} min left</em></div>` : ''}
+      ${resumeMs && e.duration_ms ? `<div class="resume-bar"><span class="progress"><i style="width:${(e.position_ms / e.duration_ms * 100).toFixed(1)}%"></i></span><em>${share ? `${Math.round(share * 100)} % watched` : `${Math.round((e.duration_ms - e.position_ms) / 60000)} min left`}</em></div>` : ''}
       ${cast.length || director.length ? `<p class="credits">${director.length ? `<b>Director</b> ${esc(director.slice(0, 2).join(', '))}` : ''}${cast.length ? ` <b>Cast</b> ${esc(cast.join(', '))}` : ''}</p>` : ''}
     </div>
     ${isSeries ? '<section class="episodes" data-nav-section="episodes"><div class="seasons chips"></div><div class="ep-list"></div></section>' : ''}
@@ -639,7 +672,8 @@ function renderDetail(node, meta, focusResume) {
       label.textContent = t.resume ? `Resume ${ep}` : t.next ? `Next ${ep}` : `Play ${ep}`;
       if (season === null) season = t.video.season;
     } else {
-      label.textContent = core.resumePositionMs(store.entry(meta.id)) ? 'Resume' : 'Play';
+      const en = store.entry(meta.id);
+      label.textContent = core.resumePositionMs(en) || core.resumeFraction(en) ? 'Resume' : 'Play';
     }
   };
   paintPlay();
@@ -915,6 +949,38 @@ function accountSection() {
     <div class="row-btns"><button class="btn ghost" data-syncnow>${icon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/>')}<span>Sync now</span></button><button class="btn ghost danger" data-signout>Sign out</button></div>`;
 }
 
+function traktSection() {
+  if (!trakt.available()) return '<p class="muted">This build was made without a Trakt key.</p>';
+  const st = trakt.traktStatus();
+  const code = trakt.signInCode();
+  if (code) {
+    const url = code.url.replace(/^https?:\/\//, '');
+    return `<div class="trakt-code">
+        <p class="muted">On your phone or here, go to <b>${esc(url)}</b> and type</p>
+        <strong class="code-sign">${esc(code.userCode)}</strong>
+        <p class="muted small">This page signs in by itself once the code is entered.</p>
+      </div>
+      <div class="row-btns"><a class="btn primary" href="${esc(code.url)}/${encodeURIComponent(code.userCode)}" target="_blank" rel="noopener" data-key="t:open">Open ${esc(url)}</a><button class="btn ghost" data-trakt-cancel>Cancel</button></div>`;
+  }
+  if (st.state === 'code') return '<p class="muted"><span class="spinner"></span> Getting a code from Trakt…</p>';
+  if (!trakt.linked()) {
+    return `<p class="muted">Scrobbles what you watch here and brings in what you watched in other apps (the TV, Omni, your phone), for ${esc(store.profile().name)}.</p>
+      ${st.error ? `<p class="form-error">${esc(st.error)}</p>` : ''}
+      <div class="row-btns"><button class="btn primary" data-trakt-in>${icon('<circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>')}<span>Connect Trakt</span></button></div>`;
+  }
+  const name = trakt.username();
+  const line = st.state === 'syncing' ? 'Syncing…' : st.error ? `Not synced: ${esc(st.error)}` : esc(st.note || 'Signed in');
+  return `<div class="account"><span class="avatar trakt-mark">t</span>
+      <span><strong>${esc(name || 'Trakt')}</strong><small class="${st.error ? 'bad' : ''}">${line}</small></span></div>
+    <div class="row-btns"><button class="btn ghost" data-trakt-sync>${icon('<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/>')}<span>Sync now</span></button><button class="btn ghost danger" data-trakt-out>Disconnect</button></div>`;
+}
+
+function updatesSection(note = '') {
+  return `<div class="account"><span class="avatar ver-mark">${updateReady() ? '★' : '✓'}</span>
+      <span><strong>Neon Tokyo Web ${esc(VERSION)}</strong><small>${esc(note || (updateReady() ? 'A new version is ready' : 'Updates download by themselves in the background'))}</small></span></div>
+    <div class="row-btns">${updateReady() ? '<button class="btn primary" data-update-now>Restart into the new version</button>' : '<button class="btn ghost" data-update-check>Check for updates</button>'}</div>`;
+}
+
 // ---------- Settings ----------
 
 VIEWS.settings = (node) => {
@@ -928,6 +994,8 @@ VIEWS.settings = (node) => {
         </div>
       </section>
       <section class="set-group"><h2>Stremio account for ${esc(p.name)}</h2><div data-account>${accountSection()}</div></section>
+      <section class="set-group"><h2>Trakt for ${esc(p.name)}</h2><div data-trakt>${traktSection()}</div></section>
+      <section class="set-group"><h2>Updates</h2><div data-updates>${updatesSection()}</div></section>
       <section class="set-group"><h2>Video player</h2>
         <p class="muted">Films open in this player on this device. Your own app plays more file types (MKV, Dolby Vision, Atmos) and keeps playing when the screen locks.</p>
         <div class="player-pick">${externalPlayers().map(([id, name]) => `<button class="chip ${(s.player || 'builtin') === id ? 'on' : ''}" data-player="${id}">${esc(name)}</button>`).join('')}</div>
@@ -953,6 +1021,18 @@ VIEWS.settings = (node) => {
       </section>`;
   };
   const off = sync.onChange(() => { if (document.contains(node)) { const sec = node.querySelector('[data-account]'); if (sec) sec.innerHTML = accountSection(); } else off(); });
+  // Redraw the Trakt part in place; keep the focus on the same control
+  const paintTrakt = () => {
+    const sec = node.querySelector('[data-trakt]');
+    if (!sec) return;
+    const had = sec.contains(document.activeElement);
+    sec.innerHTML = traktSection();
+    if (had) nav.focusEl(sec.querySelector('button,a'), { scroll: false });
+  };
+  const offT = trakt.onChange(() => { if (document.contains(node)) paintTrakt(); else offT(); });
+  const paintUpdates = (note) => { const sec = node.querySelector('[data-updates]'); if (sec) sec.innerHTML = updatesSection(note); };
+  const onUpdate = () => { if (document.contains(node)) paintUpdates(); else updateListeners.delete(onUpdate); };
+  updateListeners.add(onUpdate);
   const toggle = (k, title, sub, on) => `<button class="toggle ${on ? 'on' : ''}" data-toggle="${k}" role="switch" aria-checked="${on}"><span><strong>${title}</strong><small>${sub}</small></span><i></i></button>`;
   draw();
   node.addEventListener('click', (e) => {
@@ -970,6 +1050,12 @@ VIEWS.settings = (node) => {
     if ('syncnow' in t.dataset) sync.syncNow({ full: true }).then(() => { invalidateBrowse(); draw(); });
     if ('signout' in t.dataset && confirm('Sign this profile out of Stremio? What is saved here stays.')) { sync.signOut(); draw(); }
     if ('install' in t.dataset && deferredInstall) { deferredInstall.prompt(); deferredInstall = null; }
+    if ('traktIn' in t.dataset) trakt.signIn();
+    if ('traktCancel' in t.dataset) trakt.cancel();
+    if ('traktSync' in t.dataset) trakt.syncNow().then(() => { invalidateBrowse(); });
+    if ('traktOut' in t.dataset && confirm('Disconnect Trakt from this profile? What is saved here stays.')) trakt.signOut();
+    if ('updateNow' in t.dataset) applyUpdate();
+    if ('updateCheck' in t.dataset) { t.disabled = true; t.textContent = 'Checking…'; checkForUpdate().then((note) => paintUpdates(note)); }
   });
   node.addEventListener('change', async (e) => {
     if (!e.target.matches('[data-import]')) return;
@@ -1004,6 +1090,98 @@ document.addEventListener('click', (e) => {
   if (row && !row.querySelector('.card')) row.remove();
 }, true);
 
+// ---------- The light that follows the focus ----------
+// With keys: the focused card pops (CSS), the floor light glides under it and the skyline
+// leans along the row. With a mouse: the card under the pointer does the same.
+
+function leanFor(card) {
+  const track = card.parentElement;
+  if (track && track.classList.contains('row-track') && track.scrollWidth > track.clientWidth) {
+    leanToward((card.offsetLeft + card.offsetWidth / 2) / track.scrollWidth);
+  } else {
+    const r = card.getBoundingClientRect();
+    leanToward((r.left + r.width / 2) / innerWidth);
+  }
+}
+
+function installFocusLight() {
+  const root = document.documentElement;
+  document.addEventListener('focusin', (e) => {
+    if (!root.classList.contains('kbd')) return;
+    const t = e.target;
+    if (t.closest('.card,.btn,.chip,.episode,.src-main,.profile')) sound('move');
+    if (t.classList.contains('card')) { floorUnder(t, 'on'); leanFor(t); }
+  });
+  let lit = null;
+  const unlight = () => { if (lit) { lit.classList.remove('lit'); floorOff(lit); lit = null; } };
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const c = e.target.closest && e.target.closest('.card');
+    if (c === lit) return;
+    unlight();
+    if (!c) return;
+    lit = c;
+    c.classList.add('lit');
+    floorUnder(c, 'lit');
+    leanFor(c);
+  }, { passive: true });
+  root.addEventListener('pointerleave', unlight);
+  addEventListener('hashchange', unlight);
+}
+
+// ---------- Updates ----------
+// The service worker keeps the app on the device. When a new version is published it is
+// fetched in the background; a pill offers to switch to it (and it switches by itself the
+// next time the app opens).
+
+let waitingWorker = null;
+const updateListeners = new Set();
+export const updateReady = () => !!waitingWorker;
+
+function offerUpdate(worker) {
+  waitingWorker = worker;
+  updateListeners.forEach((f) => f());
+  if ($('#updatePill')) return;
+  const pill = html(`<button id="updatePill" class="update-pill"><i></i><span>New version ready</span><b>Restart</b></button>`);
+  pill.addEventListener('click', applyUpdate);
+  document.body.append(pill);
+  requestAnimationFrame(() => pill.classList.add('in'));
+}
+
+function applyUpdate() {
+  if (!waitingWorker) { location.reload(); return; }
+  if (playerOpen()) closePlayer();
+  waitingWorker.postMessage('skip-waiting');
+}
+
+async function watchUpdates() {
+  if (!('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloading && waitingWorker) { reloading = true; location.reload(); } });
+  const reg = await navigator.serviceWorker.register('sw.js').catch(() => null);
+  if (!reg) return;
+  const track = (w) => {
+    if (!w) return;
+    const ready = () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(w); };
+    ready();
+    w.addEventListener('statechange', ready);
+  };
+  track(reg.waiting);
+  reg.addEventListener('updatefound', () => track(reg.installing));
+  const check = () => reg.update().catch(() => {});
+  setInterval(() => { if (!document.hidden) check(); }, 30 * 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+}
+
+export async function checkForUpdate() {
+  if (!('serviceWorker' in navigator)) return 'This browser cannot update apps in the background';
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return 'Updates work once the app is opened from its web address';
+  await reg.update().catch(() => {});
+  await new Promise((r) => setTimeout(r, 1500));
+  return waitingWorker || reg.waiting ? 'A new version is ready' : 'This is the newest version';
+}
+
 // ---------- Start ----------
 
 async function start() {
@@ -1012,7 +1190,7 @@ async function start() {
   nav.install({ onBack: back });
   addEventListener('hashchange', route);
   addEventListener('resize', () => setTab((parseHash().name)));
-  document.addEventListener('focusin', (e) => { if (document.documentElement.classList.contains('kbd') && e.target.closest('.card,.btn,.chip,.episode,.src-main,.profile')) sound('move'); });
+  installFocusLight();
   const introDone = settings().intro && !sessionStorage.getItem('nt.introShown') ? playIntro() : Promise.resolve();
   try { sessionStorage.setItem('nt.introShown', '1'); } catch { /* ignore */ }
   const probe = probeMetahub();
@@ -1026,7 +1204,8 @@ async function start() {
   route();
   store.refreshManifests();
   if (sync.linked()) sync.start();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (trakt.linked()) trakt.start();
+  watchUpdates();
 }
 
 start();

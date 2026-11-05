@@ -87,6 +87,7 @@ function playExternal(ctx, player) {
 }
 
 function markWatched(ctx) {
+  import('./trakt.js').then((t) => t.soonSync()).catch(() => {});
   const { meta, video } = ctx;
   const p = store.profile();
   const old = store.entry(ctx.playbackId);
@@ -352,6 +353,7 @@ export function openPlayer(ctx) {
   const close = () => {
     if (!el) return;
     save(true);
+    import('./trakt.js').then((t) => { t.scrobbleStop(store.entry(state.playbackId)); t.soonSync(); }).catch(() => {});
     clearInterval(saveTimer); clearTimeout(hideTimer);
     if (hls) hls.destroy();
     v.removeAttribute('src'); v.load();
@@ -435,5 +437,8 @@ export function openPlayer(ctx) {
   const entry = store.entry(state.playbackId);
   const start = ctx.fromStart ? 0 : core.resumePositionMs(entry) / 1000;
   load(state.stream, start);
+  // From Trakt only the share is known: seek there once the length is
+  const share = ctx.fromStart ? 0 : core.resumeFraction(entry);
+  if (share > 0.01) v.addEventListener('loadedmetadata', () => { if (isFinite(v.duration)) v.currentTime = v.duration * share; }, { once: true });
   setTimeout(() => nav.focusEl(el.querySelector('.pl-btn.main'), { scroll: false }), 50);
 }
