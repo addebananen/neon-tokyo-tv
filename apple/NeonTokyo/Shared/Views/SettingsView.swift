@@ -16,15 +16,56 @@ struct SettingsView: View {
     @State private var signInError: String?
 
     var body: some View {
+        #if os(tvOS)
+        // Apple TV's own Settings layout: who and what on the left, the list on a glass pane
+        // to the right, so nothing reads over the busy skyline.
+        HStack(alignment: .top, spacing: 64) {
+            SettingsAside()
+                .frame(width: 500)
+                .padding(.top, 90)
+            list
+                .padding(.horizontal, 28)
+                .padding(.vertical, 18)
+                .background(SettingsPane())
+                .padding(.vertical, 40)
+        }
+        .padding(.horizontal, Metrics.edge)
+        .background(NeonBackground(dim: 0.62))
+        .alert("Add addon", isPresented: $showAdd) { addAlert }
+        #else
+        list
+            .navigationTitle("Settings")
+            .scrollContentBackground(.hidden)
+            .background(NeonBackground(dim: 0.55))
+            .alert("Add addon", isPresented: $showAdd) { addAlert }
+        #endif
+    }
+
+    @ViewBuilder
+    private var addAlert: some View {
+        TextField("https://…/manifest.json", text: $addonInput)
+            #if os(iOS)
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            #endif
+        Button("Add") { add() }
+        Button("Cancel", role: .cancel) {}
+    }
+
+    private var list: some View {
         let accounts = model.accounts
-        List {
+        return List {
             Section("Profile") {
+                #if os(iOS)
+                // Apple TV shows the profile big beside the list
                 if let p = model.activeProfile {
                     HStack(spacing: 16) {
                         ProfileBadgeView(profile: p, size: Metrics.bodySize * 2, showName: false)
                         Text(p.name).font(.system(size: Metrics.bodySize, weight: .semibold))
                     }
                 }
+                #endif
                 Button("Switch profile") { model.select(nil) }
             }
 
@@ -87,21 +128,7 @@ struct SettingsView: View {
                 LabeledContent("Core", value: coreVersion())
             }
         }
-        .navigationTitle("Settings")
-        #if os(iOS)
-        .scrollContentBackground(.hidden)
-        #endif
-        .background(NeonBackground(dim: 0.45))
-        .alert("Add addon", isPresented: $showAdd) {
-            TextField("https://…/manifest.json", text: $addonInput)
-                #if os(iOS)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                #endif
-            Button("Add") { add() }
-            Button("Cancel", role: .cancel) {}
-        }
+        .tint(theme.primary)
     }
 
     // MARK: - Stremio
@@ -255,6 +282,99 @@ struct SettingsView: View {
         }
     }
 }
+
+#if os(tvOS)
+/// The left of Apple TV's Settings: the profile's badge lit like a sign, its name, and how the
+/// accounts are doing at a glance.
+private struct SettingsAside: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.neon) private var theme
+    @State private var lit = false
+
+    var body: some View {
+        let accounts = model.accounts
+        VStack(alignment: .leading, spacing: 30) {
+            NeonTitle(text: "Settings", size: Metrics.titleSize * 1.9)
+            if let p = model.activeProfile {
+                HStack(spacing: 26) {
+                    ProfileBadgeView(profile: p, size: 132, showName: false)
+                        .shadow(color: theme.primary.opacity(theme.focus == .glow ? (lit ? 0.7 : 0.35) : 0.2), radius: lit ? 34 : 18)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(p.name)
+                            .font(.system(size: Metrics.titleSize, weight: .bold))
+                            .foregroundStyle(theme.text)
+                        Text("Profile")
+                            .font(.system(size: Metrics.bodySize * 0.8, weight: .medium))
+                            .foregroundStyle(theme.muted)
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                AccountChip(name: "Stremio", on: accounts.stremio != nil,
+                            detail: accounts.stremio.map { $0.email } ?? "Not signed in")
+                AccountChip(name: "Trakt", on: accounts.trakt != nil,
+                            detail: accounts.trakt != nil ? "Connected" : (accounts.traktAvailable ? "Not connected" : "No key in this build"))
+                if let u = model.updates.available {
+                    AccountChip(name: "Update", on: true, detail: "\(u.version) is out", warm: true)
+                }
+            }
+            Spacer(minLength: 0)
+            Text("Neon Tokyo \(Bundle.main.shortVersion)")
+                .font(.system(size: Metrics.bodySize * 0.7, weight: .medium))
+                .foregroundStyle(theme.muted.opacity(0.7))
+                .padding(.bottom, 60)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { lit = true }
+        }
+    }
+}
+
+/// One account at a glance: a lamp that is lit when it is connected.
+private struct AccountChip: View {
+    let name: String
+    let on: Bool
+    let detail: String
+    var warm = false
+    @Environment(\.neon) private var theme
+
+    var body: some View {
+        let lamp = warm ? theme.warm : (on ? theme.secondary : theme.muted.opacity(0.35))
+        HStack(spacing: 16) {
+            Circle()
+                .fill(lamp)
+                .frame(width: 12, height: 12)
+                .shadow(color: on ? lamp : .clear, radius: 7)
+            Text(name)
+                .font(.system(size: Metrics.bodySize * 0.85, weight: .semibold))
+                .foregroundStyle(theme.text)
+            Text(detail)
+                .font(.system(size: Metrics.bodySize * 0.75))
+                .foregroundStyle(theme.muted)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(Capsule().fill(theme.panel.opacity(0.7)))
+        .overlay(Capsule().strokeBorder(on ? lamp.opacity(0.35) : theme.text.opacity(0.08), lineWidth: 1))
+    }
+}
+
+/// The glass the list sits on: the night, frosted, with a thin neon edge lit from the top.
+private struct SettingsPane: View {
+    @Environment(\.neon) private var theme
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 40, style: .continuous)
+        shape
+            .fill(.ultraThinMaterial)
+            .overlay(shape.fill(theme.panel.opacity(0.72)))
+            .overlay(shape.strokeBorder(LinearGradient(colors: [theme.primary.opacity(0.5), theme.secondary.opacity(0.12), .clear],
+                                                       startPoint: .top, endPoint: .bottom), lineWidth: 1.5))
+            .shadow(color: .black.opacity(0.55), radius: 40, y: 24)
+    }
+}
+#endif
 
 /// An account's line: its name, how sync went, a spinner while it runs.
 private struct StatusLine: View {

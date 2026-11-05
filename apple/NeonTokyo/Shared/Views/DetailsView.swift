@@ -29,10 +29,17 @@ struct DetailsView: View {
                                          startPoint: .top, endPoint: .bottom))
                     .frame(width: g.size.width, height: g.size.height, alignment: .topTrailing)
                     .transition(.opacity)
+                if !wide {
+                    // on a phone the story sits over the picture's foot: a soft night under it
+                    LinearGradient(stops: [.init(color: .clear, location: 0.2), .init(color: theme.background.opacity(0.82), location: 0.58)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(width: g.size.width, height: g.size.height * 0.62)
+                        .allowsHitTesting(false)
+                }
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: Metrics.rowSpacing * 0.55) {
-                        Spacer().frame(height: g.size.height * (wide ? 0.2 : 0.3))
+                        Spacer().frame(height: g.size.height * (wide ? 0.2 : 0.34))
                         VStack(alignment: .leading, spacing: Metrics.rowSpacing * 0.45) {
                             LogoOrTitle(title: meta.name, logo: Art.logo(meta.id, meta.logo), maxWidth: Metrics.posterWidth * 2.8,
                                         maxHeight: Metrics.posterWidth * 0.75, size: Metrics.titleSize * 1.6)

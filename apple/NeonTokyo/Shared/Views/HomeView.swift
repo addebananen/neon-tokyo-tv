@@ -368,17 +368,24 @@ private struct PhoneHero: View {
                     ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                         NavigationLink(value: Route.details(item)) {
                             ZStack(alignment: .bottomLeading) {
-                                DriftingPicture(url: Art.background(item.id, item.background) ?? item.poster)
-                                    .frame(height: height)
+                                // the picture fills the page's width (a wide picture filling the
+                                // height would otherwise widen the page and push the text off screen)
+                                Color.clear
+                                    .overlay { DriftingPicture(url: Art.background(item.id, item.background) ?? item.poster) }
                                     .clipped()
                                     .mask(LinearGradient(stops: [.init(color: .black, location: 0.45), .init(color: .clear, location: 1)],
                                                          startPoint: .top, endPoint: .bottom))
                                 LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.25))
+                                // a soft night under the story so a bright picture never washes it out
+                                LinearGradient(stops: [.init(color: .clear, location: 0.42), .init(color: theme.background.opacity(0.78), location: 1)],
+                                               startPoint: .top, endPoint: .bottom)
                                 HeroText(item: item, lines: 2)
                                     .padding(.horizontal, Metrics.edge)
                                     .padding(.bottom, 34)
                             }
+                            .frame(maxWidth: .infinity)
                             .frame(height: height)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .tag(i)
