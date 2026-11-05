@@ -1,0 +1,12 @@
+[SKIKO] warn: Fallback to next API
+org.jetbrains.skiko.RenderException: Cannot create Linux GL context
+
+(java:5333): dbind-WARNING **: 05:25:50.601: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files
+FocusRelatedWarning: 
+   FocusRequester is not initialized. Here are some possible fixes:
+
+   1. Remember the FocusRequester: val focusRequester = remember { FocusRequester() }
+   2. Did you forget to add a Modifier.focusRequester() ?
+   3. Are you attempting to request focus during composition? Focus requests should be made in
+   response to some event. Eg Modifier.clickable { focusRequester.requestFocus() }
+
