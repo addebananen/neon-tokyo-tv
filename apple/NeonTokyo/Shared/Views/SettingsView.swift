@@ -56,6 +56,7 @@ struct SettingsView: View {
     private var list: some View {
         let accounts = model.accounts
         return List {
+            Group {
             Section {
                 #if os(iOS)
                 // Apple TV shows the profile big beside the list
@@ -133,6 +134,11 @@ struct SettingsView: View {
             } header: {
                 SettingsHead(text: "About")
             }
+            }
+            #if os(iOS)
+            // the rows on the night's own glass instead of the system's grey
+            .listRowBackground(theme.panel.opacity(0.78))
+            #endif
         }
         .tint(theme.primary)
     }
