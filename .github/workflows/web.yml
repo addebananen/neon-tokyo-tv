@@ -47,7 +47,8 @@ jobs:
           TRAKT_ID: ${{ vars.TRAKT_CLIENT_ID }}
         run: |
           if [ -z "$TRAKT_ID" ]; then echo "No TRAKT_CLIENT_ID variable: Trakt stays off on the web"; exit 0; fi
-          if ! [[ "$TRAKT_ID" =~ ^[A-Za-z0-9]+$ ]]; then echo "::error::TRAKT_CLIENT_ID should be letters and digits only"; exit 1; fi
+          # A wrong value must not stop the site from publishing: Trakt just stays off until it is fixed
+          if ! [[ "$TRAKT_ID" =~ ^[A-Za-z0-9]+$ ]]; then echo "::warning::TRAKT_CLIENT_ID should be the Trakt app's Client ID (letters and digits only), so Trakt stays off on the web"; exit 0; fi
           sed -i "s/__TRAKT_ID__/$TRAKT_ID/" web/js/trakt.js
           echo "Trakt is on for the web page"
       - uses: actions/upload-pages-artifact@v3

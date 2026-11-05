@@ -632,7 +632,7 @@ function renderDetail(node, meta, focusResume) {
     <div class="detail-body" data-nav-section="hero">
       <div class="detail-logo">${meta.logo ? `<img src="${esc(imgUrl(meta.logo, 800))}" alt="${esc(meta.name)}" onerror="this.outerHTML='<h1>${esc(meta.name).replace(/'/g, '&#39;')}</h1>'">` : `<h1>${esc(meta.name)}</h1>`}</div>
       <p class="facts">${facts.map((f) => `<span>${f}</span>`).join('')}${(meta.genres || []).slice(0, 4).map((g) => `<span class="genre">${esc(g)}</span>`).join('')}</p>
-      <p class="desc">${esc(meta.description || '')}</p>
+      <p class="desc" onclick="this.classList.toggle('open')">${esc(meta.description || '')}</p>
       <div class="detail-actions">
         <button class="btn primary big" data-play data-key="d:play">${icon('<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>')}<span class="play-label"></span></button>
         ${trailerId ? `<button class="btn ghost" data-trailer="${esc(trailerId)}" data-key="d:trailer">${icon('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>')}<span>Trailer</span></button>` : ''}
