@@ -88,7 +88,9 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        #if os(iOS)
         .scrollContentBackground(.hidden)
+        #endif
         .background(NeonBackground(dim: 0.45))
         .alert("Add addon", isPresented: $showAdd) {
             TextField("https://…/manifest.json", text: $addonInput)
