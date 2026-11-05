@@ -36,9 +36,15 @@ const status = async () => {
   await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 5, downloadThroughput: 12e6, uploadThroughput: 6e6 });
   await page.setInputFiles('#library', videoFile);
   await page.click('#send');
-  await sleep(2000);
-  const awake = await page.evaluate(() => { const a = document.getElementById('awake'); return !a.paused && a.readyState >= 2; });
-  console.log(`keep-awake video playing: ${awake}`);
+  // The little video comes from the TV, which can be slow to answer at the end of a long emulator
+  // run: give it up to 10 s to start, the way a phone on Wi-Fi would wait for it
+  let awake = false;
+  const askedAt = Date.now();
+  while (!awake && Date.now() - askedAt < 10000) {
+    await sleep(250);
+    awake = await page.evaluate(() => { const a = document.getElementById('awake'); return !a.paused && a.readyState >= 2; });
+  }
+  console.log(`keep-awake video playing: ${awake} after ${Date.now() - askedAt} ms`);
   if (!awake) fail('the page did not start the video that keeps the phone awake');
 
   // Thrown away halfway, as a phone may do with a page it put to sleep
