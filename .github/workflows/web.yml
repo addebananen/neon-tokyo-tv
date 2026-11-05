@@ -39,6 +39,17 @@ jobs:
         run: |
           sed -i "s/__BUILD__/${{ github.run_number }}/g" web/js/app.js web/sw.js
           rm -rf web/test
+      # Trakt's Client ID is public by design (every request from the page carries it), so it
+      # comes from the repository's Variables (Settings > Secrets and variables > Actions >
+      # Variables: TRAKT_CLIENT_ID). The client secret never goes into the web page.
+      - name: Trakt app id for the web page
+        env:
+          TRAKT_ID: ${{ vars.TRAKT_CLIENT_ID }}
+        run: |
+          if [ -z "$TRAKT_ID" ]; then echo "No TRAKT_CLIENT_ID variable: Trakt stays off on the web"; exit 0; fi
+          if ! [[ "$TRAKT_ID" =~ ^[A-Za-z0-9]+$ ]]; then echo "::error::TRAKT_CLIENT_ID should be letters and digits only"; exit 1; fi
+          sed -i "s/__TRAKT_ID__/$TRAKT_ID/" web/js/trakt.js
+          echo "Trakt is on for the web page"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
