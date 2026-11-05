@@ -60,14 +60,33 @@ fun HomeScreen() {
         delay(140)
         hero = focusedItem
     }
-    val pivot = with(LocalDensity.current) { (Metrics.heroHeight * 0.52f).dp.toPx() }
+    // The focused row's cards stay where the first row's cards start (under the story, like
+    // Neon Home's film rows): rows above slide up and fade out under the story, never over it
+    val density = LocalDensity.current
+    val pivot = with(density) { (Metrics.heroHeight * 0.80f + 59f).dp.toPx() }
+    val fadeFrom = with(density) { 150.dp.toPx() }
+    val fadeTo = with(density) { 64.dp.toPx() }
     val vertical = remember(pivot) { PivotSpec(pivot) }
 
     Box(Modifier.fillMaxSize()) {
         Hero(hero ?: first, Modifier.fillMaxWidth().height((Metrics.heroHeight + 120).dp))
         CompositionLocalProvider(LocalBringIntoViewSpec provides vertical) {
             LazyColumn(
-                Modifier.fillMaxSize(),
+                Modifier.fillMaxSize()
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val h = size.height.coerceAtLeast(1f)
+                        drawRect(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                ((pivot - fadeFrom) / h).coerceIn(0f, 1f) to Color.Transparent,
+                                ((pivot - fadeTo) / h).coerceIn(0f, 1f) to Color.Black,
+                                1f to Color.Black,
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    },
                 contentPadding = PaddingValues(top = (Metrics.heroHeight * 0.80f).dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy((Metrics.rowSpacing * 0.4f).dp),
             ) {
