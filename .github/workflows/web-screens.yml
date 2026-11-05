@@ -1,0 +1,55 @@
+name: Web screenshots
+
+# Photographs the live Neon Tokyo Web (real catalogs) in a TV-sized window and on an iPhone,
+# and keeps the pictures on the web-screens branch. Runs after every web deploy.
+
+on:
+  workflow_run:
+    workflows: ["Neon Tokyo Web"]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: ['claude/**']
+    paths:
+      - '.github/scripts/web-screens.cjs'
+      - '.github/workflows/web-screens.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-screens
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Browser and fonts
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm i -q playwright@1.49.1
+          npx playwright install --with-deps chromium > /dev/null
+          sudo apt-get install -yq fonts-noto-cjk > /dev/null || true
+      - name: Screenshots
+        run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node .github/scripts/web-screens.cjs "$RUNNER_TEMP/web-screens"
+      - name: Publish screenshots to the web-screens branch
+        if: always()
+        continue-on-error: true
+        run: |
+          S="$RUNNER_TEMP/web-screens"
+          [ -d "$S" ] || exit 0
+          cd "$S"
+          printf 'Neon Tokyo Web (live site), run %s\n' "$GITHUB_RUN_ID" > README.md
+          git init -q -b web-screens
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Web screenshots, run $GITHUB_RUN_ID"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" web-screens

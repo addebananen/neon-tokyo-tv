@@ -582,11 +582,16 @@ body.on-profiles #topbar { display: none; }
   .page-head { padding-top: calc(var(--nav-h) + env(safe-area-inset-top) + 14px); }
   .page-head h1 { font-size: 32px; }
   .grid { gap: 18px 10px; grid-template-columns: repeat(3, 1fr); }
-  .detail-body { padding-top: calc(var(--nav-h) + 30vh); min-height: auto; }
+  /* Phone details read like the TV: title, facts, then Play right away; the story follows (4 lines, tap for all) */
+  .detail-body { padding-top: calc(var(--nav-h) + env(safe-area-inset-top) + 20svh); min-height: auto; }
+  .detail-body .desc { order: 1; margin: 18px 0 0; font-size: 15px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; cursor: pointer; }
+  .detail-body .desc.open { -webkit-line-clamp: unset; }
+  .detail-body .credits { order: 2; }
+  .facts { margin: 14px 0 16px; gap: 6px 12px; font-size: 14px; }
+  .facts .genre { font-size: 12px; padding: 1px 9px; }
   .detail-shade { background: linear-gradient(to top, var(--bg) 35%, color-mix(in srgb, var(--bg) 40%, transparent) 70%, transparent); }
   .detail-art img.in { opacity: .75; }
   .detail-art { bottom: 40%; }
-  .desc { font-size: 15px; }
   .ep-list { grid-template-columns: 1fr; gap: 10px; }
   .ep-thumb { width: 120px; }
   .search-bar { margin-top: calc(var(--nav-h) + env(safe-area-inset-top) + 16px); }
