@@ -53,3 +53,45 @@ const cw = core.continueWatching([e, half], [next], 'p');
 assert.deepEqual(Object.fromEntries(cw.map((c) => [c.id, c.resumeId])), { tt1: 'tt1:1:3', tt9: 'tt9' });
 
 console.log('core rules: all good');
+
+// ---------- Trakt (mirrors trakt.rs tests) ----------
+{
+  const m = core.traktScrobbleBody('tt1', 'movie', 42.123);
+  assert.deepEqual(m, { movie: { ids: { imdb: 'tt1' } }, progress: 42.12 });
+  const e = core.traktScrobbleBody('tmdb:1399:2:5', 'series', 90);
+  assert.equal(e.show.ids.tmdb, 1399);
+  assert.deepEqual(e.episode, { season: 2, number: 5 });
+  assert.equal(core.traktScrobbleBody('kitsu:1:1:1', 'series', 5), null);
+
+  const w = (id, kind, watched, dur = 1) => ({ profile_id: 'p', id, kind, title: 'T', position_ms: watched ? dur : 1, duration_ms: dur, watched, updated_at_ms: 1000, deleted: false });
+  const body = core.traktHistoryBody([w('tt9:1:1', 'series', true), w('tt9:1:2', 'series', true), w('tt1', 'movie', true), w('tt2', 'movie', false, 6e6)]);
+  assert.equal(body.movies.length, 1);
+  assert.equal(body.shows[0].seasons[0].episodes.length, 2);
+  assert.equal(core.traktHistoryBody([]), null);
+
+  const mine = { ...core.recordProgress(null, { profileId: 'p', id: 'tmdb:1399:1:1', kind: 'series', title: 'GoT', positionMs: 10, durationMs: 3_600_000 }), updated_at_ms: 5 };
+  const playback = [
+    { progress: 50, paused_at: '2026-11-03T20:00:00.000Z', type: 'episode', episode: { season: 1, number: 1 }, show: { title: 'GoT', ids: { imdb: 'tt0944947', tmdb: 1399 } } },
+    { progress: 25, paused_at: '2026-11-03T21:00:00.000Z', type: 'movie', movie: { title: 'Dune', ids: { imdb: 'tt1160419', tmdb: 438631 } } },
+    { progress: 0.2, paused_at: '2026-11-03T21:00:00.000Z', type: 'movie', movie: { title: 'Skip', ids: { imdb: 'tt0' } } },
+  ];
+  const pm = core.traktMergePlayback(playback, [mine], 'p');
+  assert.equal(pm.changed, 2);
+  assert.equal(pm.history.find((x) => x.id === 'tmdb:1399:1:1').position_ms, 1_800_000);
+  const dune = pm.history.find((x) => x.id === 'tt1160419');
+  assert.equal(dune.duration_ms, core.PERCENT_DURATION_MS);
+  assert.equal(core.resumePositionMs(dune), 0);
+  assert.ok(Math.abs(core.resumeFraction(dune) - 0.25) < 1e-6);
+  assert.equal(core.traktMergePlayback(playback, pm.history, 'p').changed, 0);
+
+  const movies = [{ last_watched_at: '2026-11-01T10:00:00Z', movie: { title: 'Dune', ids: { imdb: 'tt1' } } }];
+  const shows = [{ last_watched_at: '2026-11-02T10:00:00Z', show: { title: 'S', ids: { imdb: 'tt9' } },
+    seasons: [{ number: 0, episodes: [{ number: 1 }] }, { number: 1, episodes: [{ number: 1, last_watched_at: '2026-11-02T10:00:00Z' }, { number: 2 }] }] }];
+  const wm = core.traktMergeWatched(movies, shows, [], 'p', 100);
+  assert.equal(wm.changed, 3);
+  assert.ok(wm.history.every((x) => x.watched));
+  assert.ok(wm.history.some((x) => x.id === 'tt9:1:2'));
+  assert.equal(core.traktPendingHistory(wm.history, 'p', 0).length, 3);
+  assert.equal(core.traktActivityStamp({ movies: { watched_at: 'a', paused_at: 'b' }, episodes: { watched_at: 'c' } }), 'a|b|c|');
+  console.log('trakt rules ok');
+}
