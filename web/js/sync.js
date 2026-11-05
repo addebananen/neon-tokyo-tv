@@ -134,7 +134,7 @@ function changes(items, pid, since) {
     };
   };
   // Newest first, so a series takes the episode watched last
-  const history = s.history.filter((e) => e.profile_id === pid && !e.deleted && e.updated_at_ms > since)
+  const history = s.history.filter((e) => e.profile_id === pid && !e.deleted && e.updated_at_ms > since && e.duration_ms !== core.PERCENT_DURATION_MS)
     .sort((a, b) => a.updated_at_ms - b.updated_at_ms);
   for (const e of history) {
     const id = e.kind === 'series' ? core.canonicalSeriesId(e.id) : e.id;

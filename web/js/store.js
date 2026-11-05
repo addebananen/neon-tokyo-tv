@@ -201,7 +201,8 @@ export function toggleWatchlist(meta) {
 // ---------- Backup ----------
 
 export function exportJson() {
-  // Stremio sign-ins stay on this device: a backup file must not carry a session key
+  // Stremio and Trakt sign-ins stay on this device: a backup file must not carry a session key
+  // (Trakt's live under their own storage keys and are never in state)
   const profiles = state.profiles.map((p) => ({ ...p, stremio: null }));
   return JSON.stringify({ app: 'neon-tokyo-web', version: 1, exported_at_ms: Date.now(), ...state, profiles }, null, 1);
 }

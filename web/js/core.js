@@ -309,6 +309,7 @@ export function recordProgress(existing, { profileId, id, kind, title, poster, b
 }
 
 export function resumePositionMs(entry) {
+  if (entry && entry.duration_ms === PERCENT_DURATION_MS) return 0; // a share from Trakt: see resumeFraction
   return entry && !entry.watched && !entry.deleted && entry.position_ms >= 10000 ? entry.position_ms : 0;
 }
 
@@ -374,4 +375,177 @@ export function nextUpAfter({ profileId, seriesId, title, poster, background, pl
     next_season: 0, next_episode: 0, next_episode_title: null, next_released: null,
     is_complete: true, is_new_episode: false, updated_at_ms: Date.now(), deleted: false,
   };
+}
+
+// ---------- Trakt (the same rules as native/neon-core/src/trakt.rs) ----------
+
+/** Progress known only as a share (from Trakt): the entry's length is this sentinel. */
+export const PERCENT_DURATION_MS = 1_000_000_000;
+
+/** Where to start as a share of the length, for entries that only know a share. */
+export function resumeFraction(entry) {
+  if (!entry || entry.watched || entry.deleted || !entry.duration_ms) return 0;
+  if (entry.duration_ms !== PERCENT_DURATION_MS) return 0;
+  return Math.min(0.97, entry.position_ms / entry.duration_ms);
+}
+
+const TRAKT_PREFIXED = ['tmdb', 'tvdb', 'kitsu', 'mal', 'anilist', 'anidb'];
+
+function traktSplit(playbackId) {
+  const parts = String(playbackId).split(':');
+  const n = parts.length > 1 && TRAKT_PREFIXED.includes(parts[0]) ? 2 : 1;
+  return [parts.slice(0, n).join(':'), parts.slice(n)];
+}
+
+function traktIds(contentId) {
+  if (contentId.startsWith('tt')) return { imdb: contentId };
+  const i = contentId.indexOf(':');
+  if (i < 0) return null;
+  const prefix = contentId.slice(0, i), num = Number(contentId.slice(i + 1));
+  if (!Number.isInteger(num)) return null;
+  if (prefix === 'tmdb') return { tmdb: num };
+  if (prefix === 'tvdb') return { tvdb: num };
+  return null;
+}
+
+function traktKeys(ids) {
+  const out = [];
+  if (ids && ids.imdb) out.push(ids.imdb);
+  if (ids && Number.isInteger(ids.tmdb)) out.push(`tmdb:${ids.tmdb}`);
+  if (ids && Number.isInteger(ids.tvdb)) out.push(`tvdb:${ids.tvdb}`);
+  return out;
+}
+
+/** Body for scrobble/start|pause|stop, or null when Trakt cannot place the id. */
+export function traktScrobbleBody(playbackId, kind, progressPercent) {
+  const [content, rest] = traktSplit(playbackId);
+  const ids = traktIds(content);
+  if (!ids) return null;
+  const progress = Math.round(Math.max(0, Math.min(100, progressPercent)) * 100) / 100;
+  if (kind === 'series' || rest.length >= 2) {
+    const season = Number(rest[0]), number = Number(rest[1]);
+    if (!Number.isInteger(season) || !Number.isInteger(number)) return null;
+    return { show: { ids }, episode: { season, number }, progress };
+  }
+  return { movie: { ids }, progress };
+}
+
+/** sync/history for entries watched here, grouped by show and season; null when empty. */
+export function traktHistoryBody(entries) {
+  const movies = [];
+  const shows = new Map();
+  for (const e of entries) {
+    if (!e.watched || e.deleted) continue;
+    const at = new Date(e.updated_at_ms).toISOString();
+    const [content, rest] = traktSplit(e.id);
+    const ids = traktIds(content);
+    if (!ids) continue;
+    if (rest.length >= 2) {
+      const s = Number(rest[0]), n = Number(rest[1]);
+      if (!Number.isInteger(s) || !Number.isInteger(n)) continue;
+      if (!shows.has(content)) shows.set(content, { ids, seasons: new Map() });
+      const seasons = shows.get(content).seasons;
+      if (!seasons.has(s)) seasons.set(s, []);
+      seasons.get(s).push({ number: n, watched_at: at });
+    } else if (e.kind !== 'series') {
+      movies.push({ ids, watched_at: at });
+    }
+  }
+  if (!movies.length && !shows.size) return null;
+  return {
+    movies,
+    shows: [...shows.values()].map(({ ids, seasons }) => ({ ids, seasons: [...seasons].map(([number, episodes]) => ({ number, episodes })) })),
+  };
+}
+
+/** One stamp for "has anything changed on Trakt", from sync/last_activities. */
+export function traktActivityStamp(a) {
+  const g = (k, f) => (a && a[k] && a[k][f]) || '';
+  return [g('movies', 'watched_at'), g('movies', 'paused_at'), g('episodes', 'watched_at'), g('episodes', 'paused_at')].join('|');
+}
+
+function traktLocalId(ids, history, pid) {
+  const keys = traktKeys(ids);
+  if (!keys.length) return null;
+  for (const k of keys) if (history.some((e) => e.profile_id === pid && (e.id === k || canonicalSeriesId(e.id) === k))) return k;
+  return keys[0];
+}
+
+function traktUpsert(history, e) {
+  const i = history.findIndex((x) => x.profile_id === e.profile_id && x.id === e.id);
+  if (i >= 0 && history[i].updated_at_ms >= e.updated_at_ms) return false;
+  if (i >= 0) {
+    const old = history[i];
+    history[i] = { ...e, poster: e.poster || old.poster || null, background: old.background || null, logo: old.logo || null, title: e.title || old.title };
+  } else history.push(e);
+  return true;
+}
+
+const isoMs = (v) => (v ? Date.parse(v) || 0 : 0);
+
+/** sync/playback (paused part way on any app) into this profile's history. */
+export function traktMergePlayback(list, history, pid) {
+  const out = history.slice();
+  let changed = 0;
+  for (const p of list || []) {
+    const pct = Math.max(0, Math.min(100, p.progress || 0));
+    const at = isoMs(p.paused_at);
+    if (pct < 1 || !at) continue;
+    let id, kind, title;
+    if (p.type === 'movie') {
+      id = traktLocalId(p.movie && p.movie.ids, out, pid); kind = 'movie'; title = (p.movie && p.movie.title) || '';
+    } else if (p.type === 'episode') {
+      const sid = traktLocalId(p.show && p.show.ids, out, pid);
+      const s = p.episode && p.episode.season, n = p.episode && p.episode.number;
+      if (!sid || !Number.isInteger(s) || !Number.isInteger(n)) continue;
+      id = `${sid}:${s}:${n}`; kind = 'series'; title = (p.show && p.show.title) || '';
+    } else continue;
+    if (!id) continue;
+    const known = out.find((e) => e.profile_id === pid && e.id === id && e.duration_ms > 0 && e.duration_ms !== PERCENT_DURATION_MS);
+    const dur = known ? known.duration_ms : PERCENT_DURATION_MS;
+    const e = { profile_id: pid, id, kind, title, poster: null, background: null, logo: null,
+      position_ms: Math.floor(dur * pct / 100), duration_ms: dur, watched: false, updated_at_ms: at, deleted: false };
+    if (traktUpsert(out, e)) changed++;
+  }
+  return { history: out, changed };
+}
+
+/** sync/watched/movies and sync/watched/shows: the newest `max` titles of each, as watched. */
+export function traktMergeWatched(movies, shows, history, pid, max = 120) {
+  const last = (v) => isoMs(v.last_watched_at);
+  const ms = (movies || []).slice().sort((a, b) => last(b) - last(a)).slice(0, max);
+  const ss = (shows || []).slice().sort((a, b) => last(b) - last(a)).slice(0, max);
+  const out = history.slice();
+  let changed = 0;
+  const mark = (id, kind, title, at) => {
+    const cur = out.find((e) => e.profile_id === pid && e.id === id);
+    if (cur && (cur.watched || cur.updated_at_ms >= at)) return;
+    const e = { profile_id: pid, id, kind, title, poster: null, background: null, logo: null,
+      position_ms: 1, duration_ms: 1, watched: true, updated_at_ms: at, deleted: false };
+    if (traktUpsert(out, e)) changed++;
+  };
+  for (const m of ms) {
+    const id = traktLocalId(m.movie && m.movie.ids, out, pid);
+    if (id) mark(id, 'movie', (m.movie && m.movie.title) || '', last(m));
+  }
+  for (const s of ss) {
+    const sid = traktLocalId(s.show && s.show.ids, out, pid);
+    if (!sid) continue;
+    const title = (s.show && s.show.title) || '';
+    for (const season of s.seasons || []) {
+      if (!Number.isInteger(season.number) || season.number === 0) continue;
+      for (const ep of season.episodes || []) {
+        if (!Number.isInteger(ep.number)) continue;
+        mark(`${sid}:${season.number}:${ep.number}`, 'series', title, Math.max(last(ep), 1));
+      }
+    }
+  }
+  return { history: out, changed };
+}
+
+/** Watched here since `since` with ids Trakt can place: what to send to sync/history. */
+export function traktPendingHistory(history, pid, since) {
+  return history.filter((e) => e.profile_id === pid && e.watched && !e.deleted && e.updated_at_ms > since)
+    .filter((e) => traktIds(traktSplit(e.id)[0]))
+    .filter((e) => e.kind !== 'series' || isEpisodeId(e.id));
 }

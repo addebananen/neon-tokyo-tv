@@ -1,0 +1,164 @@
+name: Windows app
+
+# Builds Neon Tokyo for Windows on GitHub's Windows runners: the shared Rust core (as a DLL),
+# the Compose Desktop app, and an installer (.msi) and a portable installer (.exe) that Adrian
+# downloads from the release page. When a main release of the Android app passes, the Windows
+# installers are added to that same release, so every platform updates together.
+
+on:
+  push:
+    branches: [main, dev, 'claude/**']
+    paths:
+      - 'desktop/**'
+      - 'native/neon-core/**'
+      - 'design/**'
+      - 'tools/gen_tokens.py'
+      - 'app/src/main/res/font/**'
+      - '.github/workflows/windows.yml'
+      - '.github/scripts/desktop-screens.sh'
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Publish the installers as a test release to download now
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      # the same release name as the Android app: nt.<its run number> for main releases
+      NEON_VERSION: ${{ github.event_name == 'workflow_run' && format('0.2.0-nt.{0}', github.event.workflow_run.run_number) || format('0.2.0-win.{0}', github.run_number) }}
+      BUILD_NUMBER: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.run_number || github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Design tokens are up to date
+        run: python tools/gen_tokens.py --check
+
+      - name: Test the shared core
+        run: cargo test --release --manifest-path native/neon-core/Cargo.toml
+
+      - name: Build the core as a Windows DLL and its Kotlin interface
+        shell: bash
+        run: desktop/build-core.sh
+
+      - name: Bundle mpv (plays MKV, HEVC, HDR and ASS subtitles like the TV)
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest \
+            | python -c "import sys,json; a=[x['browser_download_url'] for x in json.load(sys.stdin)['assets'] if x['name'].startswith('mpv-x86_64-') and not x['name'].startswith('mpv-x86_64-v3') and x['name'].endswith('.7z')]; print(a[0])")
+          echo "mpv: $url"
+          curl -fsSL -o mpv.7z "$url"
+          mkdir -p desktop/app-resources/windows/mpv
+          7z e mpv.7z -odesktop/app-resources/windows/mpv mpv.exe -r -y
+          ls -l desktop/app-resources/windows/mpv
+
+      - name: Build the installers
+        shell: bash
+        env:
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
+        run: ./gradlew -p desktop packageMsi packageExe -PneonVersion="$NEON_VERSION" -PbuildNumber="$BUILD_NUMBER" -PbuiltAt="$(date +%s)000" --no-daemon --stacktrace
+
+      - name: The shared core is inside the app
+        shell: bash
+        run: |
+          jar=$(ls desktop/build/libs/*.jar | head -1)
+          jar tf "$jar" | grep -q 'win32-x86-64/neon_core.dll' || { echo "::error::neon_core.dll is missing from $jar, the app would not start"; exit 1; }
+
+      - name: Collect the installers
+        shell: bash
+        run: |
+          mkdir -p out
+          # jpackage names them by the package version; rename to the full Neon version
+          msi=$(find desktop/build/compose/binaries -name '*.msi' | head -1)
+          exe=$(find desktop/build/compose/binaries -name '*.exe' | head -1)
+          cp "$msi" "out/NeonTokyo-$NEON_VERSION.msi"
+          cp "$exe" "out/NeonTokyo-$NEON_VERSION-setup.exe"
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-tokyo-windows-${{ env.NEON_VERSION }}
+          path: out/*
+
+      - name: Add the installers to the release
+        if: github.event_name == 'workflow_run'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEON_VERSION }}
+          files: out/*
+
+      - name: Publish a test release
+        if: github.event_name == 'workflow_dispatch' && inputs.prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.NEON_VERSION }}
+          name: Windows test build ${{ env.NEON_VERSION }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: |
+            Test build of Neon Tokyo for Windows. Download the .msi (normal install) or the -setup.exe (portable installer), open it, and allow it past the Windows SmartScreen notice (More info -> Run anyway), since it is not signed with a paid Microsoft certificate.
+          files: out/*
+
+  # The app on a Linux desktop at 1920 x 1080, screenshots of its main screens on the
+  # windows-screens branch, so how it looks can be checked without a Windows PC.
+  screens:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Linux desktop and fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq xvfb > /dev/null
+          sudo apt-get install -yq fonts-noto-cjk > /dev/null || true
+      - name: Build the core and the app
+        run: |
+          desktop/build-core.sh
+          ./gradlew -p desktop jar -q
+          jar tf desktop/build/libs/*.jar | grep -q 'linux-x86-64/libneon_core.so' || { echo "::error::libneon_core.so is missing from the app"; exit 1; }
+      - name: Screenshots
+        run: .github/scripts/desktop-screens.sh "$RUNNER_TEMP/windows-screens"
+      - name: Publish screenshots to the windows-screens branch
+        if: always()
+        continue-on-error: true
+        run: |
+          S="$RUNNER_TEMP/windows-screens"
+          [ -d "$S" ] || exit 0
+          cd "$S"
+          printf 'Windows app (on Linux, 1920x1080) of %s, run %s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > README.md
+          git init -q -b windows-screens
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Windows screenshots $GITHUB_SHA"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" windows-screens
