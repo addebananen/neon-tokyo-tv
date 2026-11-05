@@ -272,6 +272,9 @@ struct LogoOrTitle: View {
     let size: CGFloat
     @State private var image: UIImage?
     @State private var failed = false
+    /// A dark logo (a deep purple on the night) is lit from behind like a sign, so it reads.
+    @State private var dark = false
+    @Environment(\.neon) private var theme
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -280,7 +283,8 @@ struct LogoOrTitle: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: maxWidth, maxHeight: maxHeight, alignment: .bottomLeading)
-                    .shadow(color: .black.opacity(0.5), radius: 8)
+                    .shadow(color: dark ? .white.opacity(0.55) : .black.opacity(0.5), radius: dark ? 10 : 8)
+                    .shadow(color: dark ? theme.secondary.opacity(0.35) : .clear, radius: dark ? 26 : 0)
                     .transition(.opacity)
             } else if failed || logo == nil {
                 NeonTitle(text: title, size: size)
@@ -296,12 +300,41 @@ struct LogoOrTitle: View {
             failed = false
             guard let logo, !logo.isEmpty else { return }
             let loaded = await ImageLoader.shared.image(for: logo)
+            dark = loaded.map { lightness(of: $0) < 0.3 } ?? false
             withAnimation(.easeOut(duration: 0.25)) {
                 image = loaded
                 failed = loaded == nil
             }
         }
     }
+}
+
+/// How light a picture is where it is not see-through, 0 (black) ... 1 (white), read from a
+/// 12 x 12 copy (cheap enough to do as a logo arrives).
+func lightness(of image: UIImage) -> CGFloat {
+    guard let cg = image.cgImage else { return 1 }
+    let n = 12
+    var px = [UInt8](repeating: 0, count: n * n * 4)
+    let drawn: Bool = px.withUnsafeMutableBytes { buf in
+        guard let ctx = CGContext(data: buf.baseAddress, width: n, height: n, bitsPerComponent: 8, bytesPerRow: n * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return false }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: n, height: n))
+        return true
+    }
+    guard drawn else { return 1 }
+    var sum: CGFloat = 0
+    var weight: CGFloat = 0
+    for i in stride(from: 0, to: px.count, by: 4) {
+        let a = CGFloat(px[i + 3]) / 255
+        guard a > 0.2 else { continue }
+        // the colours are premultiplied by the alpha
+        let r = CGFloat(px[i]) / 255 / a, g = CGFloat(px[i + 1]) / 255 / a, b = CGFloat(px[i + 2]) / 255 / a
+        sum += (0.2126 * r + 0.7152 * g + 0.0722 * b) * a
+        weight += a
+    }
+    return weight > 0 ? sum / weight : 1
 }
 
 /// How far someone got: a lit line, the theme's colour fading into its second colour.

@@ -24,8 +24,8 @@ struct SettingsView: View {
                 .frame(width: 500)
                 .padding(.top, 90)
             list
-                .padding(.horizontal, 28)
-                .padding(.vertical, 18)
+                .padding(.horizontal, 32)
+                .padding(.vertical, 30)
                 .background(SettingsPane())
                 .padding(.vertical, 40)
         }
@@ -56,7 +56,7 @@ struct SettingsView: View {
     private var list: some View {
         let accounts = model.accounts
         return List {
-            Section("Profile") {
+            Section {
                 #if os(iOS)
                 // Apple TV shows the profile big beside the list
                 if let p = model.activeProfile {
@@ -67,13 +67,15 @@ struct SettingsView: View {
                 }
                 #endif
                 Button("Switch profile") { model.select(nil) }
+            } header: {
+                SettingsHead(text: "Profile")
             }
 
             stremioSection(accounts)
             traktSection(accounts)
             updatesSection
 
-            Section("Theme") {
+            Section {
                 ForEach(NeonTokens.themes) { t in
                     Button {
                         withAnimation(NeonMotion.fastOutSlowIn(0.4)) { model.setTheme(t.id) }
@@ -87,6 +89,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+            } header: {
+                SettingsHead(text: "Theme")
             }
 
             Section {
@@ -118,14 +122,16 @@ struct SettingsView: View {
                     Text(addError).foregroundStyle(theme.error)
                 }
             } header: {
-                Text("Addons")
+                SettingsHead(text: "Addons")
             } footer: {
-                Text("Paste or type the addon's address (ending in manifest.json). Addons are shared by every profile; signing in to Stremio adds yours.")
+                SettingsFoot(text: "Paste or type the addon's address (ending in manifest.json). Addons are shared by every profile; signing in to Stremio adds yours.")
             }
 
-            Section("About") {
+            Section {
                 LabeledContent("Neon Tokyo", value: Bundle.main.shortVersion)
                 LabeledContent("Core", value: coreVersion())
+            } header: {
+                SettingsHead(text: "About")
             }
         }
         .tint(theme.primary)
@@ -168,9 +174,9 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Stremio")
+            SettingsHead(text: "Stremio")
         } footer: {
-            Text("Brings your Stremio addons here and keeps Continue watching, watched marks and the library the same on every device. The password is not kept.")
+            SettingsFoot(text: "Brings your Stremio addons here and keeps Continue watching, watched marks and the library the same on every device. The password is not kept.")
         }
     }
 
@@ -213,9 +219,9 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Trakt")
+            SettingsHead(text: "Trakt")
         } footer: {
-            Text(accounts.traktAvailable
+            SettingsFoot(text: accounts.traktAvailable
                  ? "Scrobbles what you watch here and brings in what you watched elsewhere, for this profile."
                  : "This build was made without a Trakt key.")
         }
@@ -264,7 +270,7 @@ struct SettingsView: View {
                 Text(updates.status).foregroundStyle(theme.muted)
             }
         } header: {
-            Text("Updates")
+            SettingsHead(text: "Updates")
         }
     }
 
@@ -375,6 +381,34 @@ private struct SettingsPane: View {
     }
 }
 #endif
+
+/// A section's name in the list: the neon heading font, lit a little.
+private struct SettingsHead: View {
+    let text: String
+    @Environment(\.neon) private var theme
+
+    var body: some View {
+        Text(text)
+            .font(theme.focus == .glow ? NeonFont.heading(Metrics.titleSize * 0.72) : .system(size: Metrics.titleSize * 0.7, weight: .semibold))
+            .foregroundStyle(theme.text)
+            .shadow(color: theme.focus == .glow ? theme.primary.opacity(0.5) : .clear, radius: 8)
+            .textCase(nil)
+            .padding(.top, 6)
+    }
+}
+
+/// What a section is for, quiet under it.
+private struct SettingsFoot: View {
+    let text: String
+    @Environment(\.neon) private var theme
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: Metrics.bodySize * 0.68))
+            .foregroundStyle(theme.muted.opacity(0.85))
+            .textCase(nil)
+    }
+}
 
 /// An account's line: its name, how sync went, a spinner while it runs.
 private struct StatusLine: View {
