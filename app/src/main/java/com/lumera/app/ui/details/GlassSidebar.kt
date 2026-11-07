@@ -35,6 +35,11 @@ import coil.compose.AsyncImage
 import com.lumera.app.ui.home.DpadRepeatGate
 import com.lumera.app.data.model.stremio.MetaVideo
 import com.lumera.app.data.model.stremio.Stream
+import com.lumera.app.data.stream.DevicePlaybackCaps
+import com.lumera.app.data.stream.SourceRanker
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.lumera.app.data.tmdb.TmdbEpisodeEnrichment
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -345,6 +350,10 @@ fun SourcesContent(
         actualStreams.filter { filter == "All Addons" || (it.name?.contains(filter) == true) }
     }
 
+    val bestStream = remember(actualStreams) {
+        actualStreams.firstOrNull { !it.url.isNullOrBlank() || !it.infoHash.isNullOrBlank() }
+    }
+
     val selectedIndex = remember(filtered, selectedStreamId) {
         if (selectedStreamId == null) 0
         else {
@@ -420,6 +429,8 @@ fun SourcesContent(
                         RawSourceItem(
                             stream = s,
                             isPlaying = index == selectedIndex && selectedStreamId != null,
+                            // The one Play starts: first in the list, which is ranked best first
+                            isBest = s === bestStream,
                             modifier = if (index == selectedIndex) Modifier.focusRequester(focusRequester) else Modifier
                         ) { onSourceClick(s) }
                     }
@@ -807,21 +818,45 @@ private fun WatchedToggleButton(
 }
 
 @Composable
-fun RawSourceItem(stream: Stream, isPlaying: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun RawSourceItem(stream: Stream, isPlaying: Boolean = false, isBest: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
     val primary = MaterialTheme.colorScheme.primary
     val mainText = stream.description ?: stream.title ?: stream.name ?: "Unknown"
     val subText = stream.name ?: ""
+    val context = LocalContext.current
+    // What matters at a glance, read from the source's own text: 4K, Dolby Vision, Atmos, size
+    val labels = remember(stream) {
+        runCatching { SourceRanker.labels(SourceRanker.features(stream), DevicePlaybackCaps.get(context)) }.getOrDefault(emptyList())
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = if (isFocused) Color.White.copy(0.1f) else Color.White.copy(0.05f)),
         modifier = modifier.fillMaxWidth().onFocusChanged { isFocused = it.isFocused }
-            .border(if (isFocused) 3.dp else 0.dp, if (isFocused) primary else Color.Transparent, RoundedCornerShape(8.dp))
+            .border(
+                if (isFocused) 3.dp else if (isBest) 1.dp else 0.dp,
+                if (isFocused) primary else if (isBest) primary.copy(alpha = 0.45f) else Color.Transparent,
+                RoundedCornerShape(8.dp)
+            )
             .clickable(onClick = onClick)
     ) {
         Column(Modifier.padding(16.dp)) {
+            if (labels.isNotEmpty() || isBest) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    if (isBest) SourceChip("Best", primary, filled = true)
+                    labels.forEach { SourceChip(it, if (isFocused) Color.White else Color.LightGray) }
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(mainText, style = MaterialTheme.typography.bodyLarge, color = if (isFocused) Color.White else Color.LightGray, modifier = Modifier.weight(1f))
+                Text(
+                    mainText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isFocused) Color.White else Color.LightGray,
+                    modifier = Modifier.weight(1f)
+                )
                 if (isPlaying) {
                     Text(
                         "Playing",
@@ -836,4 +871,18 @@ fun RawSourceItem(stream: Stream, isPlaying: Boolean = false, modifier: Modifier
             }
         }
     }
+}
+
+@Composable
+private fun SourceChip(text: String, color: Color, filled: Boolean = false) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.3.sp),
+        color = if (filled) Color.Black else color,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(if (filled) color else Color.White.copy(alpha = 0.08f))
+            .padding(horizontal = 7.dp, vertical = 2.dp)
+    )
 }

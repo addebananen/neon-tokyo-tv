@@ -13,6 +13,10 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -668,6 +672,15 @@ fun DetailsScreen(
                         }
                     }
                 }
+
+                // The source Play starts, so the list rarely needs opening
+                Spacer(modifier = Modifier.height(14.dp))
+                BestSourceLine(
+                    best = state.bestSource,
+                    finding = state.findingBestSource,
+                    textColor = textColor,
+                    accent = accentColor
+                )
             }
             } // hero item
 
@@ -1578,3 +1591,92 @@ private fun resolvePlayableUrl(stream: com.lumera.app.data.model.stremio.Stream)
 
 /** How long OK is held on Play to choose the source instead of playing at once. */
 private const val HOLD_MS = 1000
+
+/**
+ * One quiet line under Play: what it will start and why ("4K · Dolby Vision · Atmos 7.1 ·
+ * 18 GB · Instant"), with a hint that holding OK opens the full list. The height is kept while
+ * the sources load so the page never jumps when the line fills in.
+ */
+@Composable
+private fun BestSourceLine(
+    best: DetailsViewModel.BestSource?,
+    finding: Boolean,
+    textColor: Color,
+    accent: Color
+) {
+    val shade = Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 8f)
+    val visible = best != null || finding
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(360), label = "bestSourceAlpha")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(26.dp)
+            .widthIn(max = 760.dp)
+            .graphicsLayer { this.alpha = alpha }
+    ) {
+        if (best == null) {
+            if (finding) {
+                BreathingDot(accent)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Finding the best source…",
+                    style = MaterialTheme.typography.bodyMedium.copy(shadow = shade),
+                    color = textColor.copy(alpha = 0.6f),
+                    maxLines = 1
+                )
+            }
+        } else {
+            Box(Modifier.size(7.dp).background(accent, CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = if (best.remembered) "Your source" else "Best source",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp, shadow = shade),
+                color = accent,
+                maxLines = 1
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = best.labels.joinToString("  ·  ").ifEmpty { "Ready to play" },
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, shadow = shade),
+                color = textColor.copy(alpha = 0.92f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            best.addon?.let {
+                Text(
+                    text = "  ·  $it",
+                    style = MaterialTheme.typography.bodyMedium.copy(shadow = shade),
+                    color = textColor.copy(alpha = 0.55f),
+                    maxLines = 1
+                )
+            }
+            if (best.count > 1) {
+                Text(
+                    text = "     Hold OK for all ${best.count}",
+                    style = MaterialTheme.typography.bodySmall.copy(shadow = shade),
+                    color = textColor.copy(alpha = 0.42f),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** A slow breath while the sources are read; only composed then, so it costs nothing after. */
+@Composable
+private fun BreathingDot(color: Color) {
+    val pulse = rememberInfiniteTransition(label = "bestSourcePulse")
+    val breath by pulse.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "bestSourceBreath"
+    )
+    Box(
+        Modifier
+            .size(7.dp)
+            .graphicsLayer { alpha = breath }
+            .background(color, CircleShape)
+    )
+}

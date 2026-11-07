@@ -14,6 +14,7 @@ import com.lumera.app.data.player.SourceSelectionStore
 import com.lumera.app.data.profile.ProfileConfigurationManager
 import com.lumera.app.data.repository.AddonRepository
 import com.lumera.app.data.repository.SubtitleRepository
+import com.lumera.app.data.stream.SourceRanker
 import com.lumera.app.data.stream.StreamSortingService
 import com.lumera.app.data.tmdb.TmdbEnrichment
 import com.lumera.app.data.tmdb.TmdbEpisodeEnrichment
@@ -22,6 +23,7 @@ import com.lumera.app.data.tmdb.TmdbMetadataService
 import com.lumera.app.data.tmdb.TmdbService
 import com.lumera.app.data.tmdb.TmdbVideoInfo
 import com.lumera.app.domain.AddonSubtitle
+import com.lumera.app.domain.episodePlaybackId
 import com.lumera.app.domain.episodeStreamId
 import com.lumera.app.data.trakt.TraktSyncManager
 import com.lumera.app.livetv.VodCatalog
@@ -47,6 +49,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
@@ -71,6 +74,19 @@ class DetailsViewModel @Inject constructor(
         val watched: Boolean
     )
 
+    /**
+     * The source Play will start, named under the button so the list rarely needs opening:
+     * "4K · Dolby Vision · Atmos 7.1 · 18 GB · Instant" from Torrentio.
+     */
+    data class BestSource(
+        val labels: List<String>,
+        val addon: String?,
+        /** The source this profile picked for the title last time, which Play reuses */
+        val remembered: Boolean,
+        /** How many sources it was chosen from */
+        val count: Int
+    )
+
     data class DetailsState(
         val meta: MetaItem? = null,
         val resolvedId: String? = null, // IMDb ID resolved from tmdb: prefixes, used for stream/subtitle fetching
@@ -92,7 +108,9 @@ class DetailsViewModel @Inject constructor(
         val tmdbRecommendations: List<TmdbMetaPreview> = emptyList(),
         val tmdbTrailer: TmdbVideoInfo? = null,
         val tmdbCollection: List<TmdbMetaPreview> = emptyList(),
-        val tmdbCollectionName: String? = null
+        val tmdbCollectionName: String? = null,
+        val bestSource: BestSource? = null,
+        val findingBestSource: Boolean = false
     )
 
     private val _state = MutableStateFlow(DetailsState())
@@ -207,6 +225,8 @@ class DetailsViewModel @Inject constructor(
                     tmdbTrailer = null,
                     tmdbCollection = emptyList(),
                     tmdbCollectionName = null,
+                    bestSource = null,
+                    findingBestSource = true,
                     tmdbEnabled = isTmdbEnabled,
                     tmdbLoading = isTmdbEnabled
                 )
@@ -218,17 +238,19 @@ class DetailsViewModel @Inject constructor(
                 loadTmdbEnrichment(details.type, streamFetchId, requestKey)
 
                 // Prefetch streams so they're ready when the user hits Play
-                val prefetchId = if (resumePlaybackId != null) {
-                    resumePlaybackId
-                } else if (details.type == "series") {
-                    val firstEpisode = details.videos
+                val firstEpisode = if (resumePlaybackId == null && details.type == "series") {
+                    details.videos
                         ?.filter { it.season > 0 && it.episode > 0 }
                         ?.minWithOrNull(compareBy<com.lumera.app.data.model.stremio.MetaVideo> { it.season }.thenBy { it.episode })
-                    firstEpisode?.let { episodeStreamId(streamFetchId, it) } ?: streamFetchId
-                } else {
-                    streamFetchId
+                } else null
+                val prefetchId = when {
+                    resumePlaybackId != null -> resumePlaybackId
+                    firstEpisode != null -> episodeStreamId(streamFetchId, firstEpisode)
+                    else -> streamFetchId
                 }
-                prefetchStreams(details.type, prefetchId)
+                // The id Play remembers its source under, the same one DetailsScreen hands loadStreams
+                val selectionId = firstEpisode?.let { episodePlaybackId(streamFetchId, it) } ?: prefetchId
+                prefetchStreams(details.type, prefetchId, selectionId)
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
@@ -279,12 +301,20 @@ class DetailsViewModel @Inject constructor(
                 val episodeProgressMap = if (meta.type == "series") {
                     buildEpisodeProgressMap(meta.id)
                 } else emptyMap()
+                val previousResume = _state.value.resumePlaybackId
                 _state.value = _state.value.copy(
                     resumePlaybackId = resumePlaybackId,
                     isMovieWatched = isMovieWatched,
                     autoPlayStream = null,
                     episodeProgressMap = episodeProgressMap
                 )
+                // Watched on to the next episode: the best source shown is for that one now,
+                // and a source picked in the player is what Play reuses for a film
+                if (meta.type == "series" && resumePlaybackId != null && resumePlaybackId != previousResume) {
+                    prefetchStreams(meta.type, resumePlaybackId, resumePlaybackId)
+                } else {
+                    refreshBestSource()
+                }
                 // Update next-up after returning from player
                 if (meta.type == "series") {
                     computeAndStoreNextUp(meta.id, meta.name, meta.poster, meta.videos)
@@ -601,12 +631,15 @@ class DetailsViewModel @Inject constructor(
         )
     }
 
-    private fun prefetchStreams(type: String, id: String) {
+    private fun prefetchStreams(type: String, id: String, selectionId: String = id) {
         prefetchStreamsJob?.cancel()
+        bestSourceJob?.cancel()
         val key = "$type:$id"
         prefetchedStreamKey = key
         prefetchedStreams = null
         prefetchedSubtitles = null
+        prefetchedSelectionId = selectionId
+        _state.value = _state.value.copy(bestSource = null, findingBestSource = true)
         prefetchStreamsJob = viewModelScope.launch {
             try {
                 val (streams, subtitles) = fetchSources(type, id)
@@ -617,7 +650,80 @@ class DetailsViewModel @Inject constructor(
             } catch (_: Exception) {
                 // Prefetch failed silently — loadStreams will fetch fresh
             }
+            showBestSource(type, key)
         }
+    }
+
+    private var bestSourceJob: Job? = null
+    private var prefetchedSelectionId: String? = null
+
+    /** Names the source Play will start, after the sources were fetched or the player closed. */
+    private fun refreshBestSource() {
+        val key = prefetchedStreamKey ?: return
+        if (prefetchedStreams == null) return
+        bestSourceJob?.cancel()
+        bestSourceJob = viewModelScope.launch { showBestSource(key.substringBefore(':'), key) }
+    }
+
+    private suspend fun showBestSource(type: String, key: String) {
+        val raw = prefetchedStreams
+        if (raw == null || prefetchedStreamKey != key) {
+            if (prefetchedStreamKey == key) _state.value = _state.value.copy(bestSource = null, findingBestSource = false)
+            return
+        }
+        val best = try {
+            val profile = profileConfigurationManager.getLastActiveProfileId()?.let { dao.getProfileById(it) }
+            val (streams, _) = rankForProfile(raw, type == "series")
+            val remembered = if (profile?.rememberSourceSelection != false) {
+                prefetchedSelectionId?.let { sourceSelectionStore.findPreferredStream(it, streams) }
+            } else null
+            val pick = remembered ?: streams.firstOrNull { !it.url.isNullOrBlank() || !it.infoHash.isNullOrBlank() }
+            pick?.let {
+                val caps = streamSortingService.playbackCaps
+                BestSource(
+                    labels = withContext(Dispatchers.Default) { SourceRanker.labels(SourceRanker.features(it), caps) },
+                    addon = SourceRanker.addonLabel(it),
+                    remembered = remembered != null,
+                    count = streams.size
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        if (prefetchedStreamKey != key) return
+        _state.value = _state.value.copy(bestSource = best, findingBestSource = false)
+    }
+
+    /**
+     * The sources in the order Play and the list use: the household's own service first (never
+     * filtered, it is what they pay for), then the addons' sources filtered and ranked by the
+     * profile's settings. Ranking reads every source's text, so it runs off the main thread.
+     * Returns the list and how many sources the filters kept out.
+     */
+    private suspend fun rankForProfile(rawStreams: List<Stream>, isEpisode: Boolean): Pair<List<Stream>, Int> {
+        val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
+        val profile = activeProfileId?.let { dao.getProfileById(it) }
+        val (ownStreams, addonStreams) = rawStreams.partition { it.addonTransportUrl == VodLibrary.TRANSPORT }
+        val sortedStreams = if (profile?.sourceSortingEnabled != false) {
+            val enabledQualities = StreamSortingService.parseEnabledQualities(profile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
+            val excludePhrases = StreamSortingService.parseExcludePhrases(profile?.sourceExcludePhrases ?: "")
+            val addonSortOrders = dao.getAllAddons().firstOrNull()
+                ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
+            val excludedFormats = StreamSortingService.parseExcludedFormats(profile?.sourceExcludedFormats ?: "")
+            val runtime = _state.value.tmdbEnrichment?.runtimeMinutes ?: _state.value.meta?.runtime?.let(SourceRanker::runtimeMinutesIn)
+            withContext(Dispatchers.Default) {
+                streamSortingService.sortAndFilter(
+                    addonStreams, enabledQualities, excludePhrases, addonSortOrders,
+                    profile?.sourceSortPrimary ?: StreamSortingService.SORT_SMART,
+                    profile?.sourceMaxSizeGb ?: 0, excludedFormats,
+                    runtimeMinutes = runtime, isEpisode = isEpisode
+                )
+            }
+        } else addonStreams
+        val streams = ownStreams + sortedStreams
+        return streams to (rawStreams.size - streams.size).coerceAtLeast(0)
     }
 
     /**
@@ -700,21 +806,8 @@ class DetailsViewModel @Inject constructor(
                     fetchSources(type, id)
                 }
 
-                // Read sorting preferences from the active profile
-                val activeProfileId = profileConfigurationManager.getLastActiveProfileId()
-                val profile = activeProfileId?.let { dao.getProfileById(it) }
-
-                // The household's own service is never filtered away: it is what they pay for
-                val (ownStreams, addonStreams) = rawStreams.partition { it.addonTransportUrl == VodLibrary.TRANSPORT }
-                val sortedStreams = if (profile?.sourceSortingEnabled != false) {
-                    val enabledQualities = StreamSortingService.parseEnabledQualities(profile?.sourceEnabledQualities ?: "4k,1080p,720p,unknown")
-                    val excludePhrases = StreamSortingService.parseExcludePhrases(profile?.sourceExcludePhrases ?: "")
-                    val addonSortOrders = dao.getAllAddons().firstOrNull()
-                        ?.associate { it.transportUrl to it.sortOrder } ?: emptyMap()
-                    val excludedFormats = StreamSortingService.parseExcludedFormats(profile?.sourceExcludedFormats ?: "")
-                    streamSortingService.sortAndFilter(addonStreams, enabledQualities, excludePhrases, addonSortOrders, profile?.sourceSortPrimary ?: "quality", profile?.sourceMaxSizeGb ?: 0, excludedFormats)
-                } else addonStreams
-                val streams = ownStreams + sortedStreams
+                // The household's own service first, then the addons' sources best first
+                val (streams, hiddenByFilters) = rankForProfile(rawStreams, type == "series")
 
                 val preferredStream = if (forceSourcePicker || !rememberSourceSelection) {
                     null
@@ -759,7 +852,7 @@ class DetailsViewModel @Inject constructor(
                     sidebarState = SidebarState.Sources(
                         displayTitle,
                         streams,
-                        hiddenByFilters = (rawStreams.size - streams.size).coerceAtLeast(0)
+                        hiddenByFilters = hiddenByFilters
                     )
                 )
             } catch (e: CancellationException) {
@@ -889,3 +982,4 @@ class DetailsViewModel @Inject constructor(
 
 /** How long the sources wait on the household IPTV service; a first visit fetches its whole library. */
 private const val SERVICE_TIMEOUT_MS = 20_000L
+

@@ -781,9 +781,18 @@ else
   adb logcat -c
   key DPAD_CENTER
   sleep 10
-  key DPAD_CENTER
+  # The best source is named under Play before anything is pressed
+  if wait_for 'Best source' 30; then
+    shot vod-movie-best-source
+  else
+    shot vod-movie-no-best-source
+    fail "the details page shows no best source under Play"
+  fi
+  # Play starts the best source itself; holding OK on Play opens the full list
+  hold_ok 1.5 >/dev/null || fail "could not hold OK on Play"
   if wait_for '\[IPTV\]' 45; then
     shot vod-movie-sources
+    screen_has 'text="Best"' || fail "the first source in the list is not marked Best"
     adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
     # The service's copy comes first, so OK on the panel's first row plays it
     key DPAD_CENTER
@@ -815,7 +824,7 @@ else
     key DPAD_CENTER
     sleep 10
     shot vod-series-details
-    key DPAD_CENTER
+    hold_ok 1.5 >/dev/null || fail "could not hold OK on Play"
     if wait_for '\[IPTV\]' 45; then
       shot vod-series-sources
       screen_has "S01E01" || fail "the IPTV source for Dune: Prophecy is not episode 1 of season 1"
