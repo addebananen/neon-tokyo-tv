@@ -129,6 +129,7 @@ const ICON = {
   full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   next: '<path d="M5 5v14l10-7z" fill="currentColor"/><path d="M18 5v14"/>',
   src: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+  tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="m10.5 8.5 4 2.5-4 2.5z" fill="currentColor"/>',
   close: '<path d="M15 5 8 12l7 7"/>',
 };
 const ic = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
@@ -160,6 +161,7 @@ export function openPlayer(ctx) {
           <span class="pl-time"><b>0:00</b> / <span>0:00</span></span>
           <span class="pl-spacer"></span>
           <button class="pl-btn" data-act="next" aria-label="Next episode" hidden>${ic('next')}</button>
+          <button class="pl-btn" data-act="tv" aria-label="Fortsätt på TV:n" title="Fortsätt på TV:n">${ic('tv')}</button>
           <button class="pl-btn" data-act="subs" aria-label="Subtitles" hidden>${ic('cc')}</button>
           <button class="pl-btn" data-act="air" aria-label="AirPlay" hidden>${ic('air')}</button>
           <button class="pl-btn" data-act="pip" aria-label="Picture in picture" hidden>${ic('pip')}</button>
@@ -385,6 +387,17 @@ export function openPlayer(ctx) {
     else if (a === 'close') close();
     else if (a === 'next') playNext();
     else if (a === 'subs') subsMenu();
+    else if (a === 'tv') {
+      // "Fortsätt på TV:n": pause here, the TV picks up at this second; done here once it plays
+      const { handoffItem } = await import('./app.js');
+      const { continueOnTv } = await import('./handoff.js');
+      const wasPlaying = !v.paused;
+      v.pause(); save(true);
+      const at = isFinite(v.duration) ? { positionMs: v.currentTime * 1000, durationMs: v.duration * 1000 } : {};
+      const ok = await continueOnTv(handoffItem(meta, state.video, at));
+      if (ok) close();
+      else if (wasPlaying && el) v.play().catch(() => {});
+    }
     else if (a === 'air') v.webkitShowPlaybackTargetPicker && v.webkitShowPlaybackTargetPicker();
     else if (a === 'pip') {
       if (document.pictureInPictureElement) document.exitPictureInPicture();
