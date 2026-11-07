@@ -44,6 +44,8 @@ class LumeraApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         startupOptimizer.warmup()
+        // The phone remote's page on the home network (Settings › Phone remote)
+        com.lumera.app.remote_input.phone.PhoneRemote.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = imageLoader

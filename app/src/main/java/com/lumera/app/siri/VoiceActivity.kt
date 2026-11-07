@@ -345,28 +345,9 @@ class VoiceActivity : ComponentActivity() {
         }, 450)
     }
 
-    private fun playIn(app: String, query: String) {
-        val q = Uri.encode(query)
-        val tries = when (app) {
-            "spotify" -> listOf(
-                Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$q")).setPackage("com.spotify.tv.android"),
-                Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$q"))
-            )
-            "youtube music" -> listOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://music.youtube.com/search?q=$q")))
-            else -> listOf(
-                Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube.tv").putExtra(SearchManager.QUERY, query),
-                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$q")).setPackage("com.google.android.youtube.tv")
-            )
-        }
-        if (tries.none { start(it) }) search(query)
-    }
+    private fun playIn(app: String, query: String) = SearchIntents.playIn(this, app, query)
 
-    private fun search(query: String) {
-        listOf(
-            Intent(SearchManager.INTENT_ACTION_GLOBAL_SEARCH).putExtra(SearchManager.QUERY, query),
-            Intent(Intent.ACTION_WEB_SEARCH).putExtra(SearchManager.QUERY, query)
-        ).firstOrNull { start(it) }
-    }
+    private fun search(query: String) = SearchIntents.global(this, query)
 
     private fun start(intent: Intent) = runCatching {
         startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true
