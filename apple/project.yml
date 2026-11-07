@@ -1,5 +1,6 @@
 # XcodeGen spec: `xcodegen generate` makes NeonTokyo.xcodeproj. The project file itself is not
 # kept in git; CI makes it on GitHub's Macs, so nobody needs a Mac to work on the app.
+# On your own Mac, apple/mac-install.sh does it all and installs on a paired Apple TV or iPhone.
 name: NeonTokyo
 options:
   bundleIdPrefix: com.neontokyo
