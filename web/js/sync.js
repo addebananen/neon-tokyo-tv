@@ -34,6 +34,9 @@ async function call(method, body) {
   return j.result;
 }
 
+/** One call to Stremio's API (the hand-off to the TV uses it too). */
+export const stremioCall = (method, body) => call(method, body);
+
 /** Signs this profile in. The password goes only to Stremio and is never kept. */
 export async function signIn(email, password) {
   const res = await call('login', { type: 'Login', email, password, facebook: false });
@@ -208,6 +211,7 @@ export function start() {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && pushTimer) { clearTimeout(pushTimer); pushTimer = 0; syncNow(); }
-    if (document.visibilityState === 'visible' && Date.now() - status.at > 60000) syncNow();
+    // Back on the phone: what the TV played meanwhile comes in at once
+    if (document.visibilityState === 'visible' && Date.now() - status.at > 10000) syncNow();
   });
 }

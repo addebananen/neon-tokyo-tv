@@ -46,6 +46,16 @@ final class AppModel {
         return a
     }
 
+    @ObservationIgnored private var handoffStore: Handoff?
+
+    /// "Fortsätt på TV:n": sending what this device watches to a Neon Tokyo TV.
+    var handoff: Handoff {
+        if let h = handoffStore { return h }
+        let h = Handoff(model: self)
+        handoffStore = h
+        return h
+    }
+
     init() {
         load()
         if demo {

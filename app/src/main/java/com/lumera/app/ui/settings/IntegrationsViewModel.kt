@@ -38,7 +38,11 @@ data class IntegrationsUiState(
     val tmdbEnabled: Boolean = false,
     val tmdbLanguage: String = "",
     val traktConnected: Boolean = false,
-    val traktAuthState: DeviceAuthState = DeviceAuthState.Idle
+    val traktAuthState: DeviceAuthState = DeviceAuthState.Idle,
+    /** Whose Continue watching follows the Stremio account on this TV (null: nobody's). */
+    val stremioWatchProfile: String? = null,
+    /** Whether that is the profile using the TV now. */
+    val stremioWatchIsThisProfile: Boolean = false
 )
 
 @HiltViewModel
@@ -48,7 +52,8 @@ class IntegrationsViewModel @Inject constructor(
     private val profileConfigurationManager: ProfileConfigurationManager,
     private val dao: AddonDao,
     private val traktAuthManager: TraktAuthManager,
-    private val traktSyncManager: TraktSyncManager
+    private val traktSyncManager: TraktSyncManager,
+    private val stremioWatchSync: com.lumera.app.handoff.StremioWatchSync
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IntegrationsUiState())
@@ -79,6 +84,7 @@ class IntegrationsViewModel @Inject constructor(
                 }
             }
         }
+        refreshWatchSync()
         // Load TMDB settings from active profile
         viewModelScope.launch(Dispatchers.IO) {
             val profileId = profileConfigurationManager.getLastActiveProfileId() ?: 1
@@ -242,6 +248,33 @@ class IntegrationsViewModel @Inject constructor(
         stremioAuthManager.disconnect()
         viewModelScope.launch {
             _events.send(IntegrationsEvent.Disconnected)
+        }
+    }
+
+    // ── Stremio Continue watching ──
+
+    private fun refreshWatchSync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val id = stremioAuthManager.watchSyncProfileId(dao)
+            val name = id?.let { dao.getProfileById(it)?.name }
+            _uiState.value = _uiState.value.copy(
+                stremioWatchProfile = name,
+                stremioWatchIsThisProfile = id != null && id == dao.getActiveProfileId()
+            )
+        }
+    }
+
+    /** Gives the account's Continue watching to the profile watching now, or takes it away again. */
+    fun toggleWatchSyncHere() {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_uiState.value.stremioWatchIsThisProfile) {
+                stremioAuthManager.setWatchSyncProfile(null)
+            } else {
+                val active = dao.getActiveProfileId() ?: return@launch
+                stremioAuthManager.setWatchSyncProfile(active)
+                stremioWatchSync.sync(pullAll = true)
+            }
+            refreshWatchSync()
         }
     }
 
