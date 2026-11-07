@@ -1,0 +1,3 @@
+--------- beginning of main
+--------- beginning of system
+11-07 11:50:27.830  2284 29290 I NeonIntro: played 5 frames in 1827 ms, 0 ms of them waiting for the window

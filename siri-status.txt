@@ -1,0 +1,1 @@
+{"version":1,"state":"no-remote","connected":false,"remote":"","battery":-1,"keys":0,"problem":"No Siri Remote paired yet","config":{"scrollSpeed":1.0,"momentum":true,"ringScrub":true,"edgeTaps":false,"backHoldHome":true,"siriKey":0,"tvDoubleKey":187,"tvHoldKey":-2,"wakeFromRemote":true}}

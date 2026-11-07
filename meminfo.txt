@@ -1,0 +1,58 @@
+Applications Memory Usage (in Kilobytes):
+Uptime: 3557206 Realtime: 3557206
+
+** MEMINFO in pid 2284 [com.neontokyo.tv] **
+                   Pss  Private  Private     Swap      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap   369341   369284        0        0   371020   675444   249799   409775
+  Dalvik Heap   123068   122936        0        0   126824   139214   114638    24576
+ Dalvik Other    15703     6316        0        0    25584                           
+        Stack     2516     2516        0        0     2524                           
+       Ashmem      150      140        0        0      172                           
+    Other dev       40        0       40        0      208                           
+     .so mmap     5709      268      492        0    48956                           
+    .jar mmap     2710        0      160        0    31004                           
+    .apk mmap     1052        0       48        0    24236                           
+    .ttf mmap      572        0      292        0      948                           
+    .dex mmap    14847    14844        0        0    14944                           
+    .oat mmap     1278        0       68        0    16124                           
+    .art mmap     2397     1908        4        0    14648                           
+   Other mmap     1677       36      808        0     5016                           
+      Unknown      365      356        0        0      676                           
+        TOTAL   541425   518604     1912        0   541425   814658   364437   434351
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:   124848                         141472
+         Native Heap:   369284                         371020
+                Code:    16184                         155048
+               Stack:     2516                           2524
+            Graphics:        0                              0
+       Private Other:     7684
+              System:    20909
+             Unknown:                                   12820
+ 
+           TOTAL PSS:   541425            TOTAL RSS:   682884      TOTAL SWAP (KB):        0
+ 
+ Objects
+               Views:      294         ViewRootImpl:        3
+         AppContexts:       64           Activities:       30
+              Assets:        8        AssetManagers:        0
+       Local Binders:      167        Proxy Binders:      119
+       Parcel memory:       33         Parcel count:      132
+    Death Recipients:       27      OpenSSL Sockets:       19
+            WebViews:        0
+ 
+ SQL
+         MEMORY_USED:      915
+  PAGECACHE_OVERFLOW:      373          MALLOC_SIZE:      117
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b)          cache  Dbname
+         4      160             12     306/1410/1  /data/user/0/com.neontokyo.tv/databases/lumera_db
+         4       16                         0/0/0    (attached) temp
+         4      160             14      480/741/1  /data/user/0/com.neontokyo.tv/databases/lumera_db (2)
+         4      160             36       17/244/1  /data/user/0/com.neontokyo.tv/databases/lumera_db (3)
+         4      160             35      491/725/1  /data/user/0/com.neontokyo.tv/databases/lumera_db (1)

@@ -1,0 +1,70 @@
+Applications Graphics Acceleration Info:
+Uptime: 3557191 Realtime: 3557191
+
+** Graphics info for pid 2284 [com.neontokyo.tv] **
+
+Stats since: 37334474544ns
+Total frames rendered: 8939
+Janky frames: 8358 (93.50%)
+50th percentile: 150ms
+90th percentile: 500ms
+95th percentile: 650ms
+99th percentile: 1050ms
+Number Missed Vsync: 2545
+Number High input latency: 38
+Number Slow UI thread: 2098
+Number Slow bitmap uploads: 243
+Number Slow issue draw commands: 8242
+Number Frame deadline missed: 8346
+HISTOGRAM: 5ms=331 6ms=47 7ms=42 8ms=24 9ms=13 10ms=26 11ms=9 12ms=14 13ms=10 14ms=7 15ms=7 16ms=5 17ms=7 18ms=2 19ms=5 20ms=8 21ms=2 22ms=7 23ms=4 24ms=5 25ms=5 26ms=6 27ms=8 28ms=6 29ms=6 30ms=3 31ms=4 32ms=11 34ms=6 36ms=10 38ms=14 40ms=10 42ms=13 44ms=11 46ms=9 48ms=16 53ms=16 57ms=16 61ms=13 65ms=12 69ms=21 73ms=27 77ms=44 81ms=44 85ms=59 89ms=63 93ms=47 97ms=65 101ms=64 105ms=56 109ms=93 113ms=120 117ms=184 121ms=217 125ms=320 129ms=392 133ms=408 150ms=2650 200ms=754 250ms=678 300ms=356 350ms=222 400ms=213 450ms=157 500ms=154 550ms=139 600ms=87 650ms=91 700ms=107 750ms=88 800ms=47 850ms=29 900ms=17 950ms=16 1000ms=26 1050ms=27 1100ms=22 1150ms=16 1200ms=7 1250ms=6 1300ms=2 1350ms=5 1400ms=7 1450ms=6 1500ms=2 1550ms=5 1600ms=3 1650ms=1 1700ms=0 1750ms=1 1800ms=1 1850ms=0 1900ms=0 1950ms=0 2000ms=2 2050ms=1 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 4950ms
+90th gpu percentile: 4950ms
+95th gpu percentile: 4950ms
+99th gpu percentile: 4950ms
+GPU HISTOGRAM: 1ms=23 2ms=25 3ms=11 4ms=9 5ms=7 6ms=4 7ms=2 8ms=1 9ms=0 10ms=4 11ms=2 12ms=1 13ms=2 14ms=3 15ms=1 16ms=63 17ms=1 18ms=3 19ms=1 20ms=4 21ms=0 22ms=1 23ms=1 24ms=0 25ms=1 4950ms=8544
+Font Cache (CPU):
+  Size: 6734.03 kB 
+  Glyph Count: 394 
+CPU Caches:
+  Masks: 1.59 KB (1 entry)
+GPU Caches:
+  RoundRect Blur Mask:
+    RenderTarget: 66.52 KB (1 entry)
+  Shadow Gaussian Falloff:
+    Texture: 128.00 bytes (1 entry)
+  SW Path Mask:
+    Texture: 21.37 KB (14 entries)
+  Other:
+    Other: 33.10 KB (1 entry)
+    Buffer Object: 2.05 KB (2 entries)
+  Image:
+    Texture: 18.21 MB (174 entries)
+  Scratch:
+    RenderTarget: 9.30 MB (27 entries)
+    Texture: 6.01 MB (4 entries)
+    Buffer Object: 174.00 KB (5 entries)
+Other Caches:
+                         Current / Maximum
+  Layers Total           0.00 KB (numLayers = 0)
+Total GPU memory usage:
+  35441860 bytes, 33.80 MB (26.80 MB is purgeable)
+
+
+Pipeline=Skia (OpenGL)
+Profile data in ms:
+
+	com.neontokyo.tv/com.neontokyo.tv.NeonHome/android.view.ViewRootImpl@8b8cf2c (visibility=8)
+	com.neontokyo.tv/com.lumera.app.MainActivity/android.view.ViewRootImpl@dd7cdf5 (visibility=0)
+View hierarchy:
+
+  com.neontokyo.tv/com.neontokyo.tv.NeonHome/android.view.ViewRootImpl@8b8cf2c
+  10 views, 9.45 kB of render nodes
+
+  com.neontokyo.tv/com.lumera.app.MainActivity/android.view.ViewRootImpl@dd7cdf5
+  7 views, 8.19 kB of render nodes
+
+
+Total ViewRootImpl   : 2
+Total attached Views : 17
+Total RenderNode     : 17.64 kB (used) / 42.34 kB (capacity)
+

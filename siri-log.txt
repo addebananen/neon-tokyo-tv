@@ -1,0 +1,2 @@
+Neon Tokyo Siri Remote bridge 1 running (pid 3799)
+problem: No Siri Remote paired yet
