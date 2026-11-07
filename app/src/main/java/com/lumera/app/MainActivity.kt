@@ -1056,6 +1056,14 @@ class MainActivity : ComponentActivity() {
                         var currentNav by remember { mutableStateOf(NavDestination.Home) }
                         val wantedChannel by com.lumera.app.livetv.LiveTv.wanted.collectAsState()
                         LaunchedEffect(wantedChannel) { if (wantedChannel != null) currentNav = NavDestination.LiveTv }
+                        // A search typed or said on the phone remote: the Search tab takes it
+                        val remoteSearch by com.lumera.app.remote_input.phone.RemoteSearch.wanted.collectAsState()
+                        LaunchedEffect(remoteSearch) {
+                            if (remoteSearch != null) {
+                                activeView = "menu"
+                                currentNav = NavDestination.Search
+                            }
+                        }
                         
                         // Grid view state
                         var gridViewTitle by rememberSaveable { mutableStateOf("") }

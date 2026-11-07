@@ -1876,6 +1876,67 @@ if app_in_front; then
   fail "two quick presses of Back did not close the app"
 fi
 
+# --- Phone remote: the page the TV serves on the home network, paired with the code ----------
+# The runner plays the phone: it opens pairing the way a PC can (a broadcast only the shell may
+# send), pairs with the code, then presses, types and searches through the same calls the page uses
+adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
+sleep 6
+adb forward tcp:18765 tcp:8765 > /dev/null
+pr="$OUT/phone-remote.txt"
+R=http://127.0.0.1:18765
+curl -s -m 10 "$R/" > "$OUT/phone-remote.html" || true
+grep -q "Neon Remote" "$OUT/phone-remote.html" || fail "phone remote: the TV does not serve the remote page on port 8765"
+for f in remote.js remote.css fonts/outfit_regular.woff2 icons/apple-touch-icon.png; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$R/$f")
+  echo "$f $code" >> "$pr"
+  [ "$code" = 200 ] || fail "phone remote: $f answers $code"
+done
+code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -X POST -H 'Content-Type: application/json' -d '{"key":"down"}' "$R/api/key")
+[ "$code" = 401 ] || fail "phone remote: a press without the key answers $code, not 401"
+pin=$(adb shell am broadcast -a com.neontokyo.tv.PHONE_REMOTE --es do pair 2>/dev/null | tr -d '\r' | sed -n 's/.*pin=\([0-9]\{4\}\).*/\1/p' | head -1)
+echo "pin: $pin" >> "$pr"
+curl -s -m 10 -X POST -H 'Content-Type: application/json' -d '{"pin":"0000"}' "$R/api/pair" >> "$pr"; echo >> "$pr"
+k=$(curl -s -m 10 -X POST -H 'Content-Type: application/json' -d "{\"pin\":\"$pin\"}" "$R/api/pair" | sed -n 's/.*"k":"\([^"]*\)".*/\1/p')
+if [ -z "$k" ]; then
+  fail "phone remote: pairing with the TV's code gave no key"
+else
+  api() { curl -s -m 10 -H "X-Neon-Key: $k" -H 'Content-Type: application/json' ${2:+-d "$2"} "$R/api/$1"; }
+  api hello >> "$pr"; echo >> "$pr"
+  timeout 4 curl -s -N -H "X-Neon-Key: $k" "$R/api/events?k=$k" > "$OUT/phone-remote-events.txt" 2>/dev/null || true
+  grep -q '"name"' "$OUT/phone-remote-events.txt" || fail "phone remote: the event stream sent no state"
+  for key in down right left up; do
+    r=$(api key "{\"key\":\"$key\"}")
+    echo "key $key: $r" >> "$pr"
+    echo "$r" | grep -q '"ok"' || fail "phone remote: $key did not reach the app ($r)"
+    sleep 0.6
+  done
+  # The app came back on "Who's watching?": the phone picks the profile, as anyone would
+  if screen_has "Who's watching"; then
+    api key '{"key":"left"}' >> "$pr"; sleep 0.6
+    r=$(api key '{"key":"ok"}'); echo "pick profile: $r" >> "$pr"
+    sleep 8
+  fi
+  apps=$(api apps)
+  echo "$apps" | head -c 600 >> "$pr"; echo >> "$pr"
+  echo "$apps" | grep -q "$PKG" || fail "phone remote: the app list lacks Neon Tokyo"
+  code=$(curl -s -o "$OUT/phone-remote-icon.png" -w '%{http_code}' -m 10 "$R/api/icon?pkg=$PKG&k=$k")
+  [ "$code" = 200 ] || fail "phone remote: no app picture ($code)"
+  r=$(api search '{"q":"Akira","where":"neon"}')
+  echo "search: $r" >> "$pr"
+  echo "$r" | grep -q '"ok"' || fail "phone remote: search was not taken ($r)"
+  wait_for "Akira" 30 || fail "phone remote: Neon's search page did not show the phone's search"
+  shot phone-remote-search
+  # Letters typed on the phone go straight into the search page while it shows
+  r=$(api text '{"text":"Akira 1988","submit":false}')
+  echo "text: $r" >> "$pr"
+  echo "$r" | grep -q '"neon"' || fail "phone remote: typing did not go to Neon's search ($r)"
+  wait_for "Akira 1988" 20 || fail "phone remote: the typed text did not show on the TV"
+  r=$(api key '{"key":"back"}'); echo "back: $r" >> "$pr"
+fi
+adb forward --remove tcp:18765 > /dev/null 2>&1
+adb logcat -d -s PhoneRemote:I PhoneRemote:W | tail -20 >> "$pr"
+cat "$pr"
+
 # --- Siri Remote bridge: runs as the shell user, sees Bluetooth, injects keys --
 # The emulator has no remote to pair, so this checks everything up to the remote itself
 if [ -n "${SIRI_LIB:-}" ] && [ -f "$SIRI_LIB" ]; then
