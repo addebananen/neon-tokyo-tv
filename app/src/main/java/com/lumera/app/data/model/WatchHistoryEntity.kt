@@ -23,4 +23,16 @@ data class WatchHistoryEntity(
         if (duration == 0L) return 0f
         return position.toFloat() / duration.toFloat()
     }
+
+    /** Only how far in is known (Trakt, another device), not the length: see [PERCENT_DURATION_MS]. */
+    val isShare: Boolean get() = duration == PERCENT_DURATION_MS
+
+    companion object {
+        /**
+         * The length saved for a title when only its share watched is known: position is then
+         * that share of this number, so [progress] still reads right and the player goes to the
+         * same share of the real length. The same marker as the web app's and the shared core's.
+         */
+        const val PERCENT_DURATION_MS = 1_000_000_000L
+    }
 }

@@ -886,6 +886,9 @@ class MainActivity : ComponentActivity() {
             var selectedMovieLogo by rememberSaveable { mutableStateOf("") }
             var selectedAddonBaseUrl by rememberSaveable { mutableStateOf<String?>(null) }
             var detailsResumePlaybackHint by rememberSaveable { mutableStateOf<String?>(null) }
+            // "Fortsätt på TV:n": the details page plays this title as soon as it is open
+            var handoffAutoPlayId by remember { mutableStateOf<String?>(null) }
+            var handoffNavToken by remember { mutableStateOf(0) }
             var trailerReturnToken by rememberSaveable { mutableStateOf(0) }
             var isTrailerLoading by remember { mutableStateOf(false) }
             var showTrailerError by remember { mutableStateOf(false) }
@@ -925,6 +928,7 @@ class MainActivity : ComponentActivity() {
                     pendingOpen.value = null
                     return@LaunchedEffect
                 }
+                val wasOnDetails = activeView == "details"
                 selectedMovieId = open.id
                 selectedMovieType = open.type
                 selectedMovieTitle = open.name
@@ -932,12 +936,22 @@ class MainActivity : ComponentActivity() {
                 selectedMovieBackground = open.background
                 selectedMovieLogo = open.logo
                 selectedAddonBaseUrl = null
-                detailsResumePlaybackHint = null
-                selectedPlaybackId = open.id
+                // A hand-off names the episode to pick up; the page plays it when it is open
+                detailsResumePlaybackHint = open.video.takeIf { open.autoPlay && open.type == "series" && it.isNotBlank() && it != open.id }
+                handoffAutoPlayId = if (open.autoPlay) open.id else null
+                if (open.autoPlay) {
+                    handoffNavToken++
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        if (open.from.isNotBlank()) "Fortsätter från ${open.from}" else "Fortsätter där du slutade",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+                selectedPlaybackId = open.video.ifBlank { open.id }
                 selectedPlaybackType = open.type
                 selectedPlaybackTitle = open.name
                 selectedPlaybackPoster = open.poster
-                previousView = "menu"
+                if (!wasOnDetails) previousView = "menu"
                 activeView = "details"
                 pendingOpen.value = null
             }
@@ -1569,6 +1583,15 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            // A hand-off while another title's page is open: go to the handed-off one
+                            LaunchedEffect(handoffNavToken) {
+                                if (handoffNavToken == 0) return@LaunchedEffect
+                                val entry = detailsNavController.currentBackStackEntry ?: return@LaunchedEffect
+                                val shownId = entry.arguments?.getString("id")?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+                                if (entry.destination.route != "detail_start" && shownId != selectedMovieId) {
+                                    detailsNavController.navigate(startRoute)
+                                }
+                            }
 
                             BackHandler {
                                 if (!detailsNavController.popBackStack()) {
@@ -1670,6 +1693,8 @@ class MainActivity : ComponentActivity() {
                                         id = detailId,
                                         addonBaseUrl = detailAddon,
                                         resumePlaybackHint = detailResume,
+                                        autoPlay = handoffAutoPlayId != null && handoffAutoPlayId == detailId,
+                                        onAutoPlayStarted = { handoffAutoPlayId = null },
                                         autoSelectSource = currentProfile?.autoSelectSource ?: false,
                                         rememberSourceSelection = currentProfile?.rememberSourceSelection ?: true,
                                         onPosterResolved = { selectedMoviePoster = it },
@@ -2469,7 +2494,13 @@ class MainActivity : ComponentActivity() {
         val name: String,
         val poster: String,
         val background: String,
-        val logo: String
+        val logo: String,
+        /** What to play: an episode's id for a series; blank opens the details page only. */
+        val video: String = "",
+        /** Play right away (a hand-off from another device), not just open the page. */
+        val autoPlay: Boolean = false,
+        /** The device it came from, for the "Fortsätter från …" note. */
+        val from: String = ""
     ) {
         companion object {
             fun from(intent: Intent?): OpenRequest? {
@@ -2485,7 +2516,10 @@ class MainActivity : ComponentActivity() {
                     name = intent.getStringExtra(EXTRA_OPEN_NAME) ?: "",
                     poster = intent.getStringExtra(EXTRA_OPEN_POSTER) ?: "",
                     background = intent.getStringExtra(EXTRA_OPEN_BACKGROUND) ?: "",
-                    logo = intent.getStringExtra(EXTRA_OPEN_LOGO) ?: ""
+                    logo = intent.getStringExtra(EXTRA_OPEN_LOGO) ?: "",
+                    video = intent.getStringExtra(EXTRA_OPEN_VIDEO) ?: "",
+                    autoPlay = intent.getBooleanExtra(EXTRA_OPEN_AUTOPLAY, false).also { intent.removeExtra(EXTRA_OPEN_AUTOPLAY) },
+                    from = intent.getStringExtra(EXTRA_OPEN_FROM) ?: ""
                 )
             }
         }
@@ -2504,5 +2538,9 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN_POSTER = "nt_open_poster"
         const val EXTRA_OPEN_BACKGROUND = "nt_open_background"
         const val EXTRA_OPEN_LOGO = "nt_open_logo"
+        /** "Fortsätt på TV:n" (see handoff/HandoffOpen): the episode or film to play, and play it now. */
+        const val EXTRA_OPEN_VIDEO = "nt_open_video"
+        const val EXTRA_OPEN_AUTOPLAY = "nt_open_autoplay"
+        const val EXTRA_OPEN_FROM = "nt_open_from"
     }
 }
