@@ -63,7 +63,7 @@ class StremioWatchSync @Inject constructor(
         for (item in items) {
             val type = item.str("type")
             if (type != "movie" && type != "series") continue
-            val itemId = item.str("_id").ifBlank { continue }
+            val itemId = item.str("_id").takeIf { it.isNotBlank() } ?: continue
             val state = item.get("state")?.takeIf { it.isJsonObject }?.asJsonObject ?: continue
             val lastWatched = HandoffProtocol.parseIso(state.str("lastWatched")).takeIf { it > 0L }
                 ?: HandoffProtocol.parseIso(item.str("_mtime"))
