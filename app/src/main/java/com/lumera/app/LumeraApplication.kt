@@ -21,6 +21,9 @@ class LumeraApplication : Application(), ImageLoaderFactory {
     @Inject
     lateinit var startupOptimizer: StartupOptimizer
 
+    @Inject
+    lateinit var handoffReceiver: com.lumera.app.handoff.HandoffReceiver
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
 
@@ -44,6 +47,8 @@ class LumeraApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         startupOptimizer.warmup()
+        // "Fortsätt på TV:n" from the phone: listens while the screen is on
+        handoffReceiver.start()
     }
 
     override fun newImageLoader(): ImageLoader = imageLoader

@@ -142,6 +142,9 @@ fun DetailsScreen(
     id: String,
     addonBaseUrl: String? = null,
     resumePlaybackHint: String? = null,
+    /** "Fortsätt på TV:n": play as soon as the page is open, with the best source, no picking. */
+    autoPlay: Boolean = false,
+    onAutoPlayStarted: () -> Unit = {},
     autoSelectSource: Boolean = false,
     rememberSourceSelection: Boolean = true,
     onPlayClick: (String, String, String, String, String, String, Stream, List<AddonSubtitle>, List<Stream>, List<MetaVideo>) -> Unit,
@@ -544,7 +547,7 @@ fun DetailsScreen(
                     ) {
                         // A press plays (or picks up where it was, with the source used before);
                         // holding OK for a second opens the sources to choose from instead
-                        fun playEpisode(choose: Boolean) {
+                        fun playEpisode(choose: Boolean, pickBest: Boolean = autoSelectSource) {
                                 val ep = resumeEpisode ?: firstEpisode ?: return
                                 val trackId = resumePlaybackId ?: episodePlaybackId(streamId, ep)
                                 val epStreamId = episodeStreamId(streamId, ep)
@@ -558,7 +561,12 @@ fun DetailsScreen(
                                 pendingPlaybackId = trackId
                                 pendingPlaybackType = type
                                 pendingPlaybackTitle = epTitle
-                                viewModel.loadStreams(type, epStreamId, epTitle, sourceSelectionId = trackId, forceSourcePicker = choose, autoSelectSource = autoSelectSource, rememberSourceSelection = rememberSourceSelection)
+                                viewModel.loadStreams(type, epStreamId, epTitle, sourceSelectionId = trackId, forceSourcePicker = choose, autoSelectSource = pickBest, rememberSourceSelection = rememberSourceSelection)
+                        }
+                        LaunchedEffect(autoPlay) {
+                            if (!autoPlay) return@LaunchedEffect
+                            onAutoPlayStarted()
+                            playEpisode(choose = false, pickBest = true)
                         }
                         ExpandableIconButton(
                             label = playLabel,
@@ -609,6 +617,14 @@ fun DetailsScreen(
                             false
                         }
                     ) {
+                        LaunchedEffect(autoPlay) {
+                            if (!autoPlay) return@LaunchedEffect
+                            onAutoPlayStarted()
+                            pendingPlaybackId = streamId
+                            pendingPlaybackType = type
+                            pendingPlaybackTitle = currentMovie.name
+                            viewModel.loadStreams(type, streamId, currentMovie.name, autoSelectSource = true, rememberSourceSelection = rememberSourceSelection)
+                        }
                         ExpandableIconButton(
                             label = if (resumePlaybackId != null) "Resume" else "Play Movie",
                             icon = Icons.Default.PlayArrow,
