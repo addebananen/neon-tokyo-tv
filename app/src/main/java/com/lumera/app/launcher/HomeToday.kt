@@ -408,7 +408,7 @@ internal fun TodayRow(
             if (showHockey && hockeyNow != null) key("hockey") {
                 val color = if (hockeyNow.team == HomeHockey.DEFAULT_TEAM) LuleaRed else look.accent
                 NeonTile(
-                    width = 252.dp, height = TodayHeight, shape = shape, color = color,
+                    width = 284.dp, height = TodayHeight, shape = shape, color = color,
                     onClick = { open("hockey", TodayPanel.Hockey) },
                     focusRequester = requester("hockey"),
                     onFocus = { onFocusColor(null, hockeyNow.game.side(hockeyNow.team).long, color) },
@@ -536,7 +536,7 @@ private fun BoxScope.WeatherCard(forecast: Forecast, color: Color, focused: Bool
             val today = forecast.today
             Words(listOfNotNull(now.place, today?.let { "H ${it.high}°  L ${it.low}°" }).joinToString("  ·  "), 10.5.sp, alpha = 0.7f)
             // The next few hours, small, along the foot
-            val coming = forecast.hours.filter { it.at > minute }.take(4)
+            val coming = forecast.hours.filter { it.at > minute }.take(3)
             if (coming.isNotEmpty()) {
                 Spacer(Modifier.height(3.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -820,7 +820,7 @@ private fun HockeyPanel(games: List<HockeyGame>, team: String, onDismiss: () -> 
                 PanelNote("SHL 2026/27  ·  ${played.size} played  ·  $wins won", look)
             }
         }
-        val coming = games.filter { it.coming && it.start > now - HomeHockey.GAME_MS }.take(5)
+        val coming = games.filter { it.live(now) || (it.coming && it.start > now) }.take(5)
         val played = games.filter { it.played }.takeLast(5).asReversed()
         Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -829,7 +829,13 @@ private fun HockeyPanel(games: List<HockeyGame>, team: String, onDismiss: () -> 
                 coming.forEach { game ->
                     val home = game.home.code == team
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Words(HomeHockey.whenText(game.start, now), 12.sp, Modifier.width(118.dp), color = if (game.live(now)) LiveRed else null, alpha = 0.85f)
+                        val live = game.live(now)
+                        val score = if (live && game.homeScore != null && game.awayScore != null) {
+                            val mine = if (home) game.homeScore else game.awayScore
+                            val theirs = if (home) game.awayScore else game.homeScore
+                            "LIVE  $mine – $theirs"
+                        } else if (live) "LIVE" else HomeHockey.whenText(game.start, now)
+                        Words(score, 12.sp, Modifier.width(118.dp), color = if (live) LiveRed else null, alpha = 0.85f, bold = live)
                         TeamBadge(game.other(team), Modifier.size(20.dp))
                         Spacer(Modifier.width(7.dp))
                         Words((if (home) "vs " else "@ ") + game.other(team).short, 13.sp, Modifier.weight(1f))

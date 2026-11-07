@@ -1451,7 +1451,7 @@ case "$label" in *"-3°"*|*Snow*|*Luleå*) ;; *) fail "Down never reached the To
 key DPAD_CENTER
 sleep 2
 shot today-weather-panel
-screen_has 'text="Feels like' || fail "OK on the weather card did not open the forecast"
+screen_has 'Feels like' || fail "OK on the weather card did not open the forecast"
 key BACK
 sleep 2
 key DPAD_RIGHT
