@@ -872,6 +872,14 @@ class MainActivity : ComponentActivity() {
             val mainViewModel = hiltViewModel<MainViewModel>()
             val themeManager = hiltViewModel<ThemeManager>()
             val currentProfile by mainViewModel.activeProfile.collectAsState()
+            // Back in front: progress made on the phone meanwhile comes in (Stremio Continue watching)
+            androidx.compose.runtime.DisposableEffect(mainViewModel) {
+                val resumeObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) mainViewModel.onResumed()
+                }
+                this@MainActivity.lifecycle.addObserver(resumeObserver)
+                onDispose { this@MainActivity.lifecycle.removeObserver(resumeObserver) }
+            }
             var sessionProfileId by rememberSaveable { mutableStateOf<Int?>(null) }
             var sessionRestoreAttemptedProfileId by rememberSaveable { mutableStateOf<Int?>(null) }
             var activeView by rememberSaveable { mutableStateOf("menu") }
