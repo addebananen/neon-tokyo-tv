@@ -162,6 +162,7 @@ class NeonHomeActivity : ComponentActivity() {
         if (preview) previewLayout = layoutOf(intent)
         if (preview) previewWake = intent.getStringExtra(EXTRA_WAKE)
         HomeWidgets.preview(if (preview) widgetsOf(intent) else null)
+        HomeToday.demo = preview && intent.getStringExtra(EXTRA_TODAY) == "demo"
         if (preview) previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
         if (preview) previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
         setContent {
@@ -197,6 +198,7 @@ class NeonHomeActivity : ComponentActivity() {
             previewFocus = null
             previewLayout = null
             HomeWidgets.preview(null)
+            HomeToday.demo = false
             // Timed as each press comes, not when the screen gets to it: back from an app the
             // TV is busy, and two presses could otherwise reach the screen as one
             val now = SystemClock.uptimeMillis()
@@ -217,6 +219,7 @@ class NeonHomeActivity : ComponentActivity() {
             layoutOf(intent)?.let { previewLayout = it }
             previewWake = intent.getStringExtra(EXTRA_WAKE)
             widgetsOf(intent)?.let { HomeWidgets.preview(it) }
+            intent.getStringExtra(EXTRA_TODAY)?.let { HomeToday.demo = it == "demo" }
             previewBluetooth = intent.getStringExtra(EXTRA_BLUETOOTH)
             previewBluetoothList = intent.getStringExtra(EXTRA_BLUETOOTH_LIST)
             if (intent.hasExtra(EXTRA_SWITCHER)) {
@@ -276,6 +279,8 @@ class NeonHomeActivity : ComponentActivity() {
 
         /** Names of made-up Bluetooth devices, separated by commas, for the Bluetooth corner. */
         const val EXTRA_BLUETOOTH_LIST = "bluetoothlist"
+        /** "demo" fills the Today row with made-up weather, a game, a song and lights. */
+        const val EXTRA_TODAY = "today"
 
         /** Opens the app switcher at once, as Home pressed twice does. */
         const val EXTRA_SWITCHER = "switcher"
