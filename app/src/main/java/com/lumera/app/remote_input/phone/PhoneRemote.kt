@@ -92,7 +92,20 @@ object PhoneRemote {
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
         if (isOn(app)) worker.post { startServer() }
+        // From a PC (and the TV test): `adb shell am broadcast -a com.neontokyo.tv.PHONE_REMOTE --es do pair`
+        // opens pairing for two minutes and prints the code. Only the shell and the system hold DUMP
+        androidx.core.content.ContextCompat.registerReceiver(app, object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: android.content.Intent) {
+                if (intent.getStringExtra("do") != "pair") return
+                ensureRunning()
+                val code = openPairing()
+                worker.postDelayed({ if (pin == code) closePairing() }, 120_000L)
+                resultData = "pin=$code port=${port.takeIf { it > 0 } ?: PORT}"
+            }
+        }, android.content.IntentFilter(ACTION_ADB), "android.permission.DUMP", null, androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
     }
+
+    private const val ACTION_ADB = "com.neontokyo.tv.PHONE_REMOTE"
 
     fun isOn(context: Context): Boolean = prefs(context).getBoolean(KEY_ON, true)
 
