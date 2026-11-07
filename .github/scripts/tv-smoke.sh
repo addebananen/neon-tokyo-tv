@@ -1854,6 +1854,12 @@ else
     echo "$r" | grep -q '"ok"' || fail "phone remote: $key did not reach the app ($r)"
     sleep 0.6
   done
+  # The app came back on "Who's watching?": the phone picks the profile, as anyone would
+  if screen_has "Who's watching"; then
+    api key '{"key":"left"}' >> "$pr"; sleep 0.6
+    r=$(api key '{"key":"ok"}'); echo "pick profile: $r" >> "$pr"
+    sleep 8
+  fi
   apps=$(api apps)
   echo "$apps" | head -c 600 >> "$pr"; echo >> "$pr"
   echo "$apps" | grep -q "$PKG" || fail "phone remote: the app list lacks Neon Tokyo"
