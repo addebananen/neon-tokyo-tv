@@ -5,7 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 CORE=native/neon-core
 OUT=apple/Generated
-TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-tvos aarch64-apple-tvos-sim)
+# NEON_CORE_TARGETS="aarch64-apple-tvos" builds only what one device needs (mac-install.sh does that)
+read -r -a TARGETS <<< "${NEON_CORE_TARGETS:-aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-tvos aarch64-apple-tvos-sim}"
 
 export IPHONEOS_DEPLOYMENT_TARGET=17.0
 export TVOS_DEPLOYMENT_TARGET=17.0
