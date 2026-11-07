@@ -58,6 +58,10 @@ struct DetailsView: View {
                             actions
                                 .modifier(Staggered(index: 3))
                                 .tvFocusSection()
+                            #if os(iOS)
+                            tvButton
+                                .modifier(Staggered(index: 3))
+                            #endif
                             if let detail, !detail.cast.isEmpty {
                                 Text("Cast: " + detail.cast.prefix(6).joined(separator: ", "))
                                     .font(.system(size: Metrics.bodySize * 0.8))
@@ -83,7 +87,64 @@ struct DetailsView: View {
         .background(theme.background)
         .neonNavigationChrome()
         .task(id: "\(item.id)|\(model.manifests.count)") { await load() }
+        #if os(iOS)
+        .sheet(isPresented: handoffShown) {
+            HandoffSheet(poster: meta.poster, what: handoffWhat)
+                .presentationDetents([.height(330)])
+                .presentationBackground(theme.panel)
+        }
+        #endif
     }
+
+    #if os(iOS)
+    // MARK: Fortsätt på TV:n
+
+    @State private var handoffWhat = ""
+
+    private var handoffShown: Binding<Bool> {
+        Binding(get: { model.handoff.phase != .idle }, set: { if !$0 { model.handoff.cancel() } })
+    }
+
+    /// The film, or the episode Play would play, and how far this profile got in it.
+    private var handoffItem: Handoff.Item? {
+        guard let target = playTarget else { return nil }
+        let play = target.request.play
+        let e = model.entry(play.playbackId)
+        let started = e.map { !$0.watched && !$0.deleted && $0.positionMs > 0 } ?? false
+        let title = isSeries ? "\(target.request.heading.replacingOccurrences(of: "\(meta.name)  ·  ", with: "")) - \(meta.name)" : meta.name
+        return Handoff.Item(id: meta.id, kind: isSeries ? "series" : "movie", video: play.playbackId, name: meta.name,
+                            title: title, poster: meta.poster, background: meta.background, logo: meta.logo,
+                            positionMs: started ? e!.positionMs : 0, durationMs: started ? e!.durationMs : 0)
+    }
+
+    private var tvButton: some View {
+        let started = handoffItem.map { $0.positionMs > 0 } ?? false
+        return Button {
+            guard let item = handoffItem else { return }
+            handoffWhat = item.title
+            if model.handoff.available {
+                model.handoff.start(item)
+            } else {
+                model.handoff.cancel()
+                handoffWhat = ""
+                showSignInHint = true
+            }
+        } label: {
+            Label(started ? "Fortsätt på TV:n" : "Spela på TV:n", systemImage: "tv")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(NeonPillStyle())
+        .frame(maxWidth: Metrics.posterWidth * 4.6)
+        .disabled(handoffItem == nil)
+        .alert("Fortsätt på TV:n", isPresented: $showSignInHint) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Logga in profilen med Stremio i Inställningar, med samma konto som TV:n. Sedan skickar den här knappen det du tittar på till TV:n, på samma sekund.")
+        }
+    }
+
+    @State private var showSignInHint = false
+    #endif
 
     /// Apple TV and iPad: the picture sits to the right; on a phone it fills the top.
     #if os(iOS)

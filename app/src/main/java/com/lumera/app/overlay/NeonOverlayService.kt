@@ -10,17 +10,21 @@ import android.media.tv.TvInputManager
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.Build
+import android.os.Bundle
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import com.lumera.app.control.CcPage
 import com.lumera.app.control.ControlCenter
 import com.lumera.app.launcher.BluetoothHelper
 import com.lumera.app.launcher.SettingsHand
+import com.lumera.app.remote_input.phone.PhoneRemote
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -206,6 +210,9 @@ class NeonOverlayService : AccessibilityService() {
         // Only the shell and the system hold DUMP, so no app can open the overlays this way
         runCatching { unregisterReceiver(fromAdb) }
         ContextCompat.registerReceiver(this, fromAdb, IntentFilter(ACTION_ADB), "android.permission.DUMP", handler, ContextCompat.RECEIVER_EXPORTED)
+        // The phone remote's page runs as long as this does, and steers the TV through it
+        PhoneRemote.ensureRunning()
+        if (PhoneRemote.phones.value > 0) watchFieldsNow(true)
         Log.i(TAG, "Connected, chords ${if (gestures) "on" else "off"}, keys on ${if (keysOwnThread) "their own thread" else "the main thread"}")
     }
 
@@ -249,6 +256,9 @@ class NeonOverlayService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Read now: the event is recycled once this returns
         val type = event?.eventType
+        if (watchingFields && type != null) fieldEvent(type)
+        // Only the phone remote asks for these, and only it needs them
+        if (type == AccessibilityEvent.TYPE_VIEW_FOCUSED || type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return
         val pkg = event?.packageName?.toString()
         val className = event?.className?.toString()
         onMain { windowChanged(type, pkg, className) }
@@ -266,6 +276,7 @@ class NeonOverlayService : AccessibilityService() {
         // The overlays' own windows and toasts don't change what is in front
         if (pkg == packageName && (diagnostics != null || hud != null || className?.contains("Toast") == true)) return
         foreground = pkg
+        PhoneRemote.appChanged(pkg)
         val console = ConsoleSession.last
         if (hudWhenConsole > 0 && console?.tvApp == pkg) {
             if (SystemClock.uptimeMillis() - hudWhenConsole < CONSOLE_WAIT_MS) {
@@ -279,6 +290,84 @@ class NeonOverlayService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
+
+    // ── The phone remote ──
+
+    /** A phone has the remote open: the TV tells it when a text field comes up, to type in from the phone. */
+    @Volatile
+    private var watchingFields = false
+
+    private val checkField = Runnable { PhoneRemote.fieldSeen(readField()) }
+
+    private fun watchFieldsNow(on: Boolean) {
+        if (watchingFields == on) return
+        watchingFields = on
+        serviceInfo?.let { info ->
+            val bits = AccessibilityEvent.TYPE_VIEW_FOCUSED or AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+            info.eventTypes = if (on) info.eventTypes or bits else info.eventTypes and bits.inv()
+            serviceInfo = info
+        }
+        PhoneRemote.worker.removeCallbacks(checkField)
+        if (on) PhoneRemote.worker.post(checkField) else PhoneRemote.fieldSeen(null)
+    }
+
+    /** Focus or text moved: a moment later the remote's thread looks at what has focus now. */
+    private fun fieldEvent(type: Int) {
+        if (type != AccessibilityEvent.TYPE_VIEW_FOCUSED && type != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED &&
+            type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        PhoneRemote.worker.removeCallbacks(checkField)
+        PhoneRemote.worker.postDelayed(checkField, 120L)
+    }
+
+    /**
+     * The text field that has focus in the app in front, if any. The app's own window, not the
+     * keyboard's: the field keeps its focus while the TV's keyboard is up.
+     */
+    private fun focusedField(): AccessibilityNodeInfo? = runCatching {
+        rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }
+            ?: findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }
+    }.getOrNull()
+
+    private fun readField(): PhoneRemote.Field? {
+        val node = focusedField() ?: return null
+        val hint = if (Build.VERSION.SDK_INT >= 26) node.hintText?.toString().orEmpty() else ""
+        val showingHint = Build.VERSION.SDK_INT >= 26 && node.isShowingHintText
+        return PhoneRemote.Field(
+            text = if (showingHint) "" else node.text?.toString().orEmpty(),
+            hint = hint.ifEmpty { node.contentDescription?.toString().orEmpty() },
+            password = node.isPassword,
+            app = node.packageName?.toString()
+        )
+    }
+
+    /** The phone's text into the focused field, the cursor at its end; [submit] presses the keyboard's Search/Go. */
+    fun typeInto(text: String, submit: Boolean): Boolean {
+        val node = focusedField() ?: return false
+        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+        if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) return false
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, text.length)
+            putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, text.length)
+        })
+        if (submit && Build.VERSION.SDK_INT >= 30) {
+            node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+        }
+        return true
+    }
+
+    /**
+     * A press from the phone for the Control Center or diagnostics, while either has the remote.
+     * Presses Android makes for an app skip [onKeyEvent], so they are handed over here instead.
+     */
+    fun panelPress(code: Int): Boolean {
+        if (control?.engaged != true && !(code == KeyEvent.KEYCODE_BACK && backIsOurs)) return false
+        return onMainNow(MAIN_WAIT_MS, false) {
+            val now = SystemClock.uptimeMillis()
+            val down = panelKey(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0))
+            panelKey(KeyEvent(now, now + 1, KeyEvent.ACTION_UP, code, 0))
+            down == true
+        }
+    }
 
     private var handWatching = false
 
@@ -305,6 +394,7 @@ class NeonOverlayService : AccessibilityService() {
 
     override fun onDestroy() {
         if (instance === this) instance = null
+        PhoneRemote.worker.removeCallbacks(checkField)
         runCatching { unregisterReceiver(fromAdb) }
         handler.removeCallbacksAndMessages(null)
         diagnostics?.close()
@@ -466,6 +556,15 @@ class NeonOverlayService : AccessibilityService() {
         private var instance: NeonOverlayService? = null
 
         val running: Boolean get() = instance != null
+
+        /** For the phone remote: the service, while it runs. */
+        val current: NeonOverlayService? get() = instance
+
+        /** The phone remote opened or closed on a phone. */
+        fun watchFields(on: Boolean) {
+            val service = instance ?: return
+            service.handler.post { service.watchFieldsNow(on) }
+        }
 
         /** For Settings' button: opens the Control Center now, false when the service is off. */
         fun openControlCenter(): Boolean {

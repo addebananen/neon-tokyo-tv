@@ -199,10 +199,10 @@ import kotlin.random.Random
 private enum class HomeTab { Home, Apps, Sources }
 
 
-private val BigTile = 190.dp to 82.dp
+internal val BigTile = 190.dp to 82.dp
 private val SmallTile = 116.dp to 69.dp
-private val Gap = 13.dp
-private val Side = 55.dp
+internal val Gap = 13.dp
+internal val Side = 55.dp
 
 // On glass: the wide tiles on Home, square icons as on Apple TV, consoles on Home, and the room
 // for an app's name under its tile
@@ -893,7 +893,18 @@ fun NeonHome(homePresses: Int, switcherOpens: Int = 0, onLeave: (() -> Unit)? = 
                                 onOpen = { openConsole(it) },
                                 onLink = { linking = it }
                             )
-                        })
+                        }),
+                        todayRow = {
+                            TodayRow(
+                                profileId = profile.id,
+                                shape = RoundedCornerShape(look.corner),
+                                onFocusColor = { pkg, title, color -> focusMoved(); wallpaper = NeonWallpaper.forCard(pkg, title, color.toArgb()) },
+                                onSpot = {
+                                    spot = it
+                                    spotOn = true
+                                }
+                            )
+                        }
                     )
                     HomeTab.Sources -> Sources(
                         consoles = consoles,
@@ -1139,7 +1150,8 @@ private fun HomeRows(
     namesAlways: Boolean = true,
     down: Boolean = false,
     onHeight: (Int) -> Unit = {},
-    consoleRow: (@Composable () -> Unit)? = null
+    consoleRow: (@Composable () -> Unit)? = null,
+    todayRow: (@Composable () -> Unit)? = null
 ) {
     val look = LocalHomeLook.current
     val pack = LocalIconPack.current
@@ -1147,7 +1159,7 @@ private fun HomeRows(
     val continues = watching != null && watching.entries.isNotEmpty()
     // With the consoles and Continue watching the rows outgrow the screen: they scroll as the
     // focus goes down, with room at the top for a focused tile's glow
-    val scrolls = consoleRow != null && continues
+    val scrolls = listOf(consoleRow != null, continues, todayRow != null).count { it } >= 2
     val room = 16.dp
     val watch: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1160,7 +1172,7 @@ private fun HomeRows(
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) { ContinueRow(watching, RoundedCornerShape(look.corner), onFocusColor, onSpot, onOpenWatching) }
         }
     }
-    val rows = listOfNotNull(watch, consoleRow, continueRow.takeIf { continues })
+    val rows = listOfNotNull(watch, consoleRow, continueRow.takeIf { continues }, todayRow)
     Column(
         modifier = Modifier
             .then(if (scrolls) Modifier.offset(y = -room).verticalScroll(rememberScrollState()).padding(top = room, bottom = room) else Modifier)
@@ -1448,7 +1460,7 @@ private fun ContinueRow(
     }
 }
 
-private val WatchTileHeight = 92.dp
+internal val WatchTileHeight = 92.dp
 
 /**
  * Källor, the consoles and the PC by their HDMI numbers, as big tiles three to a row. One that
@@ -1542,7 +1554,7 @@ private fun columns(row: HomeOrder.Row): Int = when (row) {
 }
 
 /** How a tile shows a lift: none going on, it is the one lifted, or another one is. */
-private enum class Lift { None, Lifted, Other }
+internal enum class Lift { None, Lifted, Other }
 
 private fun liftOf(lifted: Lifted?, row: HomeOrder.Row, key: String): Lift = when {
     lifted == null -> Lift.None
@@ -1686,7 +1698,7 @@ private fun AllApps(
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun NeonTile(
+internal fun NeonTile(
     width: Dp,
     height: Dp,
     shape: RoundedCornerShape,
@@ -2427,7 +2439,7 @@ private fun GlassTab(text: String, selected: Boolean, focusRequester: FocusReque
 }
 
 @Composable
-private fun RowTitle(text: String) {
+internal fun RowTitle(text: String) {
     val look = LocalHomeLook.current
     if (look.glassy) {
         BasicText(
@@ -2472,7 +2484,7 @@ private fun RowTitle(text: String) {
 }
 
 @Composable
-private fun TileName(text: String, size: TextUnit) {
+internal fun TileName(text: String, size: TextUnit) {
     val look = LocalHomeLook.current
     BasicText(
         text = text,
@@ -2898,7 +2910,7 @@ private fun CacheDrawScope.filmScene(color: Color, time: () -> Float, lit: () ->
 }
 
 /** The tile in focus on the Home tab: where it is on the screen, and its colour. */
-private data class Spot(val bounds: Rect, val color: Color)
+internal data class Spot(val bounds: Rect, val color: Color)
 
 /**
  * The picture behind everything, leaning gently away from the tile in focus, and for Neon the

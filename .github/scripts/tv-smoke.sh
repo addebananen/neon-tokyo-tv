@@ -781,9 +781,18 @@ else
   adb logcat -c
   key DPAD_CENTER
   sleep 10
-  key DPAD_CENTER
+  # The best source is named under Play before anything is pressed
+  if wait_for 'Best source' 30; then
+    shot vod-movie-best-source
+  else
+    shot vod-movie-no-best-source
+    fail "the details page shows no best source under Play"
+  fi
+  # Play starts the best source itself; holding OK on Play opens the full list
+  hold_ok 1.5 >/dev/null || fail "could not hold OK on Play"
   if wait_for '\[IPTV\]' 45; then
     shot vod-movie-sources
+    screen_has 'text="Best"' || fail "the first source in the list is not marked Best"
     adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
     # The service's copy comes first, so OK on the panel's first row plays it
     key DPAD_CENTER
@@ -815,7 +824,7 @@ else
     key DPAD_CENTER
     sleep 10
     shot vod-series-details
-    key DPAD_CENTER
+    hold_ok 1.5 >/dev/null || fail "could not hold OK on Play"
     if wait_for '\[IPTV\]' 45; then
       shot vod-series-sources
       screen_has "S01E01" || fail "the IPTV source for Dune: Prophecy is not episode 1 of season 1"
@@ -1426,6 +1435,53 @@ label=$(focused_label)
 key BACK
 sleep 2
 
+# Today: everyday cards under the apps. The demo fills them with made-up weather, a Luleå game
+# on now, a song and three lights, so the row looks the same every run
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es today demo >/dev/null 2>&1
+sleep 5
+shot neon-home-today
+today_xml="$OUT/$(printf "%02d" "$step")-neon-home-today.xml"
+grep -qi 'text="Today"' "$today_xml" 2>/dev/null || fail "Neon Home has no Today row"
+grep -q 'text="-3°"' "$today_xml" 2>/dev/null || fail "the weather card did not show"
+grep -q 'text="LIVE"' "$today_xml" 2>/dev/null || fail "the hockey card does not show the Luleå game as live"
+grep -q 'text="Night Drive"' "$today_xml" 2>/dev/null || fail "the now playing card did not show the song"
+grep -q 'text="Living room"' "$today_xml" 2>/dev/null || fail "the lights did not show in the Today row"
+label=$(focused_text < "$today_xml" 2>/dev/null)
+[ "$label" = "YouTube" ] || fail "with the Today row, Neon Home does not start on YouTube ($label has the focus)"
+# Down to the row: the weather card first
+for _ in 1 2 3 4 5; do
+  key DPAD_DOWN
+  sleep 1
+  label=$(focused_label)
+  case "$label" in *"-3°"*|*Snow*|*Luleå*) break ;; esac
+done
+shot today-weather-focus
+case "$label" in *"-3°"*|*Snow*|*Luleå*) ;; *) fail "Down never reached the Today row ($label has the focus)" ;; esac
+key DPAD_CENTER
+sleep 2
+shot today-weather-panel
+screen_has 'Feels like' || fail "OK on the weather card did not open the forecast"
+key BACK
+sleep 2
+key DPAD_RIGHT
+sleep 1
+key DPAD_CENTER
+sleep 2
+shot today-hockey-panel
+screen_has 'text="Luleå Hockey"' || fail "OK on the hockey card did not open the season"
+key BACK
+sleep 2
+# Over the song to the first light: OK turns the living room off
+key DPAD_RIGHT DPAD_RIGHT
+sleep 1
+shot today-light-focus
+key DPAD_CENTER
+sleep 2
+shot today-light-off
+screen_has 'text="On · 80%"' && fail "OK on the living room light did not turn it off"
+key BACK
+sleep 2
+
 # A home style's own screensaver: its picture, its little lights and a quiet clock, or for a
 # style that is a film (Deep Blue, Ice Lake) the film alone. The preview opens over the app the
 # way its Preview button does; clearing the task would close the app too
@@ -1819,6 +1875,67 @@ shot after-power-off noalive
 if app_in_front; then
   fail "two quick presses of Back did not close the app"
 fi
+
+# --- Phone remote: the page the TV serves on the home network, paired with the code ----------
+# The runner plays the phone: it opens pairing the way a PC can (a broadcast only the shell may
+# send), pairs with the code, then presses, types and searches through the same calls the page uses
+adb shell am start -n "$PKG/$ACTIVITY" > /dev/null 2>&1
+sleep 6
+adb forward tcp:18765 tcp:8765 > /dev/null
+pr="$OUT/phone-remote.txt"
+R=http://127.0.0.1:18765
+curl -s -m 10 "$R/" > "$OUT/phone-remote.html" || true
+grep -q "Neon Remote" "$OUT/phone-remote.html" || fail "phone remote: the TV does not serve the remote page on port 8765"
+for f in remote.js remote.css fonts/outfit_regular.woff2 icons/apple-touch-icon.png; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$R/$f")
+  echo "$f $code" >> "$pr"
+  [ "$code" = 200 ] || fail "phone remote: $f answers $code"
+done
+code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -X POST -H 'Content-Type: application/json' -d '{"key":"down"}' "$R/api/key")
+[ "$code" = 401 ] || fail "phone remote: a press without the key answers $code, not 401"
+pin=$(adb shell am broadcast -a com.neontokyo.tv.PHONE_REMOTE --es do pair 2>/dev/null | tr -d '\r' | sed -n 's/.*pin=\([0-9]\{4\}\).*/\1/p' | head -1)
+echo "pin: $pin" >> "$pr"
+curl -s -m 10 -X POST -H 'Content-Type: application/json' -d '{"pin":"0000"}' "$R/api/pair" >> "$pr"; echo >> "$pr"
+k=$(curl -s -m 10 -X POST -H 'Content-Type: application/json' -d "{\"pin\":\"$pin\"}" "$R/api/pair" | sed -n 's/.*"k":"\([^"]*\)".*/\1/p')
+if [ -z "$k" ]; then
+  fail "phone remote: pairing with the TV's code gave no key"
+else
+  api() { curl -s -m 10 -H "X-Neon-Key: $k" -H 'Content-Type: application/json' ${2:+-d "$2"} "$R/api/$1"; }
+  api hello >> "$pr"; echo >> "$pr"
+  timeout 4 curl -s -N -H "X-Neon-Key: $k" "$R/api/events?k=$k" > "$OUT/phone-remote-events.txt" 2>/dev/null || true
+  grep -q '"name"' "$OUT/phone-remote-events.txt" || fail "phone remote: the event stream sent no state"
+  for key in down right left up; do
+    r=$(api key "{\"key\":\"$key\"}")
+    echo "key $key: $r" >> "$pr"
+    echo "$r" | grep -q '"ok"' || fail "phone remote: $key did not reach the app ($r)"
+    sleep 0.6
+  done
+  # The app came back on "Who's watching?": the phone picks the profile, as anyone would
+  if screen_has "Who's watching"; then
+    api key '{"key":"left"}' >> "$pr"; sleep 0.6
+    r=$(api key '{"key":"ok"}'); echo "pick profile: $r" >> "$pr"
+    sleep 8
+  fi
+  apps=$(api apps)
+  echo "$apps" | head -c 600 >> "$pr"; echo >> "$pr"
+  echo "$apps" | grep -q "$PKG" || fail "phone remote: the app list lacks Neon Tokyo"
+  code=$(curl -s -o "$OUT/phone-remote-icon.png" -w '%{http_code}' -m 10 "$R/api/icon?pkg=$PKG&k=$k")
+  [ "$code" = 200 ] || fail "phone remote: no app picture ($code)"
+  r=$(api search '{"q":"Akira","where":"neon"}')
+  echo "search: $r" >> "$pr"
+  echo "$r" | grep -q '"ok"' || fail "phone remote: search was not taken ($r)"
+  wait_for "Akira" 30 || fail "phone remote: Neon's search page did not show the phone's search"
+  shot phone-remote-search
+  # Letters typed on the phone go straight into the search page while it shows
+  r=$(api text '{"text":"Akira 1988","submit":false}')
+  echo "text: $r" >> "$pr"
+  echo "$r" | grep -q '"neon"' || fail "phone remote: typing did not go to Neon's search ($r)"
+  wait_for "Akira 1988" 20 || fail "phone remote: the typed text did not show on the TV"
+  r=$(api key '{"key":"back"}'); echo "back: $r" >> "$pr"
+fi
+adb forward --remove tcp:18765 > /dev/null 2>&1
+adb logcat -d -s PhoneRemote:I PhoneRemote:W | tail -20 >> "$pr"
+cat "$pr"
 
 # --- Siri Remote bridge: runs as the shell user, sees Bluetooth, injects keys --
 # The emulator has no remote to pair, so this checks everything up to the remote itself

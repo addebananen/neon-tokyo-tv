@@ -28,6 +28,9 @@ import com.lumera.app.domain.CategoryRow
 import com.lumera.app.data.model.stremio.MetaItem
 import com.lumera.app.domain.DashboardTab
 import com.lumera.app.domain.heroFor
+import com.lumera.app.domain.SmartHome
+import com.lumera.app.data.smart.SmartHomeRepository
+import com.lumera.app.data.smart.SmartRows
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -35,8 +38,45 @@ class HomeViewModel @Inject constructor(
     private val dao: AddonDao,
     @ApplicationContext private val context: Context,
     private val tmdbService: TmdbService,
-    private val tmdbMetadataService: TmdbMetadataService
+    private val tmdbMetadataService: TmdbMetadataService,
+    private val smartHome: SmartHomeRepository
 ) : ViewModel() {
+
+    // The profile's own rows and the smart rows, kept apart and merged by publishMixed()
+    private var baseMixedRows: List<HomeRowItem> = emptyList()
+    private var smartRows: SmartRows = SmartRows()
+    private var smartJob: kotlinx.coroutines.Job? = null
+    private var loadedSmartVersion = -1
+
+    /** The page as shown: the profile's rows with the smart rows slotted in (Home only). */
+    private fun withSmart(base: List<HomeRowItem>): List<HomeRowItem> {
+        val smart = smartRows
+        if (smart.isEmpty) return base
+        // "Top this week in Sweden" stands in for the separate Netflix top 10 rows
+        val hasTop = smart.top.any { it.id == SmartHome.TOP_SWEDEN_ID }
+        val own = if (hasTop) base.filterNot { it is CategoryRow && smartHome.isTopSwedenCatalog(it.id) } else base
+        return SmartHome.place(own, smart.top, smart.genres)
+    }
+
+    /** Swaps in fresh smart rows, keeping every row's loaded items and patches. */
+    private fun applySmartRows(profileId: Int?, rows: SmartRows) {
+        smartRows = rows
+        _state.update { current ->
+            if (current.loadedScreen != "home" || current.loadedProfileId != profileId) return@update current
+            // Keep what the shown rows picked up since (more pages, filled-in posters)
+            val shown = current.mixedRows.filterNot { it.id.startsWith(SmartHome.ROW_PREFIX) }.associateBy { it.id }
+            current.copy(mixedRows = withSmart(baseMixedRows.map { shown[it.id] ?: it }))
+        }
+    }
+
+    /** Builds this profile's smart rows in the background and merges them in when ready. */
+    private fun refreshSmartRows(profileId: Int) {
+        smartJob?.cancel()
+        smartJob = viewModelScope.launch {
+            val rows = runCatching { smartHome.build(profileId) }.getOrNull() ?: return@launch
+            if (rows != smartRows) applySmartRows(profileId, rows)
+        }
+    }
 
     private var loadJob: kotlinx.coroutines.Job? = null
     private var lastFocusedKeyMemory: String? = null
@@ -560,14 +600,30 @@ class HomeViewModel @Inject constructor(
         if (
             _state.value.loadedScreen == screenName &&
             _state.value.loadedProfileId == currentProfileId &&
-            _state.value.rows.isNotEmpty()
+            _state.value.rows.isNotEmpty() &&
+            (screenName != "home" || loadedSmartVersion == smartHome.version.value)
         ) {
             isRestoringPosition = true
+            // Tonight's episodes move on with the clock: rebuild stale smart rows quietly
+            val historyStamp = _state.value.history.maxOfOrNull { it.lastWatched } ?: 0L
+            if (screenName == "home" && currentProfileId != null && smartHome.cached(currentProfileId, historyStamp) == null) {
+                refreshSmartRows(currentProfileId)
+            }
             return
         }
 
         loadJob?.cancel()
+        smartJob?.cancel()
+        baseMixedRows = emptyList()
+        val smartProfileId: Int? = if (screenName == "home") currentProfileId else null
+        loadedSmartVersion = smartHome.version.value
+        val cachedSmart = smartProfileId?.let { smartHome.cached(it) }
+        smartRows = cachedSmart ?: SmartRows()
         loadJob = viewModelScope.launch {
+            // Smart rows build alongside the profile's own rows; fresh ones from earlier show at once
+            val smartDeferred = if (smartProfileId != null && cachedSmart == null) {
+                async { runCatching { smartHome.build(smartProfileId) }.getOrNull() }
+            } else null
             // Clear 'rows' immediately so the UI doesn't show "Ghost Data" from the previous tab
             pendingRowItems.clear()
             allFetchedRowIds.clear()
@@ -651,13 +707,19 @@ class HomeViewModel @Inject constructor(
 
                 val initialMixedList = (hubRows + initialRows.map { CategoryRow.fromHomeRow(it) })
                     .sortedBy { it.order }
+                baseMixedRows = initialMixedList
+
+                // Give the smart rows a moment so the page doesn't shift right after it opens
+                if (smartDeferred != null) {
+                    kotlinx.coroutines.withTimeoutOrNull(1_200) { smartDeferred.await() }?.let { smartRows = it }
+                }
 
                 // Cache profile for TMDB enrichment (called per-item as they become visible)
                 tmdbProfileCache = currentProfile
 
                 _state.update {
                     it.copy(
-                        mixedRows = initialMixedList,
+                        mixedRows = withSmart(initialMixedList),
                         rows = initialRows,
                         hubRows = hubRows,
                         heroRow = heroRow,
@@ -670,6 +732,13 @@ class HomeViewModel @Inject constructor(
 
                 // Start a tiny metadata warmup pass for items likely to render first.
                 prefetchLikelyVisibleMetadata(rows = initialRows, heroRow = heroRow)
+
+                // Smart rows that took longer than the moment above slot in when they arrive
+                if (smartDeferred != null && !smartDeferred.isCompleted) {
+                    smartJob = launch {
+                        smartDeferred.await()?.let { applySmartRows(currentProfileId, it) }
+                    }
+                }
 
                 // Stage 2: Load remaining categories in the background and append.
                 launch {
@@ -696,9 +765,10 @@ class HomeViewModel @Inject constructor(
 
                         val mixedList = (hubRows + allRows.map { CategoryRow.fromHomeRow(it) })
                             .sortedBy { it.order }
+                        baseMixedRows = mixedList
 
                         currentState.copy(
-                            mixedRows = mixedList,
+                            mixedRows = withSmart(mixedList),
                             rows = allRows,
                             heroRow = resolvedHeroRow
                         )

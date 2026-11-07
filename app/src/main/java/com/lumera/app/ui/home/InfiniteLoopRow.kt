@@ -449,6 +449,7 @@ private fun LinearContent(
                         progress = item.progress,
                         isWatched = rowIndex != -1 && item.id in watchedIds,
                         hasNewEpisode = item.hasNewEpisode,
+                        badge = item.badge,
                         onFocused = {
                             ImagePrefetcher.prefetchAround(context, imageUrls, index)
                             onFocused(item, uniqueKey)
@@ -670,6 +671,7 @@ private fun InfiniteGridContent(
                             onClick = { onMovieClick(item.movie) },
                             progress = item.movie.progress,
                             isWatched = rowIndex != -1 && item.movie.id in watchedIds,
+                            badge = item.movie.badge,
                             onFocused = {
                                 currentFocusedIndex = scrollIndex
                                 val logicalIndex = scrollIndex % sectionSize
@@ -878,6 +880,7 @@ private fun FiniteGridContent(
                             onClick = { onMovieClick(item.movie) },
                             progress = item.movie.progress,
                             isWatched = rowIndex != -1 && item.movie.id in watchedIds,
+                            badge = item.movie.badge,
                             onFocused = {
                                 ImagePrefetcher.prefetchAround(context, imageUrls, index)
                                 onFocused(item.movie, uniqueKey)

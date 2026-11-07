@@ -193,6 +193,9 @@ fun IntegrationsScreen(
     if (showManagementDialog) {
         StremioManagementDialog(
             email = stremioEmail ?: "",
+            watchProfile = state.stremioWatchProfile,
+            watchIsThisProfile = state.stremioWatchIsThisProfile,
+            onToggleWatchSync = { viewModel.toggleWatchSyncHere() },
             onDismiss = { showManagementDialog = false },
             onSyncAddons = {
                 showManagementDialog = false
@@ -537,6 +540,9 @@ private fun ConnectStremioDialog(
 @Composable
 private fun StremioManagementDialog(
     email: String,
+    watchProfile: String?,
+    watchIsThisProfile: Boolean,
+    onToggleWatchSync: () -> Unit,
     onDismiss: () -> Unit,
     onSyncAddons: () -> Unit,
     onDisconnect: () -> Unit
@@ -580,6 +586,20 @@ private fun StremioManagementDialog(
                     subtitle = "Import addons from your Stremio account",
                     onClick = onSyncAddons,
                     focusRequester = syncFocusRequester
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Continue watching follows the account (Stremio, the phone, the web app) for one profile
+                ManagementMenuItem(
+                    icon = Icons.Default.Sync,
+                    title = if (watchIsThisProfile) "Fortsätt titta synkas: på" else "Synka Fortsätt titta hit",
+                    subtitle = when {
+                        watchIsThisProfile -> "Den här profilen följer kontot på mobilen, webben och Stremio. Tryck för att stänga av."
+                        watchProfile != null -> "Följer nu profilen $watchProfile. Tryck för att ge den till den här profilen."
+                        else -> "Av. Tryck så följer den här profilen kontot på mobilen, webben och Stremio."
+                    },
+                    onClick = onToggleWatchSync
                 )
 
                 Spacer(Modifier.height(12.dp))

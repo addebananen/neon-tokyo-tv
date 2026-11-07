@@ -112,6 +112,15 @@ enum class Glyph(pathData: String) {
     Note("M40 72 V22 L78 14 V64" + circle(30, 72, 10) + circle(68, 64, 10) + "M40 34 L78 26"),
     Calendar(rect(16, 22, 68, 62, 8) + "M16 40 H84 M34 14 V28 M66 14 V28 M30 54 H38 M46 54 H54 M62 54 H70 M30 68 H38 M46 68 H54"),
 
+    // The Today cards on Neon Home
+    Bulb("M50 12 A24 24 0 0 1 64 55 Q60 59 60 66 H40 Q40 59 36 55 A24 24 0 0 1 50 12 Z M40 74 H60 M42 82 H58 M46 90 H54"),
+    Stick("M28 10 L50 68 Q54 78 64 78 H86 V88 H60 Q46 88 41 74 L18 14 Z M14 84 A12 5 0 1 0 38 84 A12 5 0 1 0 14 84 Z"),
+    Play("M34 22 L76 50 L34 78 Z"),
+    Pause("M32 22 V78 M68 22 V78"),
+    Next("M24 24 L60 50 L24 76 Z M74 24 V76"),
+    Previous("M76 24 L40 50 L76 76 Z M26 24 V76"),
+    Phone(rect(30, 10, 40, 80, 9) + "M44 20 H56" + circle(50, 78, 3)),
+
     // The Control Center
     Power("M31.6 27.4 A32 32 0 1 0 68.4 27.4 M50 12 V50"),
     Timer(circle(50, 56, 32) + "M50 56 L66 38 M40 12 H60 M50 12 V24"),

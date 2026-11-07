@@ -125,6 +125,24 @@ fun SearchScreen(
         drawerRequester.requestFocus()
     }
 
+    // The phone remote types here: a search it sent, then each letter as it is typed
+    LaunchedEffect(Unit) {
+        com.lumera.app.remote_input.phone.RemoteSearch.wanted.collect { wanted ->
+            if (wanted != null) {
+                viewModel.onQueryChange(wanted)
+                com.lumera.app.remote_input.phone.RemoteSearch.taken(wanted)
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        com.lumera.app.remote_input.phone.RemoteSearch.live.collect { viewModel.onQueryChange(it) }
+    }
+    LaunchedEffect(state.query) { com.lumera.app.remote_input.phone.RemoteSearch.queryChanged(state.query) }
+    DisposableEffect(Unit) {
+        com.lumera.app.remote_input.phone.RemoteSearch.shown(true)
+        onDispose { com.lumera.app.remote_input.phone.RemoteSearch.shown(false) }
+    }
+
     // Continuously maintain focus when system keyboard is active
     LaunchedEffect(keepFocused) {
         while (keepFocused) {

@@ -43,10 +43,10 @@ data class ProfileEntity(
     val autoplayThresholdMode: String = "percentage",  // "percentage" or "time"
     val autoplayThresholdPercent: Int = 95,             // 50..99
     val autoplayThresholdSeconds: Int = 30,             // 10..300
-    val autoSelectSource: Boolean = false,
+    val autoSelectSource: Boolean = true,      // Play starts the best source; hold OK for the list
     val rememberSourceSelection: Boolean = true,
     val sourceSortingEnabled: Boolean = true,
-    val sourceSortPrimary: String = "quality",    // "quality", "size", "seeds"
+    val sourceSortPrimary: String = "smart",      // "smart", "quality", "size"
     val sourceSortSecondary: String = "size",     // "quality", "size", "seeds"
     val sourceEnabledQualities: String = "4k,1080p,720p,unknown",
     val sourceExcludePhrases: String = "",

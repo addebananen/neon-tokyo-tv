@@ -316,6 +316,10 @@ interface AddonDao {
     @Query("SELECT * FROM watch_history WHERE profileId = :profileId")
     suspend fun getHistoryOf(profileId: Int): List<WatchHistoryEntity>
 
+    /** One title in one profile's history, whichever profile is watching (a hand-off from a phone). */
+    @Query("SELECT * FROM watch_history WHERE profileId = :profileId AND id = :id")
+    suspend fun getHistoryItemOf(profileId: Int, id: String): WatchHistoryEntity?
+
     @Query("SELECT * FROM watchlist WHERE profileId = :profileId")
     suspend fun getWatchlistOf(profileId: Int): List<WatchlistEntity>
 

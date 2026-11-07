@@ -1,4 +1,5 @@
 import java.util.Properties
+import javax.inject.Inject
 
 plugins {
     id("com.android.application")
@@ -118,6 +119,48 @@ android {
     }
 }
 
+/**
+ * The phone remote's page (web/remote, the same files Neon Tokyo Web serves) with the web app's
+ * fonts and icon, packed into the app's assets under phone-remote/ for the TV to serve.
+ */
+abstract class PhoneRemoteAssets : DefaultTask() {
+    @get:InputDirectory
+    abstract val webDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @get:Inject
+    abstract val files: FileSystemOperations
+
+    @TaskAction
+    fun copy() {
+        val web = webDir.get()
+        files.sync {
+            from(web.dir("remote")) { into("phone-remote") }
+            from(web.dir("fonts")) {
+                include("kanit_semibold_italic.woff2", "outfit_regular.woff2", "outfit_medium.woff2")
+                into("phone-remote/fonts")
+            }
+            from(web.dir("icons")) {
+                include("apple-touch-icon.png", "favicon-32.png")
+                into("phone-remote/icons")
+            }
+            into(outputDir)
+        }
+    }
+}
+
+val phoneRemoteAssets = tasks.register<PhoneRemoteAssets>("phoneRemoteAssets") {
+    webDir.set(rootProject.layout.projectDirectory.dir("web"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(phoneRemoteAssets, PhoneRemoteAssets::outputDir)
+    }
+}
+
 // Compose Compiler configuration for optimal performance
 composeCompiler {
     // Enable strong skipping mode for more efficient recomposition
@@ -156,6 +199,8 @@ dependencies {
 
     // 4. Image Loading
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // SHL's team badges are SVG
+    implementation("io.coil-kt:coil-svg:2.7.0")
 
     // 5. Database
     implementation("androidx.room:room-runtime:2.7.0")
