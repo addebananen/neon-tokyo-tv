@@ -209,7 +209,23 @@ fun PersonalizationSettings(
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
         Spacer(Modifier.height(15.dp))
 
-        // MENU POSITION
+        // SMART START PAGE (this profile's new episodes, top in Sweden and favourite genres)
+        val smartVersion by viewModel.smartHomeVersion.collectAsState()
+        val smartOn = remember(smartVersion, currentProfile.id) { viewModel.isSmartHomeEnabled(currentProfile.id) }
+        SettingRow("Smart Home Rows") {
+            VoidSegmentedControl(
+                options = listOf("On" to true, "Off" to false),
+                selectedOption = smartOn,
+                onOptionSelected = { viewModel.setSmartHomeEnabled(currentProfile.id, it) },
+                onBack = onGoBack,
+                blockUp = false
+            )
+        }
+        Spacer(Modifier.height(15.dp))
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(0.1f)))
+        Spacer(Modifier.height(15.dp))
+
+                // MENU POSITION
         SettingRow("Menu Position") {
             VoidSegmentedControl(
                 options = listOf("Left" to "left", "Top" to "top"),
