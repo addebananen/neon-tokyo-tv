@@ -43,6 +43,7 @@ function renderShell() {
     <header id="topbar">
       <a href="#/profiles" class="profile-badge" id="profileBadge" aria-label="Switch profile"></a>
       <a href="#/home" class="brand" tabindex="-1" aria-label="Neon Tokyo"><span class="brand-word">NEON<b>TOKYO</b></span><span class="brand-jp">ネオン東京</span></a>
+      <a href="remote/" class="remote-btn" aria-label="TV remote" title="TV remote">${icon('<rect x="7" y="2.5" width="10" height="19" rx="5"/><circle cx="12" cy="8" r="2.2"/><path d="M12 14v.01M12 17v.01"/>')}</a>
       <nav class="tabs" aria-label="Main">
         ${TABS.map(([id, label, d]) => `<a href="#/${id}" data-tab="${id}">${icon(d)}<span>${label}</span></a>`).join('')}
         <i class="tab-mark" aria-hidden="true"></i>

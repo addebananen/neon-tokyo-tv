@@ -10,6 +10,7 @@ const FILES = [
   'fonts/kanit_semibold_italic.woff2', 'fonts/kanit_medium_italic.woff2', 'fonts/kanit_medium.woff2',
   'fonts/outfit_regular.woff2', 'fonts/outfit_medium.woff2', 'fonts/neon_jp.woff2',
   'icons/icon-192.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png',
+  'remote/', 'remote/index.html', 'remote/remote.css', 'remote/remote.js',
 ];
 
 // A new version waits until the page says "restart" (or every tab of the app has closed), so
