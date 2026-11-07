@@ -1,12 +1,19 @@
 package com.lumera.app.data.stream
 
+import android.content.Context
 import com.lumera.app.data.model.StreamQuality
 import com.lumera.app.data.model.stremio.Stream
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class StreamSortingService @Inject constructor() {
+class StreamSortingService @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+
+    /** What this TV shows and decodes, read once. */
+    val playbackCaps: PlaybackCaps get() = DevicePlaybackCaps.get(context)
 
     fun sortAndFilter(
         streams: List<Stream>,
@@ -15,7 +22,9 @@ class StreamSortingService @Inject constructor() {
         addonSortOrders: Map<String, Int>,
         sortBy: String = "quality",
         maxSizeGb: Int = 0,
-        excludedFormats: Set<String> = emptySet()
+        excludedFormats: Set<String> = emptySet(),
+        runtimeMinutes: Int? = null,
+        isEpisode: Boolean = false
     ): List<Stream> {
         val lowerPhrases = excludePhrases
             .map { it.trim().lowercase() }
@@ -23,7 +32,7 @@ class StreamSortingService @Inject constructor() {
 
         val maxSizeBytes = if (maxSizeGb > 0) maxSizeGb.toLong() * 1_073_741_824L else Long.MAX_VALUE
 
-        return streams
+        val kept = streams
             .map { stream -> stream to StreamParser.parse(stream) }
             .filter { (_, info) -> info.quality in enabledQualities }
             .filter { (stream, _) ->
@@ -41,7 +50,11 @@ class StreamSortingService @Inject constructor() {
                 excludedFormats.intersect(info.formats).isEmpty()
             }
             .map { (stream, _) -> stream }
-            .sortedWith(buildComparator(addonSortOrders, sortBy))
+        // Smart: picture this TV can show, sound, a sensible size and a quick start, all at once
+        if (sortBy == SORT_SMART) {
+            return SourceRanker.rank(kept, playbackCaps, runtimeMinutes, isEpisode, addonSortOrders).map { it.stream }
+        }
+        return kept.sortedWith(buildComparator(addonSortOrders, sortBy))
     }
 
     private fun buildComparator(
@@ -68,6 +81,8 @@ class StreamSortingService @Inject constructor() {
     }
 
     companion object {
+        const val SORT_SMART = "smart"
+
         fun parseEnabledQualities(qualitiesString: String): Set<StreamQuality> {
             if (qualitiesString.isBlank()) return StreamQuality.entries.toSet()
             return qualitiesString.split(",")

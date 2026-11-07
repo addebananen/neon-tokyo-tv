@@ -364,8 +364,8 @@ fun PlaybackSettings(
 
             // AUTO-SELECT SOURCE
             SettingToggleRow(
-                label = "Auto-select Source",
-                subtitle = "Automatically pick the first available source for new content",
+                label = "Play the Best Source",
+                subtitle = "Play starts the best source right away. Hold OK on Play for the full list",
                 isChecked = currentProfile.autoSelectSource,
                 onCheckedChange = { viewModel.updateAutoSelectSource(currentProfile.id, it) },
                 onBack = onGoBack
@@ -1697,7 +1697,7 @@ fun SourcePreferencesSettings(
         // ENABLE SORTING
         SettingToggleRow(
             label = "Sort Sources",
-            subtitle = "Rank sources by quality or file size",
+            subtitle = "Rank sources so the best one comes first",
             isChecked = currentProfile.sourceSortingEnabled,
             onCheckedChange = { viewModel.updateSourceSortingEnabled(currentProfile.id, it) },
             onBack = onGoBack,
@@ -1716,7 +1716,7 @@ fun SourcePreferencesSettings(
                 color = Color.White
             )
             Text(
-                "Choose what matters most when ranking sources.",
+                "Smart weighs 4K, Dolby Vision/HDR this TV can show, Atmos/TrueHD/DTS, a sensible file size and a quick start.",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                 color = Color.White.copy(0.6f),
                 modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
@@ -1724,7 +1724,7 @@ fun SourcePreferencesSettings(
 
             SettingOptionRow(
                 label = "Sort By",
-                options = listOf("Quality" to "quality", "File Size" to "size"),
+                options = listOf("Smart" to "smart", "Quality" to "quality", "File Size" to "size"),
                 selectedOption = currentProfile.sourceSortPrimary,
                 onOptionSelected = { viewModel.updateSourceSortPrimary(currentProfile.id, it) },
                 onBack = onGoBack

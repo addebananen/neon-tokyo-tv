@@ -1923,7 +1923,7 @@ class MainActivity : ComponentActivity() {
                                                 val excludeP = StreamSortingService.parseExcludePhrases(currentProfile?.sourceExcludePhrases ?: "")
                                                 val addonOrders = addonRepository.getAddonSortOrders()
                                                 val excludedF = StreamSortingService.parseExcludedFormats(currentProfile?.sourceExcludedFormats ?: "")
-                                                streamSortingService.sortAndFilter(rawStreams, enabledQ, excludeP, addonOrders, currentProfile?.sourceSortPrimary ?: "quality", currentProfile?.sourceMaxSizeGb ?: 0, excludedF)
+                                                streamSortingService.sortAndFilter(rawStreams, enabledQ, excludeP, addonOrders, currentProfile?.sourceSortPrimary ?: StreamSortingService.SORT_SMART, currentProfile?.sourceMaxSizeGb ?: 0, excludedF)
                                             } else rawStreams
 
                                             if (streams.isEmpty()) {
@@ -2077,7 +2077,7 @@ class MainActivity : ComponentActivity() {
                                                 val excludeP = StreamSortingService.parseExcludePhrases(currentProfile?.sourceExcludePhrases ?: "")
                                                 val addonOrders = addonRepository.getAddonSortOrders()
                                                 val excludedF = StreamSortingService.parseExcludedFormats(currentProfile?.sourceExcludedFormats ?: "")
-                                                streamSortingService.sortAndFilter(rawStreams2, enabledQ, excludeP, addonOrders, currentProfile?.sourceSortPrimary ?: "quality", currentProfile?.sourceMaxSizeGb ?: 0, excludedF)
+                                                streamSortingService.sortAndFilter(rawStreams2, enabledQ, excludeP, addonOrders, currentProfile?.sourceSortPrimary ?: StreamSortingService.SORT_SMART, currentProfile?.sourceMaxSizeGb ?: 0, excludedF)
                                             } else rawStreams2
 
                                             if (streams.isEmpty()) {
