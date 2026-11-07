@@ -682,7 +682,8 @@ class DetailsViewModel @Inject constructor(
                 val caps = streamSortingService.playbackCaps
                 BestSource(
                     labels = withContext(Dispatchers.Default) { SourceRanker.labels(SourceRanker.features(it), caps) },
-                    addon = SourceRanker.addonLabel(it),
+                    addon = if (it.addonTransportUrl == VodLibrary.TRANSPORT) "Your IPTV service"
+                            else SourceRanker.addonLabel(it)?.takeUnless { name -> name.equals("4K", true) || name.equals("1080p", true) },
                     remembered = remembered != null,
                     count = streams.size
                 )

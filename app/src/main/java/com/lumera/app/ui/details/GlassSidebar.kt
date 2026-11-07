@@ -373,7 +373,30 @@ fun SourcesContent(
         }
     }
 
-    Column {
+    // Held OK on Play opens this list while the thumb is still down: its release (and the
+    // repeats before it) must not land on the first source and play it. Only an OK pressed
+    // here counts.
+    var okPressedHere by remember { mutableStateOf(false) }
+    Column(
+        Modifier.onPreviewKeyEvent { event ->
+            val isOk = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+            if (!isOk) return@onPreviewKeyEvent false
+            when (event.type) {
+                KeyEventType.KeyDown -> {
+                    if (event.nativeKeyEvent.repeatCount == 0) {
+                        okPressedHere = true
+                        false
+                    } else !okPressedHere
+                }
+                KeyEventType.KeyUp -> {
+                    val stray = !okPressedHere
+                    okPressedHere = false
+                    stray
+                }
+                else -> false
+            }
+        }
+    ) {
         Text("Select Source", style = MaterialTheme.typography.titleLarge, color = Color.White)
         Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
