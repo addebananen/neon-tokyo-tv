@@ -156,6 +156,8 @@ dependencies {
 
     // 4. Image Loading
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // SHL's team badges are SVG
+    implementation("io.coil-kt:coil-svg:2.7.0")
 
     // 5. Database
     implementation("androidx.room:room-runtime:2.7.0")

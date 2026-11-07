@@ -48,6 +48,9 @@ object LiveTv {
     /** The type Neon Home puts on the request to open a channel in the app. */
     const val OPEN_TYPE = "livetv"
 
+    /** A wanted "channel" that is a game: the names to find in the guide, split by '|'. */
+    const val MATCH_PREFIX = "match:"
+
     private const val TAG = "LiveTv"
     private const val SECURE_PREFS = "livetv_secure"
     private const val PREFS = "livetv"
