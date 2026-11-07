@@ -104,7 +104,7 @@ final class Handoff {
         do {
             let text = String(decoding: try JSONSerialization.data(withJSONObject: message), as: UTF8.self)
             try await put(key, [Self.hiddenItem(Self.mailboxId, name: text, nowMs: now)])
-            #if canImport(UIKit)
+            #if os(iOS)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             #endif
             let until = Date.nowMs + (tv == nil ? 5 * 60 * 1000 : 25 * 1000)
@@ -115,7 +115,7 @@ final class Handoff {
                 if (m["nonce"] as? String) != nonce { phase = .idle; return }
                 if let taken = m["takenBy"] as? String, !taken.isEmpty {
                     phase = .playing((m["takenName"] as? String) ?? "TV:n")
-                    #if canImport(UIKit)
+                    #if os(iOS)
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     #endif
                     try? await Task.sleep(nanoseconds: 2_200_000_000)
