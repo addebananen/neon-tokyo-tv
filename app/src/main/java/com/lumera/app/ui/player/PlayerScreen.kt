@@ -18,6 +18,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import com.lumera.app.ui.player.base.BasePlayerScaffold
 import com.lumera.app.ui.player.base.NextEpisodeInfo
 import com.lumera.app.ui.player.base.PlaybackSettings
@@ -184,11 +185,13 @@ fun PlayerScreen(
     LaunchedEffect(movieId, videoUrl, backendType) {
         if (videoUrl.isBlank()) return@LaunchedEffect // Wait for torrent stream URL
         val resumePosition = viewModel.getResumePosition(movieId)
+        // Only the share watched is known (Trakt, another device): go there once the length is
+        val resumeFraction = viewModel.getResumeFraction(movieId)
         playbackController.load(
             PlayerLoadRequest(
                 mediaUrl = videoUrl,
                 title = title,
-                startPositionMs = resumePosition,
+                startPositionMs = if (resumeFraction > 0f) 0L else resumePosition,
                 autoPlay = true,
                 sources = sources,
                 subtitles = subtitles,
@@ -203,6 +206,12 @@ fun PlayerScreen(
         playbackController.setSubtitleBackgroundColor(playbackSettings.subtitleBackgroundColor)
         if (initialSubtitleDelayMs != 0L) {
             playbackController.setSubtitleDelay(initialSubtitleDelayMs)
+        }
+        if (resumeFraction > 0f) {
+            val length = kotlinx.coroutines.withTimeoutOrNull(90_000L) {
+                playbackController.uiState.first { it.isReady && it.durationMs > 0L }.durationMs
+            }
+            if (length != null) playbackController.seekTo((length * resumeFraction).toLong())
         }
     }
 

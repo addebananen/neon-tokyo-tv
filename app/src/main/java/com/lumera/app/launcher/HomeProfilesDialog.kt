@@ -297,6 +297,7 @@ private fun ProfileEditor(
     var takingDreamVideo by remember { mutableStateOf(false) }
     var takingVideo by remember { mutableStateOf(false) }
     var choosingWidgets by remember { mutableStateOf(false) }
+    var choosingToday by remember { mutableStateOf(false) }
     val styleList = remember { FocusRequester() }
     LaunchedEffect(profile.id) {
         withFrameNanos { }
@@ -384,6 +385,7 @@ private fun ProfileEditor(
         }
         OptionRow("Widgets", look) {
             PanelButton("Under the clock", look) { choosingWidgets = true }
+            PanelButton("Today cards", look) { choosingToday = true }
         }
         OptionRow("From your phone", look) {
             PanelButton("Photo", look) { takingPhoto = true }
@@ -410,6 +412,9 @@ private fun ProfileEditor(
     }
     if (choosingWidgets) {
         HomeWidgetsDialog(profile, onDismiss = { choosingWidgets = false })
+    }
+    if (choosingToday) {
+        HomeTodayDialog(profile, onDismiss = { choosingToday = false })
     }
     if (takingPhoto) {
         ProfilePhotoDialog(

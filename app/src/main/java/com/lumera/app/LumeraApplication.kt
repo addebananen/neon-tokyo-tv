@@ -21,6 +21,9 @@ class LumeraApplication : Application(), ImageLoaderFactory {
     @Inject
     lateinit var startupOptimizer: StartupOptimizer
 
+    @Inject
+    lateinit var handoffReceiver: com.lumera.app.handoff.HandoffReceiver
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
 
@@ -46,6 +49,8 @@ class LumeraApplication : Application(), ImageLoaderFactory {
         startupOptimizer.warmup()
         // The phone remote's page on the home network (Settings › Phone remote)
         com.lumera.app.remote_input.phone.PhoneRemote.init(this)
+        // "Fortsätt på TV:n" from the phone: listens while the screen is on
+        handoffReceiver.start()
     }
 
     override fun newImageLoader(): ImageLoader = imageLoader

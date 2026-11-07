@@ -24,7 +24,8 @@ data class MetaItem(
     val videos: List<MetaVideo>? = null,
     @Transient val progress: Float = 0f, // Watch progress (0.0–1.0), used by Continue Watching
     @Transient val addonBaseUrl: String? = null, // Origin addon URL, used for preferred meta resolution
-    @Transient val hasNewEpisode: Boolean = false // True when a next-up episode recently aired
+    @Transient val hasNewEpisode: Boolean = false, // True when a next-up episode recently aired
+    @Transient val badge: String? = null // Corner label on smart start page cards ("S2 E5", "#1 series")
 )
 
 @Immutable

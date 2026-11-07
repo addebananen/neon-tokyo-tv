@@ -221,7 +221,29 @@ fun LiveTvScreen(
             // A channel picked on Neon Home: played at once, among the favourites when it is one
             val wanted by LiveTv.wanted.collectAsState()
             LaunchedEffect(wanted, byId) {
-                val channel = wanted?.let { byId[it] } ?: return@LaunchedEffect
+                val asked = wanted ?: return@LaunchedEffect
+                if (asked.startsWith(LiveTv.MATCH_PREFIX)) {
+                    // A game from Neon Home's Today row: the channel whose guide shows it, on now or
+                    // soonest; with none, the hockey channels to pick from
+                    val names = asked.removePrefix(LiveTv.MATCH_PREFIX).split('|').map { it.lowercase() }.filter { it.length >= 3 }
+                    val at = System.currentTimeMillis()
+                    val found = withContext(Dispatchers.Default) {
+                        channels.mapNotNull { channel ->
+                            val shows = guide[channel.epgId] ?: return@mapNotNull null
+                            val game = shows.filter { p -> p.stop > at && p.start < at + 6 * 60 * 60_000L && names.count { it in p.title.lowercase() }.let { n -> n >= 2 || (n >= 1 && with(SportChannels) { SportChannels.hockey.matches(p.title) }) } }
+                                .minByOrNull { it.start } ?: return@mapNotNull null
+                            Triple(channel, game.start, names.count { it in game.title.lowercase() })
+                        }.sortedWith(compareByDescending<Triple<IptvChannel, Long, Int>> { it.third }.thenBy { it.second }).firstOrNull()?.first
+                    }
+                    if (found != null) playing = listOf(found) to 0
+                    else {
+                        group = SPORT + SportChannels.hockey.key
+                        focusList = true
+                    }
+                    LiveTv.want(null)
+                    return@LaunchedEffect
+                }
+                val channel = byId[asked] ?: return@LaunchedEffect
                 val among = favouriteChannels.takeIf { channel in it } ?: listOf(channel)
                 playing = among to among.indexOf(channel)
                 LiveTv.want(null)

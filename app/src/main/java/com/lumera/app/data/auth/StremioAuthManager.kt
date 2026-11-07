@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.KeyStore
@@ -40,6 +41,9 @@ class StremioAuthManager @Inject constructor(
         private const val PREFS_FILE = "stremio_secure_prefs"
         private const val KEY_AUTH_KEY = "stremio_auth_key"
         private const val KEY_EMAIL = "stremio_email"
+        private const val KEY_WATCH_PROFILE = "stremio_watch_profile"
+        private const val WATCH_PROFILE_FIRST = -1
+        private const val WATCH_PROFILE_OFF = -2
     }
 
     private val encryptedPrefs: SharedPreferences by lazy {
@@ -193,6 +197,24 @@ class StremioAuthManager @Inject constructor(
         } catch (e: Exception) {
             Result.failure(StremioAuthError.NetworkError(e.message ?: "Network error"))
         }
+    }
+
+    /**
+     * The TV profile whose Continue watching is kept the same as the account's (see
+     * handoff/StremioWatchSync): the one chosen in Settings › Integrations › Stremio, else the
+     * first profile; null when turned off.
+     */
+    suspend fun watchSyncProfileId(dao: com.lumera.app.data.local.AddonDao): Int? {
+        val chosen = encryptedPrefs.getInt(KEY_WATCH_PROFILE, WATCH_PROFILE_FIRST)
+        if (chosen == WATCH_PROFILE_OFF) return null
+        val profiles = dao.getProfiles().first()
+        if (chosen >= 0 && profiles.any { it.id == chosen }) return chosen
+        return profiles.minOfOrNull { it.id }
+    }
+
+    /** [profileId] gets the account's Continue watching; null turns it off for every profile. */
+    fun setWatchSyncProfile(profileId: Int?) {
+        encryptedPrefs.edit().putInt(KEY_WATCH_PROFILE, profileId ?: WATCH_PROFILE_OFF).apply()
     }
 
     /**

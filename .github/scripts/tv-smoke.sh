@@ -781,9 +781,18 @@ else
   adb logcat -c
   key DPAD_CENTER
   sleep 10
-  key DPAD_CENTER
+  # The best source is named under Play before anything is pressed
+  if wait_for 'Best source' 30; then
+    shot vod-movie-best-source
+  else
+    shot vod-movie-no-best-source
+    fail "the details page shows no best source under Play"
+  fi
+  # Play starts the best source itself; holding OK on Play opens the full list
+  hold_ok 1.5 >/dev/null || fail "could not hold OK on Play"
   if wait_for '\[IPTV\]' 45; then
     shot vod-movie-sources
+    screen_has 'text="Best"' || fail "the first source in the list is not marked Best"
     adb logcat -d -s VodLibrary:I | tee "$OUT/vod.txt"
     # The service's copy comes first, so OK on the panel's first row plays it
     key DPAD_CENTER
@@ -815,7 +824,7 @@ else
     key DPAD_CENTER
     sleep 10
     shot vod-series-details
-    key DPAD_CENTER
+    hold_ok 1.5 >/dev/null || fail "could not hold OK on Play"
     if wait_for '\[IPTV\]' 45; then
       shot vod-series-sources
       screen_has "S01E01" || fail "the IPTV source for Dune: Prophecy is not episode 1 of season 1"
@@ -1423,6 +1432,53 @@ screen_has 'text="Nothing playing"' || fail "the music widget did not show under
 screen_has 'text="Wi‑Fi"\|text="Ethernet"\|text="Online"\|text="Offline"' || fail "the network widget did not show under the clock"
 label=$(focused_label)
 [ "$label" = "YouTube" ] || fail "with widgets on, Neon Home does not start on YouTube ($label has the focus)"
+key BACK
+sleep 2
+
+# Today: everyday cards under the apps. The demo fills them with made-up weather, a Luleå game
+# on now, a song and three lights, so the row looks the same every run
+adb shell am start --activity-clear-task -n "$PKG/com.lumera.app.launcher.NeonHomeActivity" --es style neon --es today demo >/dev/null 2>&1
+sleep 5
+shot neon-home-today
+today_xml="$OUT/$(printf "%02d" "$step")-neon-home-today.xml"
+grep -qi 'text="Today"' "$today_xml" 2>/dev/null || fail "Neon Home has no Today row"
+grep -q 'text="-3°"' "$today_xml" 2>/dev/null || fail "the weather card did not show"
+grep -q 'text="LIVE"' "$today_xml" 2>/dev/null || fail "the hockey card does not show the Luleå game as live"
+grep -q 'text="Night Drive"' "$today_xml" 2>/dev/null || fail "the now playing card did not show the song"
+grep -q 'text="Living room"' "$today_xml" 2>/dev/null || fail "the lights did not show in the Today row"
+label=$(focused_text < "$today_xml" 2>/dev/null)
+[ "$label" = "YouTube" ] || fail "with the Today row, Neon Home does not start on YouTube ($label has the focus)"
+# Down to the row: the weather card first
+for _ in 1 2 3 4 5; do
+  key DPAD_DOWN
+  sleep 1
+  label=$(focused_label)
+  case "$label" in *"-3°"*|*Snow*|*Luleå*) break ;; esac
+done
+shot today-weather-focus
+case "$label" in *"-3°"*|*Snow*|*Luleå*) ;; *) fail "Down never reached the Today row ($label has the focus)" ;; esac
+key DPAD_CENTER
+sleep 2
+shot today-weather-panel
+screen_has 'Feels like' || fail "OK on the weather card did not open the forecast"
+key BACK
+sleep 2
+key DPAD_RIGHT
+sleep 1
+key DPAD_CENTER
+sleep 2
+shot today-hockey-panel
+screen_has 'text="Luleå Hockey"' || fail "OK on the hockey card did not open the season"
+key BACK
+sleep 2
+# Over the song to the first light: OK turns the living room off
+key DPAD_RIGHT DPAD_RIGHT
+sleep 1
+shot today-light-focus
+key DPAD_CENTER
+sleep 2
+shot today-light-off
+screen_has 'text="On · 80%"' && fail "OK on the living room light did not turn it off"
 key BACK
 sleep 2
 

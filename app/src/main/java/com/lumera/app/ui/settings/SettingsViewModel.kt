@@ -11,8 +11,14 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val dao: AddonDao
+    private val dao: AddonDao,
+    private val smartHome: com.lumera.app.data.smart.SmartHomeRepository
 ) : ViewModel() {
+
+    /** Smart start page rows (new episodes, top in Sweden, favourite genres), per profile. */
+    val smartHomeVersion = smartHome.version
+    fun isSmartHomeEnabled(profileId: Int) = smartHome.isEnabled(profileId)
+    fun setSmartHomeEnabled(profileId: Int, on: Boolean) = smartHome.setEnabled(profileId, on)
 
     fun updateNavPosition(profileId: Int, position: String) {
         viewModelScope.launch(Dispatchers.IO + NonCancellable) {

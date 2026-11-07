@@ -37,6 +37,8 @@ class TraktSyncManager @Inject constructor(
         // Half-seen titles handed to Trakt per run; each is its own request, kept under Trakt's 1 POST/s
         private const val MAX_PAUSED_PUSH = 30
         private const val PAUSED_PUSH_GAP_MS = 1_100L
+        // A pause on Trakt this much after the last save here was made somewhere else
+        private const val ELSEWHERE_MARGIN_MS = 90_000L
     }
 
     private val syncMutex = Mutex()
@@ -492,13 +494,29 @@ class TraktSyncManager @Inject constructor(
 
                 // 5. Pull new items from Trakt playback that aren't local
                 var added = 0
+                var moved = 0
                 for ((ids, item) in traktPlaybackEntries) {
                     // Fix 5: skip items being deleted
                     if (ids.any { it in pendingDeletes }) continue
 
                     val type = if (item.type == "movie") "movie" else "series"
 
-                    // Don't overwrite existing local progress under any of its ids (exact or with stream index)
+                    // Already here: keep it, unless another device (the phone, the web app,
+                    // Omni) paused it later at another spot; then this TV picks up from there
+                    val local = ids.firstNotNullOfOrNull { dao.getHistoryItem(it) }
+                    if (local != null) {
+                        val pausedAt = parseIsoTimestamp(item.pausedAt)
+                        val share = item.progress.coerceIn(0f, 100f) / 100f
+                        if (!local.watched && pausedAt > local.lastWatched + ELSEWHERE_MARGIN_MS &&
+                            kotlin.math.abs(share - local.progress()) > 0.01f && share in 0.01f..0.97f
+                        ) {
+                            val length = if (local.duration > 0L) local.duration else WatchHistoryEntity.PERCENT_DURATION_MS
+                            dao.upsertHistory(local.copy(position = (share * length).toLong(), duration = length, lastWatched = pausedAt, scrobbled = true))
+                            moved++
+                            Log.d(TAG, "Picked up from another device: ${local.title} at ${(share * 100).toInt()} %")
+                        }
+                        continue
+                    }
                     if (ids.any { dao.getHistoryItem(it) != null }) continue
                     if (type == "series" && ids.any { dao.getLatestSeriesEpisodeHistory("$it:%") != null }) continue
                     val id = ids.first()
@@ -516,8 +534,9 @@ class TraktSyncManager @Inject constructor(
                         }
                     }
 
-                    // Fix #12: clamp progress to [0,100] and ensure position never exceeds duration
-                    val estimatedDurationMs = 90 * 60 * 1000L
+                    // Only the share watched is known: saved against the shared marker length, so
+                    // the player starts at that share of the real length (not of a guessed 90 min)
+                    val estimatedDurationMs = WatchHistoryEntity.PERCENT_DURATION_MS
                     val clampedProgress = item.progress.coerceIn(0f, 100f)
                     val estimatedPositionMs = ((clampedProgress / 100f) * estimatedDurationMs).toLong()
                         .coerceIn(0L, estimatedDurationMs)
@@ -538,7 +557,7 @@ class TraktSyncManager @Inject constructor(
                     added++
                 }
 
-                Log.i(TAG, "Playback sync: added=$added, removed=$removed, markedWatched=$markedWatched")
+                Log.i(TAG, "Playback sync: added=$added, moved=$moved, removed=$removed, markedWatched=$markedWatched")
             } catch (e: Exception) {
                 Log.e(TAG, "Playback progress sync failed", e)
             }

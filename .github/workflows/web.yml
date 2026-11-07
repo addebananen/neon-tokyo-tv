@@ -35,6 +35,8 @@ jobs:
         run: for f in web/js/*.js web/sw.js web/remote/*.js; do node --check "$f"; done
       - name: Core rules test
         run: node web/test/core.test.mjs
+      - name: Hand-off to the TV test
+        run: node web/test/handoff.test.mjs
       - name: Stamp the build number
         run: |
           sed -i "s/__BUILD__/${{ github.run_number }}/g" web/js/app.js web/sw.js

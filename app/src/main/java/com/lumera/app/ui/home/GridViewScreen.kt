@@ -273,6 +273,7 @@ fun GridViewScreen(
                         posterUrl = item.poster,
                         onClick = { onMovieClick(item) },
                         isWatched = item.id in watchedIds,
+                        badge = item.badge,
                         modifier = Modifier
                             .aspectRatio(2f / 3f)
                             .onPreviewKeyEvent { keyEvent ->

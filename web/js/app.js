@@ -7,6 +7,7 @@ import { $, $$, esc, html, poster, imgUrl, toast, modal, closeTopModal, blip, pr
 import { playIntro } from './intro.js';
 import * as sync from './sync.js';
 import * as trakt from './trakt.js';
+import * as handoff from './handoff.js';
 import { worldHtml, leanToward, floorUnder, floorOff } from './world.js';
 import { openPlayer, playerOpen, closePlayer, externalPlayers, chosenPlayer } from './player.js';
 
@@ -639,6 +640,7 @@ function renderDetail(node, meta, focusResume) {
         ${trailerId ? `<button class="btn ghost" data-trailer="${esc(trailerId)}" data-key="d:trailer">${icon('<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>')}<span>Trailer</span></button>` : ''}
         <button class="btn ghost" data-list data-key="d:list"></button>
         ${!isSeries ? `<button class="btn ghost" data-watched data-key="d:watched"></button>` : ''}
+        <button class="btn ghost tv-btn" data-tv data-key="d:tv">${handoff.TV_ICON}<span class="tv-label">Fortsätt på TV:n</span></button>
         ${resumeMs ? '<button class="btn ghost" data-restart data-key="d:restart">' + icon('<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/>') + '<span>From start</span></button>' : ''}
       </div>
       ${resumeMs && e.duration_ms ? `<div class="resume-bar"><span class="progress"><i style="width:${(e.position_ms / e.duration_ms * 100).toFixed(1)}%"></i></span><em>${share ? `${Math.round(share * 100)} % watched` : `${Math.round((e.duration_ms - e.position_ms) / 60000)} min left`}</em></div>` : ''}
@@ -678,6 +680,21 @@ function renderDetail(node, meta, focusResume) {
     }
   };
   paintPlay();
+
+  // "Fortsätt på TV:n": the TV opens this title and plays it from the same spot
+  const tvBtn = node.querySelector('[data-tv]');
+  const paintTv = () => {
+    const video = isSeries ? seriesTarget(meta).video : null;
+    const en = store.entry(video ? core.episodePlaybackId(meta.id, video) : meta.id);
+    const started = en && !en.watched && (core.resumePositionMs(en) || core.resumeFraction(en));
+    tvBtn.querySelector('.tv-label').textContent = started ? 'Fortsätt på TV:n' : 'Spela på TV:n';
+  };
+  paintTv();
+  tvBtn.addEventListener('click', () => {
+    sound('select');
+    const video = isSeries ? seriesTarget(meta).video : null;
+    handoff.continueOnTv(handoffItem(meta, video));
+  });
 
   const playItem = (video) => {
     const streamId = video ? core.episodeStreamId(meta.id, video) : meta.id;
@@ -731,10 +748,23 @@ function renderDetail(node, meta, focusResume) {
       drawEpisodes(); paintPlay();
     });
   }
-  node._refresh = () => { paintPlay(); paintWatched(); paintList(); drawEpisodes(); };
+  node._refresh = () => { paintPlay(); paintWatched(); paintList(); drawEpisodes(); paintTv(); };
   requestAnimationFrame(() => {
     if (focusResume || document.documentElement.classList.contains('kbd')) nav.focusEl(playBtn, { scroll: false });
   });
+}
+
+/** What the TV needs to play [meta] (or its episode [video]) from where this profile is. */
+export function handoffItem(meta, video, { positionMs, durationMs } = {}) {
+  const playbackId = video ? core.episodePlaybackId(meta.id, video) : meta.id;
+  const en = store.entry(playbackId);
+  const started = en && !en.watched && !en.deleted;
+  return {
+    id: meta.id, type: video ? 'series' : (meta.type === 'series' ? 'series' : 'movie'), video: playbackId,
+    name: meta.name, title: video ? `S${video.season}:E${video.episode} - ${meta.name}` : meta.name,
+    poster: meta.poster || '', background: meta.background || '', logo: meta.logo || '',
+    positionMs: positionMs ?? (started ? en.position_ms : 0), durationMs: durationMs ?? (started ? en.duration_ms : 0),
+  };
 }
 
 function openTrailer(ytId) {

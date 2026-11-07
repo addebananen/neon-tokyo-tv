@@ -34,7 +34,8 @@ class PlayerViewModel @Inject constructor(
             if (safePosition < 5_000L) return@launch
 
             val existing = dao.getHistoryItem(id)
-            val safeDuration = (duration ?: existing?.duration ?: safePosition)
+            val knownDuration = existing?.duration?.takeIf { existing.isShare.not() }
+            val safeDuration = (duration ?: knownDuration ?: safePosition)
                 .coerceAtLeast(safePosition)
 
             val remaining = safeDuration - safePosition
@@ -93,7 +94,18 @@ class PlayerViewModel @Inject constructor(
             val item = dao.getHistoryItem(id)
             // Watched to the end: it starts over, as the details page's Play promises,
             // instead of dropping in at the credits
-            if (item == null || item.watched) 0L else item.position.coerceAtLeast(0L)
+            if (item == null || item.watched || item.isShare) 0L else item.position.coerceAtLeast(0L)
+        }
+    }
+
+    /**
+     * How far in to start when only the share watched is known (picked up from Trakt or another
+     * device), as a fraction; 0 when [getResumePosition] has the exact spot.
+     */
+    suspend fun getResumeFraction(id: String): Float {
+        return withContext(Dispatchers.IO) {
+            val item = dao.getHistoryItem(id)
+            if (item == null || item.watched || !item.isShare) 0f else item.progress().coerceIn(0f, 0.97f)
         }
     }
 }

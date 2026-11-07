@@ -3,6 +3,7 @@ package com.lumera.app.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -73,6 +74,7 @@ fun LumeraCard(
     progress: Float = 0f,
     isWatched: Boolean = false,
     hasNewEpisode: Boolean = false,
+    badge: String? = null,
     onFocused: (() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -203,6 +205,26 @@ fun LumeraCard(
                             color = Color.White,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Smart start page label: the episode that is new, or the title's place in a top list
+                if (!badge.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(5.dp)
+                            .background(Color.Black.copy(alpha = 0.62f), RoundedCornerShape(7.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (isFocused) 0.95f else 0.6f), RoundedCornerShape(7.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            badge,
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }
