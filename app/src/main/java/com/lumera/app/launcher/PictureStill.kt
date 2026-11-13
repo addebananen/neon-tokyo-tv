@@ -43,13 +43,20 @@ internal object PictureStill {
     /** Deletes [picture]'s still along with it. */
     fun delete(picture: String) {
         still(picture).delete()
+        tries(picture).delete()
     }
+
+    /** Counts the failed tries for a picture, so one the TV can't make a still of isn't tried on every visit to Home. */
+    private fun tries(picture: String) = File("$picture.tries")
+
+    private fun triedOut(picture: String): Boolean =
+        runCatching { tries(picture).readText().trim().toInt() }.getOrDefault(0) >= MAX_TRIES
 
     fun still(picture: String) = File("$picture.mp4")
 
     /** Makes [picture]'s still unless it has one or it is being made; a failure leaves the picture drawn. */
     suspend fun make(context: Context, picture: String) {
-        if (of(picture) != null || !synchronized(making) { making.add(picture) }) return
+        if (of(picture) != null || triedOut(picture) || !synchronized(making) { making.add(picture) }) return
         try {
             val out = still(picture)
             val partial = File("$picture.part.mp4")
@@ -59,6 +66,10 @@ internal object PictureStill {
                 made++
             } else {
                 partial.delete()
+                // Making a still uses the TV's video encoder, which holds up Home while it works:
+                // a picture it fails on twice is drawn from then on rather than tried again and again
+                val count = runCatching { tries(picture).readText().trim().toInt() }.getOrDefault(0) + 1
+                runCatching { tries(picture).writeText(count.toString()) }
             }
         } finally {
             synchronized(making) { making.remove(picture) }
@@ -95,4 +106,5 @@ internal object PictureStill {
     }
 
     private const val STILL_BITRATE = 20_000_000
+    private const val MAX_TRIES = 2
 }
