@@ -171,6 +171,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -3251,20 +3252,46 @@ internal fun isVideo(path: String) = path.endsWith(".mp4")
 /** A photo and what moves in it, drifting slowly closer and back together so nothing slips. */
 @Composable
 internal fun DriftingBox(towardX: Float, towardY: Float, content: @Composable () -> Unit) {
-    val drift = rememberInfiniteTransition(label = "StyleDrift")
-    val zoom by drift.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.045f,
-        animationSpec = infiniteRepeatable(tween(48_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "StyleZoom"
-    )
+    val zoom = rememberBeatDrift(true, 1.045f, 48_000)
     Box(
         Modifier.fillMaxSize().graphicsLayer {
-            scaleX = zoom
-            scaleY = zoom
+            scaleX = zoom.value
+            scaleY = zoom.value
             transformOrigin = TransformOrigin(towardX, towardY)
         }
     ) { content() }
+}
+
+/**
+ * A slow zoom from 1 to [to] and back over [halfMs] each way, for a full screen picture drawn in
+ * place of the video chip. It keeps the [awaitBeat] like the other slow things, so the whole
+ * screen is drawn again at most 30 times a second for it, and stands still while Home is not in
+ * front. Read the value in a graphicsLayer only, so it never recomposes anything.
+ */
+@Composable
+private fun rememberBeatDrift(on: Boolean, to: Float, halfMs: Int): State<Float> {
+    val zoom = remember { mutableFloatStateOf(1f) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(on, lifecycle) {
+        if (!on) {
+            zoom.floatValue = 1f
+            return@LaunchedEffect
+        }
+        val ease = FastOutSlowInEasing
+        var t = 0L
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            var last = withFrameNanos { it }
+            while (true) {
+                val now = awaitBeat()
+                t += ((now - last) / 1_000_000L).coerceAtMost(100L)
+                last = now
+                val phase = (t % (2L * halfMs)).toFloat() / halfMs
+                val f = if (phase <= 1f) phase else 2f - phase
+                zoom.floatValue = 1f + (to - 1f) * ease.transform(f)
+            }
+        }
+    }
+    return zoom
 }
 
 /** A style's painting, decoded once off the main thread, at [alpha] as the video chip takes over. */
@@ -3314,30 +3341,21 @@ private object PaintingCache {
 internal fun PictureBackdrop(path: String, shown: Boolean, alpha: () -> Float, drift: Boolean) {
     Box(Modifier.fillMaxSize()) {
         if (shown) {
-            var image by remember(path) { mutableStateOf<ImageBitmap?>(null) }
+            // Kept once decoded: it is drawn again for a moment on every return from an app,
+            // until the video chip shows the still again, and decoding it each time held up Home
+            var image by remember(path) { mutableStateOf(OwnPictureCache.cached(path)) }
             LaunchedEffect(path) {
-                image = withContext(Dispatchers.IO) {
-                    // The phone page sends up to 4K, which must not fill the TV's memory
-                    decodeSampled(java.io.File(path), 1080)
-                }
+                if (image == null) image = withContext(Dispatchers.IO) { OwnPictureCache.load(path) }
             }
-            val zoom = if (drift) {
-                val value by rememberInfiniteTransition(label = "PictureDrift").animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.06f,
-                    animationSpec = infiniteRepeatable(tween(40_000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-                    label = "PictureZoom"
-                )
-                value
-            } else 1f
+            val zoom = rememberBeatDrift(drift, 1.06f, 40_000)
             image?.let {
                 Image(
                     it,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().graphicsLayer {
-                        scaleX = zoom
-                        scaleY = zoom
+                        scaleX = zoom.value
+                        scaleY = zoom.value
                         this.alpha = alpha()
                         compositingStrategy = CompositingStrategy.ModulateAlpha
                     }
@@ -3354,6 +3372,31 @@ internal fun PictureBackdrop(path: String, shown: Boolean, alpha: () -> Float, d
                 )
             }
         )
+    }
+}
+
+/** The profile's own picture last decoded: one, sampled down to 1080 lines, since the phone page sends up to 4K. */
+private object OwnPictureCache {
+    private var key: String? = null
+    private var image: ImageBitmap? = null
+
+    private fun keyOf(path: String): String {
+        val file = java.io.File(path)
+        return "$path|${file.lastModified()}|${file.length()}"
+    }
+
+    @Synchronized
+    fun cached(path: String): ImageBitmap? = image?.takeIf { key == keyOf(path) }
+
+    fun load(path: String): ImageBitmap? {
+        cached(path)?.let { return it }
+        val k = keyOf(path)
+        val decoded = decodeSampled(java.io.File(path), 1080)?.also { it.prepareToDraw() } ?: return null
+        synchronized(this) {
+            key = k
+            image = decoded
+        }
+        return decoded
     }
 }
 

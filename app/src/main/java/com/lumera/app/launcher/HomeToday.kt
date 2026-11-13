@@ -287,7 +287,7 @@ private fun rememberMusic(on: Boolean): Pair<NowPlaying, Track?> {
     return now to track
 }
 
-private class LightsState(val lights: List<HomeLight>, val linked: Boolean, val bridge: String?)
+private data class LightsState(val lights: List<HomeLight>, val linked: Boolean, val bridge: String?)
 
 @Composable
 private fun rememberLights(on: Boolean, bump: Int): LightsState {
