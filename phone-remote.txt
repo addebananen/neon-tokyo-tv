@@ -1,0 +1,19 @@
+remote.js 200
+remote.css 200
+fonts/outfit_regular.woff2 200
+icons/apple-touch-icon.png 200
+pin: 7357
+{"error":"wrong"}
+{"name":"AOSP TV on x86","paired":true,"pairing":true,"version":"0.2.0-nt.281"}
+key down: {"result":"ok"}
+key right: {"result":"ok"}
+key left: {"result":"ok"}
+key up: {"result":"ok"}
+{"result":"ok"}pick profile: {"result":"ok"}
+{"apps":[{"pkg":"com.neontokyo.tv","label":"Neon Tokyo"},{"pkg":"com.google.android.youtube.tv","label":"YouTube"},{"pkg":"com.android.vending","label":"Play Store"},{"pkg":"com.android.tv.settings","label":"Settings"}]}
+
+search: {"did":"Searching Neon Tokyo","result":"ok"}
+text: {"result":"neon"}
+back: {"result":"ok"}
+--------- beginning of main
+--------- beginning of system

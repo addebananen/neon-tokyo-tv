@@ -1,0 +1,11 @@
+uid 2000 package com.android.shell
+android.permission.BLUETOOTH_PRIVILEGED: NO
+android.permission.BLUETOOTH_CONNECT: NO
+android.permission.BLUETOOTH_SCAN: NO
+android.permission.INJECT_EVENTS: yes
+android.permission.WAKE_LOCK: yes
+bluetooth: true
+screen on: true
+wake lock: yes
+key injection: true
+rust engine: loaded

@@ -1,0 +1,20 @@
+ACCESSIBILITY MANAGER (dumpsys accessibility)
+
+currentUserId=0
+User state[
+     attributes:{id=0, touchExplorationEnabled=false, serviceHandlesDoubleTap=false, requestMultiFingerGestures=false, displayMagnificationEnabled=false, autoclickEnabled=false, nonInteractiveUiTimeout=0, interactiveUiTimeout=0, installedServiceCount=2}
+     shortcut key:{}
+     button:{}
+     button target:{null}
+     Bound services:{Service[label=Neon Tokyo overlays, feedbackType[FEEDBACK_GENERIC], capabilities=137, eventTypes=TYPE_WINDOW_STATE_CHANGED, notificationTimeout=150, requestA11yBtn=false]}
+     Enabled services:{{com.neontokyo.tv/com.lumera.app.overlay.NeonOverlayService}}
+     Binding services:{}
+     Crashed services:{}]
+11-13 16:40:58.830  2439  2439 I NeonOverlay: Connected, chords on, keys on their own thread
+Starting: Intent { cmp=com.neontokyo.tv/com.lumera.app.control.ControlSetupActivity }
+control gone after 0.0 s more
+control-list gone after 0.0 s more
+--------- beginning of main
+--------- beginning of system
+11-13 16:40:58.830  2439  2439 I NeonOverlay: Connected, chords on, keys on their own thread
+11-13 16:41:07.465  2439 26282 I Dumps   : Saved the report to /storage/emulated/0/Android/data/com.neontokyo.tv/files/diagnostics/latest.txt

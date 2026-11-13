@@ -1,0 +1,5 @@
+retry: 1500
+
+event: state
+data: {"name":"AOSP TV on x86","service":false,"dpad":false,"app":"com.neontokyo.tv","appLabel":"Neon Tokyo","volume":{"level":3,"max":15,"muted":false}}
+
